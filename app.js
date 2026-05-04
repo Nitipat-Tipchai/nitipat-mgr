@@ -1,4 +1,4 @@
-﻿    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp, where }
       from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
@@ -30,6 +30,8 @@
         
         // Initial data load
         await loadAll();
+        // Start hyper notifications after data is loaded
+        startHyperNotifications();
       } catch (err) {
         console.error("App initialization failed:", err);
       }
@@ -4900,13 +4902,12 @@
         document.documentElement.setAttribute('data-theme', state.darkMode ? 'dark' : 'light');
         loadFromLocalStorage();
         render();
-        loadAll();
-
+        // loadAll() and startHyperNotifications() are now called by startApp() once ready
+        
         if (typeof Radio !== 'undefined') {
           Radio.init();
         }
 
-        startHyperNotifications();
         setInterval(() => { if (!state.modal) render(); }, 30000); 
       } catch (e) {
         console.error("Initialization failed:", e);
