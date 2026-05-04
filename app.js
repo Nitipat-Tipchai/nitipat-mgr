@@ -1629,7 +1629,6 @@ function render() {
   if (state.view === 'dashboard') renderGPAXChart();
 }
 
-}
 
 function renderStatusBanner() {
   const now = new Date();
