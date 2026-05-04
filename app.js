@@ -32,6 +32,8 @@
         await loadAll();
         // Start hyper notifications after data is loaded
         startHyperNotifications();
+        // Initialize Web Push
+        initWebPush();
       } catch (err) {
         console.error("App initialization failed:", err);
       }
@@ -3777,13 +3779,19 @@
     <div class="page-header"><h1 class="page-title">⚙️ ตั้งค่า</h1></div>
     
 <div class="settings-card" style="margin-bottom:15px;">
-  <div style="font-size:16px; font-weight:700; margin-bottom:10px;">🔔 การแจ้งเตือน (ntfy)</div>
+  <div style="font-size:16px; font-weight:700; margin-bottom:10px;">🔔 การแจ้งเตือน</div>
+  <div class="settings-row" style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px; margin-bottom: 15px; border-bottom: 1px solid var(--c-border); padding-bottom: 15px;">
+    <div class="settings-label">
+      <div style="font-weight:600; font-size:14px;">Browser Push Notification</div>
+      <div style="font-size:12px; color:var(--c-muted); margin-top:4px;">รับการแจ้งเตือนโดยตรงผ่านเบราว์เซอร์ (ไม่ต้องมีแอป)</div>
+    </div>
+    <button class="btn-glass-primary" onclick="requestNotificationPermission()">เปิดการแจ้งเตือนบนเบราว์เซอร์</button>
+  </div>
   <div class="settings-row" style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
     <div class="settings-label">
-      <div style="font-weight:600; font-size:14px;">ntfy Topic</div>
+      <div style="font-weight:600; font-size:14px;">Mobile App (ntfy)</div>
       <div style="font-size:12px; color:var(--c-muted); margin-top:4px;">
-        ติดตั้งแอป ntfy บนมือถือ → กด Subscribe → ใส่ชื่อ topic เดียวกัน
-        <br>ตัวอย่าง: <code>nitipat-study-2024</code> (ตั้งชื่อไม่ซ้ำคนอื่น)
+        สำหรับรับแจ้งเตือนบนมือถือผ่านแอป ntfy
       </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -3792,10 +3800,10 @@
         id="ntfy-topic-input" 
         class="glass-input" 
         style="width:200px" 
-        placeholder="your-unique-topic"
+        placeholder="ชื่อ Topic ของคุณ"
         value="${state.ntfyTopic || localStorage.getItem('ntfyTopic') || ''}"
       >
-      <button class="btn-glass-primary" id="saveNtfyBtn">บันทึกและทดสอบ</button>
+      <button class="btn-glass-primary" id="saveNtfyBtn">บันทึก Topic</button>
     </div>
   </div>
   <div id="ntfy-status" style="font-size:12px;margin-top:6px;color:var(--c-muted)"></div>
@@ -5087,3 +5095,35 @@
         };
       }, 100);
     }
+    // ── Web Push & Notification Logic ──
+    async function initWebPush() {
+      if ('serviceWorker' in navigator && 'PushManager' in window) {
+        try {
+          await navigator.serviceWorker.register('sw.js');
+          console.log('Service Worker registered');
+        } catch (err) {
+          console.warn('Service Worker registration failed:', err);
+        }
+      }
+    }
+
+    async function requestNotificationPermission() {
+      if (!("Notification" in window)) {
+        alert("เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน");
+        return;
+      }
+      
+      let permission = await Notification.requestPermission();
+      if (permission === "granted") {
+        showToast("✅ เปิดการแจ้งเตือนสำเร็จ!");
+        // ส่งข้อความทดสอบ
+        new Notification("NITIPAT MANAGER", {
+          body: "ยินดีด้วย! คุณเปิดการแจ้งเตือนบนเบราว์เซอร์เรียบร้อยแล้ว",
+          icon: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+        });
+      } else {
+        showToast("⚠️ คุณยังไม่ได้อนุญาตการแจ้งเตือน", "err");
+      }
+    }
+
+    window.requestNotificationPermission = requestNotificationPermission;
