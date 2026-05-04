@@ -1689,9 +1689,8 @@ window.showCourseDetailsModal = (code) => {
       ${c.prereq && c.prereq.length > 0 ? `<div style="margin-top:15px; font-size:13px; color:var(--c-rust); font-weight:700;">วิชาที่ต้องเรียนมาก่อน: ${c.prereq.join(', ')}</div>` : ''}
     </div>
   `);
-    </div>
-  `);
 };
+
 
 function renderGPAXChart() {
   const container = document.getElementById('gpaxChart');
