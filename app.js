@@ -5106,8 +5106,12 @@
       let permission = await Notification.requestPermission();
       if (permission === "granted") {
         try {
+          // รอให้ Service Worker พร้อมทำงาน 100% ก่อน
+          const registration = await navigator.serviceWorker.ready;
+          
           const currentToken = await getToken(messaging, { 
-            vapidKey: 'BGJJHyr07SwrKxHuo1w8HDRYCb6R-p6kZsk6yRaq-ho-iQ-7S0YdfTgz9KKDFW95jyQ927xCY51r6Wml84TonF4' 
+            vapidKey: 'BGJJHyr07SwrKxHuo1w8HDRYCb6R-p6kZsk6yRaq-ho-iQ-7S0YdfTgz9KKDFW95jyQ927xCY51r6Wml84TonF4',
+            serviceWorkerRegistration: registration
           });
           
           if (currentToken) {
