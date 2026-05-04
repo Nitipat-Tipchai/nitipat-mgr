@@ -4349,7 +4349,9 @@
       
       // Sync ทุก 5 นาที เพื่อให้ GAS trigger มีข้อมูลล่าสุด
       setInterval(function() {
-        syncDataToBackend();
+        if (typeof firebase !== 'undefined' && state.active) {
+            syncDataToBackend();
+        }
       }, 5 * 60 * 1000);
     }
 
@@ -5112,8 +5114,19 @@
       let permission = await Notification.requestPermission();
       if (permission === "granted") {
         try {
-          // รอให้ Service Worker พร้อมทำงาน 100% ก่อน
-          const registration = await navigator.serviceWorker.ready;
+          // รอให้ Service Worker พร้อมทำงาน 100%
+          let registration = await navigator.serviceWorker.ready;
+          
+          // ตรวจสอบสถานะว่า Active จริงๆ หรือยัง
+          if (registration.active && registration.active.state !== 'activated') {
+            await new Promise(resolve => {
+              const checkState = () => {
+                if (registration.active.state === 'activated') resolve();
+                else setTimeout(checkState, 100);
+              };
+              checkState();
+            });
+          }
           
           const currentToken = await getToken(messaging, { 
             vapidKey: 'BGJJHyr07SwrKxHuo1w8HDRYCb6R-p6kZsk6yRaq-ho-iQ-7S0YdfTgz9KKDFW95jyQ927xCY51r6Wml84TonF4',
