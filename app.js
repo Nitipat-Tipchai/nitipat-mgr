@@ -1569,7 +1569,6 @@ function render() {
   // FIX 2: 30-minute Auto-Lock Security Check
   const unlockedAt = sessionStorage.getItem('unlocked_at');
   if (unlockedAt && Date.now() - parseInt(unlockedAt) > 1800000) { // 1800000ms = 30 mins
-  if (unlockedAt && Date.now() - parseInt(unlockedAt) > 1800000) { 
     sessionStorage.removeItem('unlocked');
     sessionStorage.removeItem('unlocked_at');
     state.isLocked = true;
@@ -1806,7 +1805,6 @@ function attachLockScreenEvents() {
     };
   });
 
-  if (pinClear) pinClear.onclick = () => { currentInput = ""; updateDots(); };
   if (pinDel) pinDel.onclick = () => { currentInput = currentInput.slice(0, -1); updateDots(); };
 
   if (showIdBtn) showIdBtn.onclick = () => {
@@ -1822,6 +1820,10 @@ function attachLockScreenEvents() {
       </div>
     `);
   };
+
+  // Add modal close events for lock screen
+  document.getElementById('modalX')?.addEventListener('click', closeModal);
+  document.getElementById('modalBd')?.addEventListener('click', e => { if (e.target.id === 'modalBd') closeModal(); });
 }
 function renderTopNav(gpa, pro, curSem) {
   const proColors = { safe: '#22c55e', 'pro-low': '#eab308', 'pro-high': '#f97316', 'expelled': '#ef4444' };
