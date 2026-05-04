@@ -5119,6 +5119,9 @@
               userId: STUDENT.id
             });
             
+            // บันทึก Token ลง GAS Script Properties (เพื่อให้ GAS ส่งแจ้งเตือนได้)
+            google.script.run.saveFcmToken(currentToken);
+            
             showToast("✅ เปิดการแจ้งเตือน FCM สำเร็จ!");
             new Notification("NITIPAT MANAGER", {
               body: "ระบบลงทะเบียนแจ้งเตือนแบบ Native สำเร็จแล้ว!",
