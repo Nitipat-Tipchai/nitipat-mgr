@@ -1805,6 +1805,7 @@ function attachLockScreenEvents() {
     };
   });
 
+  if (pinClear) pinClear.onclick = () => { currentInput = ""; updateDots(); };
   if (pinDel) pinDel.onclick = () => { currentInput = currentInput.slice(0, -1); updateDots(); };
 
   if (showIdBtn) showIdBtn.onclick = () => {
@@ -1821,7 +1822,6 @@ function attachLockScreenEvents() {
     `);
   };
 
-  // Add modal close events for lock screen
   document.getElementById('modalX')?.addEventListener('click', closeModal);
   document.getElementById('modalBd')?.addEventListener('click', e => { if (e.target.id === 'modalBd') closeModal(); });
 }
@@ -4726,7 +4726,6 @@ async function requestNotificationPermission() {
   if (permission === "granted") {
     try {
       const registration = await navigator.serviceWorker.ready;
-
       const currentToken = await getToken(messaging, {
         vapidKey: 'BGJJHyr07SwrKxHuo1w8HDRYCb6R-p6kZsk6yRaq-ho-iQ-7S0YdfTgz9KKDFW95jyQ927xCY51r6Wml84TonF4'.trim(),
         serviceWorkerRegistration: registration
@@ -4734,14 +4733,11 @@ async function requestNotificationPermission() {
 
       if (currentToken) {
         console.log('FCM Token:', currentToken);
-        // บันทึก Token ลง Firestore เพื่อให้ Backend ส่งแจ้งเตือนได้
         await setDoc(doc(db, 'app_state', 'notification_token'), {
           token: currentToken,
           updatedAt: serverTimestamp(),
           userId: STUDENT.id
         });
-
-        // บันทึก Token ลง GAS Script Properties (เพื่อให้ GAS ส่งแจ้งเตือนได้)
         google.script.run.saveFcmToken(currentToken);
 
         showToast("✅ เปิดการแจ้งเตือน FCM สำเร็จ!");
