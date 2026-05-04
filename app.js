@@ -1341,6 +1341,29 @@ function searchCourseDB(q) {
   return ALL_COURSES.filter(c => c.code?.toLowerCase().includes(q) || c.name?.toLowerCase().includes(q) || c.nameEn?.toLowerCase().includes(q)).slice(0, 8);
 }
 
+function getLockScreenTemplate() {
+  return `
+    <div class="numpad-container">
+      <div class="num-grid">
+        <button class="num-btn" data-num="1"><span class="n">1</span><span class="l"></span></button>
+        <button class="num-btn" data-num="2"><span class="n">2</span><span class="l">ABC</span></button>
+        <button class="num-btn" data-num="3"><span class="n">3</span><span class="l">DEF</span></button>
+        <button class="num-btn" data-num="4"><span class="n">4</span><span class="l">GHI</span></button>
+        <button class="num-btn" data-num="5"><span class="n">5</span><span class="l">JKL</span></button>
+        <button class="num-btn" data-num="6"><span class="n">6</span><span class="l">MNO</span></button>
+        <button class="num-btn" data-num="7"><span class="n">7</span><span class="l">PQRS</span></button>
+        <button class="num-btn" data-num="8"><span class="n">8</span><span class="l">TUV</span></button>
+        <button class="num-btn" data-num="9"><span class="n">9</span><span class="l">WXYZ</span></button>
+        <button class="num-btn" data-num="0" style="grid-column: span 3;"><span class="n">0</span></button>
+      </div>
+      <div style="margin-top: 30px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+        <button id="showIdOnLock" style="background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 16px 32px; border-radius: 50px; font-weight: 600; width: 100%; max-width: 260px; cursor: pointer; transition: all 0.3s;">
+          🪪 Digital Student ID
+        </button>
+      </div>
+    </div>`;
+}
+
 // ══════════════════════════════════════════════════
 // GRADE REPORT EXPORT
 // ══════════════════════════════════════════════════
@@ -1591,7 +1614,7 @@ function render() {
 
   app.innerHTML = `
     <div class="app-container">
-      ${renderDynamicIsland()}
+      ${renderStatusBanner()}
       ${renderTopNav(gpa, pro, curSem)}
       <div class="page-content" id="pageContent">
         ${renderPage(gpa, pro, curSem)}
@@ -1606,7 +1629,9 @@ function render() {
   if (state.view === 'dashboard') renderGPAXChart();
 }
 
-function renderDynamicIsland() {
+}
+
+function renderStatusBanner() {
   const now = new Date();
   const h = now.getHours();
   const m = now.getMinutes();
@@ -1618,7 +1643,6 @@ function renderDynamicIsland() {
 
   if (curSem) {
     const adjustedDay = getTodayDayIndex();
-
     const todayClasses = (state.courses[curSem.id] || []).flatMap(c =>
       (c.schedules || c.schedule || []).filter(s => s.day === adjustedDay).map(s => ({ ...c, slot: s }))
     ).sort((a, b) => a.slot.startHour - b.slot.startHour);
@@ -1629,57 +1653,46 @@ function renderDynamicIsland() {
 
   if (activeClass) {
     const remainingMins = Math.round((activeClass.slot.endHour - currentTimeVal) * 60);
-    const totalMins = (activeClass.slot.endHour - activeClass.slot.startHour) * 60;
-    const progress = ((totalMins - remainingMins) / totalMins) * 100;
-
-    const history = state.attendanceHistory[activeClass.id] || {};
-    const todayStr = new Date().toLocaleDateString('en-CA');
-    const checkedInToday = history[todayStr] && !history[todayStr].status.includes('ขาดเรียน');
-
     return `
-      <div class="dynamic-island-container" onclick="this.querySelector('.dynamic-island').classList.toggle('expanded')">
-        <div class="dynamic-island">
-          <div class="di-content">
-            <span style="font-size:16px;">📖</span>
-            <div style="flex:1">
-              <div class="di-label">In Class</div>
-              <div class="di-title">${activeClass.code}</div>
-            </div>
-            <div class="di-timer">${remainingMins}m</div>
-          </div>
-          <div class="di-prog-bg"><div class="di-prog-fill" style="width:${progress}%"></div></div>
-          <div class="di-actions">
-            ${checkedInToday ? `<button class="di-btn" style="color:var(--c-lime); cursor:default;" onclick="event.stopPropagation();">✅ เช็คชื่อแล้ว</button>` : `<button class="di-btn" onclick="event.stopPropagation(); state.activeHubTab='Attendance'; renderCourseHub('${activeClass.id}');">📍 Check-in</button>`}
-            <button class="di-btn" onclick="event.stopPropagation(); openAddAssignmentForm()">📝 Note</button>
-          </div>
-        </div>
+      <div class="status-banner live" onclick="renderCourseHub('${activeClass.id}')">
+        <span class="sb-icon">📖</span>
+        <span class="sb-text">กำลังเรียน: <strong>${activeClass.code}</strong> (เหลือ ${remainingMins} นาที)</span>
+        <span class="sb-arrow">→</span>
       </div>`;
   } else if (nextClass) {
     const diffMins = Math.round((nextClass.slot.startHour - currentTimeVal) * 60);
+    const diffHours = Math.floor(diffMins / 60);
+    const displayTime = diffHours > 0 ? `${diffHours} ชม. ${diffMins % 60} นาที` : `${diffMins} นาที`;
     return `
-      <div class="dynamic-island-container">
-        <div class="dynamic-island">
-          <div class="di-content">
-            <span style="font-size:16px;">⏳</span>
-            <div style="flex:1">
-              <div class="di-label">Next Class</div>
-              <div class="di-title">${nextClass.code} in ${diffMins}m</div>
-            </div>
-          </div>
-        </div>
+      <div class="status-banner next">
+        <span class="sb-icon">⏳</span>
+        <span class="sb-text">คลาสถัดไป: <strong>${nextClass.code}</strong> ในอีก ${displayTime}</span>
       </div>`;
   }
-
-  return `
-    <div class="dynamic-island-container">
-      <div class="dynamic-island">
-        <div class="di-content">
-          <span style="font-size:16px;">◈</span>
-          <div style="flex:1; font-size:12px; font-weight:600;">NITIPAT MGR</div>
-        </div>
-      </div>
-    </div>`;
+  return '';
 }
+
+window.showCourseDetailsModal = (code) => {
+  const c = ALL_COURSES.find(x => x.code === code);
+  if (!c) return;
+  openModal(`📘 รายละเอียดวิชา: ${c.code}`, `
+    <div style="padding:10px;">
+      <h3 style="margin-bottom:10px;">${c.name}</h3>
+      <p style="font-size:14px; opacity:0.8; margin-bottom:15px;">${c.nameEn || ''}</p>
+      <div style="display:flex; gap:10px; margin-bottom:20px;">
+        <span class="badge" style="background:var(--c-indigo); color:white; padding:4px 10px; border-radius:8px;">${c.credits} หน่วยกิต</span>
+        <span class="badge" style="background:#f1f5f9; color:#475569; padding:4px 10px; border-radius:8px;">${c.group || 'หมวดหลัก'}</span>
+      </div>
+      <div style="font-size:14px; line-height:1.6; background:rgba(0,0,0,0.03); padding:15px; border-radius:12px;">
+        <strong>คำอธิบายรายวิชา:</strong><br>
+        ${c.description || 'ไม่มีข้อมูลคำอธิบายรายวิชาในระบบ'}
+      </div>
+      ${c.prereq && c.prereq.length > 0 ? `<div style="margin-top:15px; font-size:13px; color:var(--c-rust); font-weight:700;">วิชาที่ต้องเรียนมาก่อน: ${c.prereq.join(', ')}</div>` : ''}
+    </div>
+  `);
+    </div>
+  `);
+};
 
 function renderGPAXChart() {
   const container = document.getElementById('gpaxChart');
@@ -1761,8 +1774,11 @@ function renderLockScreen() {
         <button class="num-btn" data-num="0"><span class="n">0</span><span class="l">&nbsp;</span></button>
         <button class="num-btn action" id="pinDel">ลบ</button>
       </div>
-      <div style="margin-top:40px; text-align:center;">
-        <button class="btn-glass sm" id="showIdOnLock" style="background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.1); padding: 12px 24px; border-radius: 24px; backdrop-filter: blur(10px); font-weight: 500; font-size: 14px;">🪪 ดูบัตรนิสิต</button>
+      <div style="margin-top: 45px; display: flex; flex-direction: column; align-items: center; gap: 15px;">
+        <button class="btn-glass-primary full" id="showIdOnLock" style="padding: 18px 40px; border-radius: 40px; font-weight: 700; width: 100%; max-width: 280px; box-shadow: 0 10px 25px rgba(79, 70, 229, 0.3);">
+          🪪 Digital Student ID
+        </button>
+        <p style="font-size: 11px; opacity: 0.5; color: white;">กดเพื่อแสดง Barcode เข้าห้องสมุด</p>
       </div>
     </div>
   </div>`;
@@ -2575,9 +2591,11 @@ function renderDashboard(gpaVal, proVal, curSemVal) {
   const cr = getTotalPassedCredits();
   const pct = Math.min(100, (cr / 137 * 100)).toFixed(1);
   const missingReflections = getMissingReflections();
+  
   const proAlerts = {
-    'pro-low': `<div class="alert glass-warn" style="border-left:8px solid var(--c-rust);">⚠️ <strong>ติดโปรต่ำ</strong> GPAX ${gpa} (1.75–1.99)</div>`,
-    'pro-high': `<div class="alert glass-danger" style="border-left:8px solid var(--c-rust); background:rgba(225,29,72,0.1);">🚨 <strong>ติดโปรสูง</strong> GPAX ${gpa} (1.50–1.74)</div>`,
+    'pro-low': `<div class="alert glass-warn" style="border-left:8px solid var(--c-rust);">⚠️ <strong>ติดโปรต่ำ</strong> GPAX ${gpa} (1.75–1.99) — ต้องให้อาจารย์ที่ปรึกษาปลดล็อค</div>`,
+    'pro-high': `<div class="alert glass-danger" style="border-left:8px solid var(--c-rust); background:rgba(225,29,72,0.1);">🚨 <strong>ติดโปรสูง</strong> GPAX ${gpa} (1.50–1.74) — ระวังพ้นสภาพ!</div>`,
+    'expelled': `<div class="alert glass-danger" style="border:3px solid var(--c-rust); background:var(--c-rust)22;">❌ <strong>GPAX ต่ำกว่า 1.50</strong> — กรุณาติดต่อฝ่ายวิชาการด่วน</div>`,
   };
 
   const now = new Date();
@@ -2592,11 +2610,18 @@ function renderDashboard(gpaVal, proVal, curSemVal) {
   const currentTimeVal = now.getHours() + (now.getMinutes() / 60);
   const activeClass = todayClasses.find(c => currentTimeVal >= c.slot.startHour && currentTimeVal < c.slot.endHour);
 
+  const hour = now.getHours();
+  let greeting = "สวัสดีตอนเช้า";
+  if (hour >= 12) greeting = "สวัสดีตอนบ่าย";
+  if (hour >= 17) greeting = "สวัสดีตอนเย็น";
+  if (hour >= 21) greeting = "ราตรีสวัสดิ์";
+
   return `<div class="page-wrap dashboard-v2">
+    <!-- Hero Section -->
     <div class="dash-hero">
       <div class="hero-main">
-        <div class="hero-greet">สวัสดี, ${STUDENT.nameTh.split(' ')[0]} 👋</div>
-        <div class="hero-status">วันนี้เรียน ${todayClasses.length} คลาส</div>
+        <div class="hero-greet">${greeting}, ${STUDENT.nameTh.split(' ')[0]} 👋</div>
+        <div class="hero-status">วันนี้คุณมีเรียน ${todayClasses.length} คลาส | ${activeClass ? 'กำลังเรียนอยู่ 1 วิชา' : 'พร้อมสำหรับการเรียนรู้!'}</div>
       </div>
       <div class="hero-stats">
         <div class="hero-stat-item">
@@ -2610,33 +2635,102 @@ function renderDashboard(gpaVal, proVal, curSemVal) {
       </div>
     </div>
 
+    ${missingReflections.length > 0 ? `
+      <div class="glass-card reflection-banner-v2" onclick="openPendingReflectionsModal()">
+        <div class="rb-icon">🚨</div>
+        <div class="rb-body">
+          <div class="rb-title">มี Reflection ที่ยังไม่ได้สรุป! (${missingReflections.length} วิชา)</div>
+          <div class="rb-list">ตรวจพบงานค้างที่ยังไม่ได้บันทึกความเข้าใจ</div>
+        </div>
+        <button class="nb-btn sm">จัดการเลย ✍️</button>
+      </div>
+    ` : ''}
+
     <div class="widget-grid">
+      <!-- Widget: Today's Timeline -->
       <div class="glass-card widget-card nb-card">
         <div class="widget-header">
           <div class="widget-title"><span>📅</span> ตารางเรียนวันนี้</div>
+          <div class="widget-action">${now.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
         </div>
         <div class="today-timeline">
-          ${todayClasses.length > 0 ? todayClasses.map(c => `
-              <div class="timeline-item">
-                <div class="t-time">${c.slot.startHour}:00</div>
+          ${todayClasses.length > 0 ? todayClasses.map(c => {
+            const isLive = activeClass && activeClass.id === c.id && activeClass.slot.startHour === c.slot.startHour;
+            const isPast = currentTimeVal > c.slot.endHour;
+            return `
+              <div class="timeline-item ${isLive ? 'live' : ''} ${isPast ? 'past' : ''}">
+                <div class="t-time">${c.slot.startHour}:00 - ${c.slot.endHour}:00</div>
+                <div class="t-indicator"><div class="t-dot"></div><div class="t-line"></div></div>
                 <div class="t-info" onclick="renderCourseHub('${c.id}')">
-                  <div class="t-code">${c.code}</div>
+                  <div class="t-code" style="color:${c.color || 'var(--c-accent)'}">${c.code}</div>
                   <div class="t-name">${c.nameTh}</div>
+                  <div class="t-meta">📍 ${c.room || 'N/A'} | ${c.mode || 'Onsite'}</div>
+                  ${isLive ? '<div class="live-badge">กำลังเรียน</div>' : ''}
                 </div>
               </div>
-          `).join('') : '<div class="empty-state-v2">วันนี้ไม่มีเรียน</div>'}
+            `;
+          }).join('') : `
+            <div class="empty-state-v2">
+              <div class="es-icon">🎉</div>
+              <div class="es-text">วันนี้ไม่มีคลาสเรียน! พักผ่อนให้เต็มที่</div>
+            </div>
+          `}
         </div>
       </div>
+
+      <!-- Widget: Progress & Stats -->
       <div class="glass-card widget-card nb-card">
-        <div class="widget-header"><div class="widget-title"><span>📝</span> สอบที่ใกล้ที่สุด</div></div>
-        ${Object.values(state.exams).flat().filter(e => new Date(e.date) >= new Date()).sort((a,b) => new Date(a.date) - new Date(b.date)).slice(0, 2).map(e => `
-          <div class="exam-widget-item" style="padding:10px; margin-bottom:5px; background:rgba(0,0,0,0.03); border-radius:10px;">
-            <div style="font-weight:700;">${e.title}</div>
-            <div style="font-size:12px;">${e.date}</div>
-          </div>
-        `).join('') || '<div class="empty-sm">ไม่มีการสอบ</div>'}
+        <div class="widget-header"><div class="widget-title"><span>📈</span> ความก้าวหน้า</div></div>
+        <div class="stats-v2-grid">
+           <div class="s2-item">
+              <div class="s2-val">${pct}%</div>
+              <div class="s2-lbl">สำเร็จแล้ว (137 นก.)</div>
+              <div class="progress-bar-v2"><div class="pb-fill" style="width:${pct}%"></div></div>
+           </div>
+           <div class="s2-item">
+              <div class="s2-val">${state.totalFocusHours.toFixed(1)}h</div>
+              <div class="s2-lbl">เวลา Focus รวม</div>
+           </div>
+           <div class="s2-item">
+              <div class="s2-val">${Object.values(state.assignments).flat().filter(a => !a.submitted).length}</div>
+              <div class="s2-lbl">งานที่ค้างอยู่</div>
+           </div>
+        </div>
+        
+        <div class="widget-header" style="margin-top:20px;"><div class="widget-title"><span>📝</span> สอบที่ใกล้ที่สุด</div></div>
+        ${Object.values(state.exams).flat().filter(e => getDaysUntil(e.date) >= 0).sort((a, b) => getDaysUntil(a.date) - getDaysUntil(b.date)).slice(0, 1).map(e => {
+          const course = findCourseById(e.courseId);
+          return `
+           <div class="exam-widget-item" style="padding:15px; background:rgba(0,0,0,0.03); border-radius:16px; display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <div class="e-name" style="font-weight:800; font-size:14px;">${e.title || 'สอบ'}</div>
+                <div class="e-meta" style="font-size:11px; opacity:0.6;">${course ? course.code : 'N/A'} | ${e.date}</div>
+              </div>
+              <div style="background:var(--c-rust); color:#fff; padding:4px 10px; border-radius:8px; font-weight:800; font-size:12px;">ใน ${getDaysUntil(e.date)} วัน</div>
+           </div>
+        `}).join('') || '<div class="empty-sm">ไม่มีการสอบเร็วๆ นี้</div>'}
+      </div>
+
+      <!-- Widget: Radio DJ Brain -->
+      <div class="glass-card widget-card nb-card" style="background: rgba(79, 70, 229, 0.05);">
+        <div class="widget-header"><div class="widget-title"><span>📻</span> MGR Radio</div></div>
+        <div class="radio-widget-body">
+            <div class="radio-disc ${Radio.isPlaying ? 'spinning' : ''}">💿</div>
+            <div class="radio-info">
+               <div class="r-status">${Radio.isPlaying ? 'NOW PLAYING' : 'OFFLINE'}</div>
+               <div class="r-mode">${Radio.mode.toUpperCase()} MIX</div>
+            </div>
+            <button class="radio-toggle-btn ${Radio.isPlaying ? 'playing' : ''}" id="radioToggleBtn">
+               ${Radio.isPlaying ? '⏹ STOP' : '▶ START'}
+            </button>
+         </div>
       </div>
     </div>
+    
+    <!-- Pro alerts -->
+    ${pro ? proAlerts[pro] || '' : ''}
+
+    <div class="quote-card glass nb-card" style="margin-top:20px; font-style:italic; text-align:center; padding:20px;">"${getTodayQuote()}"</div>
   </div>`;
 }
 
@@ -2644,15 +2738,37 @@ function renderSemesters() {
   return `<div class="page-wrap">
     <div class="page-header-row">
       <h1 class="page-title">📅 เทอมการศึกษา</h1>
-      <div class="hdr-acts"><button class="btn-glass-primary" id="addSemBtn">+ เพิ่มเทอม</button></div>
+      <div class="hdr-acts">
+        <button class="btn-glass-primary" id="importCalBtn">📥 นำเข้าปฏิทิน</button>
+        <button class="btn-glass-primary" id="addSemBtn">+ เพิ่มเทอม</button>
+      </div>
     </div>
     <div class="card-list">
-      ${state.semesters.map(sem => {
+      ${state.semesters.length === 0 ? `<div class="empty-hero"><div class="empty-icon">📅</div><h3>ยังไม่มีเทอมการศึกษา</h3><p>กด "+ เพิ่มเทอม" หรือ "นำเข้าปฏิทิน" เพื่อเริ่มต้น</p></div>` :
+      state.semesters.map(sem => {
         const courses = state.courses[sem.id] || [];
-        return `<div class="glass-card sem-card">
-            <div class="sem-name">${sem.name}</div>
+        const semGPA = calcGPAFromList(courses);
+        const isActive = getCurrentSemester()?.id === sem.id;
+        const cr = courses.reduce((s, c) => s + (parseInt(c.credits) || 0), 0);
+        return `<div class="glass-card sem-card ${isActive ? 'sem-active' : ''}">
+            <div class="sem-top">
+              <div>
+                <div class="sem-name">${sem.name} ${isActive ? '<span class="badge-live">● ปัจจุบัน</span>' : ''}</div>
+                <div class="sem-dates">📅 ${sem.startDate ? new Date(sem.startDate).toLocaleDateString('th-TH') : ''} — ${sem.endDate ? new Date(sem.endDate).toLocaleDateString('th-TH') : ''}</div>
+              </div>
+              <div class="sem-stats">
+                <div class="sem-gpa-big" style="color:${GRADE_COLORS[semGPA] || 'var(--c-accent)'}">${semGPA}</div>
+                <div class="sem-cr-lbl">${cr} หน่วยกิต</div>
+              </div>
+            </div>
+            <div class="course-tags">
+              ${courses.map(c => `<span class="ctag" style="border-color:${c.color || 'var(--c-accent)'}44;background:${c.color || 'var(--c-accent)'}11">
+                ${c.code}${c.grade ? ` <span class="ctag-grade" style="background:${GRADE_COLORS[c.grade] || '#94a3b8'}33;color:${GRADE_COLORS[c.grade] || '#94a3b8'}">${c.grade}</span>` : ''}
+              </span>`).join('') || '<span class="empty-tags">ยังไม่มีวิชา</span>'}
+            </div>
             <div class="card-actions">
               <button class="btn-text-sm" data-edit-sem="${sem.id}">✏️ แก้ไข</button>
+              <button class="btn-text-sm" data-view-sem="${sem.id}">📋 รายวิชา</button>
               <button class="btn-text-danger" data-del-sem="${sem.id}">🗑 ลบ</button>
             </div>
           </div>`;
@@ -2662,23 +2778,88 @@ function renderSemesters() {
 }
 
 function renderCourses() {
+  const isArchiveView = state.courseView === 'archive';
   const filteredSemesters = state.semesters.filter(s => !state.selectedSemester || s.id === state.selectedSemester);
+
+  const pastelMap = {
+    '#4f46e5': '#dbeafe', '#0891b2': '#ecfeff', '#059669': '#f0fdf4',
+    '#d97706': '#fefce8', '#dc2626': '#fee2e2', '#7c3aed': '#f5f3ff',
+    '#db2777': '#fdf2f8', '#ea580c': '#fff7ed'
+  };
+
   return `<div class="page-wrap">
-    <h1 class="page-title">Courses</h1>
+    <div class="page-header-row">
+      <h1 class="page-title" style="font-family: 'Playfair Display', serif; font-size: 36px; color: #000; -webkit-text-fill-color: initial;">Courses</h1>
+      <div class="hdr-acts">
+        <button class="btn-glass ${!isArchiveView ? 'active' : ''}" id="viewCurrentCourseBtn">Active</button>
+        <button class="btn-glass ${isArchiveView ? 'active' : ''}" id="viewArchiveCourseBtn">Archive</button>
+        <select class="glass-select" id="semFilterCourse">
+          <option value="">— All Terms —</option>
+          ${state.semesters.map(s => `<option value="${s.id}" ${state.selectedSemester === s.id ? 'selected' : ''}>${s.name}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+
+    <div class="search-bar-modern" style="margin-bottom: 25px; display:flex; gap:10px;">
+      <div style="position:relative; flex:1;">
+        <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); opacity:0.5;">🔍</span>
+        <input type="text" class="nb-input" id="courseLocalSearch" placeholder="Search a course" style="padding-left:40px; border-radius:10px; background:#fff;" value="${state.courseSearch || ''}" oninput="state.courseSearch = this.value; render();">
+      </div>
+      <select class="glass-select" onchange="state.courseStatusFilter = this.value; render();">
+        <option value="all" ${state.courseStatusFilter === 'all' ? 'selected' : ''}>— All Status —</option>
+        <option value="active" ${state.courseStatusFilter === 'active' ? 'selected' : ''}>📖 กำลังเรียน</option>
+        <option value="done" ${state.courseStatusFilter === 'done' ? 'selected' : ''}>✅ เสร็จสิ้น</option>
+      </select>
+    </div>
+
     ${filteredSemesters.map(sem => {
     let courses = state.courses[sem.id] || [];
+    courses = courses.filter(c => isArchiveView ? c.isArchived : !c.isArchived);
+
+    if (state.courseStatusFilter === 'active') courses = courses.filter(c => !c.grade || c.grade === '-' || c.grade === 'I');
+    if (state.courseStatusFilter === 'done') courses = courses.filter(c => c.grade && c.grade !== '-' && c.grade !== 'I');
+
+    if (state.courseSearch) {
+      const q = state.courseSearch.toLowerCase();
+      courses = courses.filter(c => c.code.toLowerCase().includes(q) || c.nameTh.toLowerCase().includes(q) || (c.nameEn && c.nameEn.toLowerCase().includes(q)));
+    }
+
+    if (courses.length === 0) return '';
+
     return `
         <div class="sem-group-block">
-          <div class="sem-group-hd">${sem.name}</div>
+          <div class="sem-group-hd" style="margin-top:20px;">${sem.name}</div>
           <div class="course-grid">
-            ${courses.map(c => `
-              <div class="folder-card" onclick="renderCourseHub('${c.id}')">
-                <div class="folder-content">
-                  <div style="font-weight:900;">${c.code}</div>
-                  <div class="folder-label">${c.nameTh}</div>
+            ${courses.map(c => {
+      const history = state.attendanceHistory[c.id] || {};
+      const totalAtt = Object.keys(history).length;
+      let attendCount = 0;
+      let todayCheckedIn = false;
+      const todayStr = new Date().toLocaleDateString('en-CA');
+      Object.entries(history).forEach(([d, h]) => {
+        if (!h.status.includes('ขาดเรียน')) attendCount++;
+        if (d === todayStr) todayCheckedIn = true;
+      });
+      const attRate = totalAtt > 0 ? ((attendCount / totalAtt) * 100).toFixed(0) : '-';
+      const attColor = attRate >= 80 || attRate === '-' ? 'var(--c-lime)' : 'var(--c-rust)';
+
+      return `
+              <div class="folder-card" style="--folder-bg: ${pastelMap[c.color] || c.color + '22'}; position:relative;" onclick="renderCourseHub('${c.id}')">
+                <div style="position:absolute; top:10px; right:10px; display:flex; gap:5px; align-items:center;">
+                   ${todayCheckedIn ? '<div style="background:var(--c-lime); color:white; font-size:10px; padding:2px 6px; border-radius:4px; font-weight:bold;">✅ วันนี้เช็คแล้ว</div>' : ''}
+                   ${attRate !== '-' ? `<div style="background:${attColor}; color:white; font-size:10px; padding:2px 6px; border-radius:4px; font-weight:bold;">📍 ${attRate}%</div>` : ''}
+                   <button class="icon-btn-sm" onclick="event.stopPropagation(); openAddCourseForm(${JSON.stringify(c).replace(/"/g, '&quot;')})">✏️</button>
+                </div>
+                <div class="folder-content" style="margin-top:15px;">
+                  <div style="font-weight:900; font-size:16px; margin-bottom:8px; line-height:1.1;">${c.code}</div>
+                  <div class="folder-label">${c.nameTh.substring(0, 15)}${c.nameTh.length > 15 ? '...' : ''}</div>
                 </div>
               </div>
-            `).join('')}
+            `;
+    }).join('')}
+            <div class="folder-card add-folder" style="--folder-bg: #f1f5f9; border-style: dashed; justify-content:center; align-items:center;" onclick="openAddCourseForm()">
+               <span style="font-size:30px; opacity:0.3;">+</span>
+            </div>
           </div>
         </div>`;
   }).join('') || `<div class="empty-hero"><div class="empty-icon">${isArchiveView ? '🗄' : '📚'}</div><h3>Empty</h3></div>`}
@@ -3120,7 +3301,8 @@ function renderRoadmap() {
       const isPassed = passedCodes.has(c.code);
       const inProgress = Object.values(state.courses).flat().find(x => x.code === c.code && !x.grade);
       const prereqOk = checkPrereqs(c.code);
-      return `<div class="rm-course-item ${isPassed ? 'passed' : inProgress ? 'in-progress' : !prereqOk.ok ? 'locked' : ''}">
+      return `<div class="rm-course-item ${isPassed ? 'passed' : inProgress ? 'in-progress' : !prereqOk.ok ? 'locked' : ''}" 
+                   onclick="showCourseDetailsModal('${c.code}')" style="cursor:pointer;">
                 <div class="rm-course-code">${c.code}</div>
                 <div class="rm-course-name">${c.name}</div>
                 <div class="rm-course-cr">${c.credits} cr</div>
@@ -3929,16 +4111,39 @@ window.renderCourseHubUI_Original = (courseId) => {
   const finalBtn = document.getElementById('finalCheckinBtn');
   if (finalBtn) {
     finalBtn.onclick = async () => {
-      await setAttendanceStatus(courseId, c.mode === 'onsite' ? 'มาเรียน' : 'มาเรียน (Online)');
-      showToast('✅ เช็คชื่อสำเร็จ!');
-      renderCourseHub(courseId);
+      if (c.mode === 'onsite') {
+        showToast('⏳ กำลังตรวจสอบพิกัด...');
+        if (!navigator.geolocation) {
+          showToast('⚠️ ไม่สามารถใช้ GPS ได้', 'err');
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+          const { latitude: lat, longitude: lon } = pos.coords;
+          const target = c.targetCoords || "13.8476,100.5696"; // KU Def
+          const [tLat, tLon] = target.split(',').map(Number);
+          const dist = getDistance(lat, lon, tLat, tLon);
+          if (dist <= 200) {
+            await setAttendanceStatus(courseId, 'มาเรียน (Onsite)');
+            showToast('✅ เช็คชื่อสำเร็จ! คุณอยู่ในพื้นที่');
+            renderCourseHub(courseId);
+          } else {
+            showToast(`📍 คุณอยู่นอกพื้นที่! (ห่าง ${dist.toFixed(0)}ม.)`, 'err');
+          }
+        }, () => showToast('⚠️ ไม่สามารถเข้าถึงตำแหน่งได้', 'err'));
+      } else {
+        await setAttendanceStatus(courseId, 'มาเรียน (Online)');
+        showToast('✅ เช็คชื่อ Online สำเร็จ!');
+        renderCourseHub(courseId);
+      }
     };
   }
 
-  document.getElementById('saveAdvHubBtn').onclick = () => {
+  document.getElementById('saveAdvHubBtn').onclick = async () => {
     const val = document.getElementById('reflInput_adv').value;
     state.reflections[courseId] = val;
     localStorage.setItem('reflections', JSON.stringify(state.reflections));
+    await fsSet('reflections', courseId, { text: val, updatedAt: new Date().toISOString() });
+    showToast('✅ บันทึก Reflection สำเร็จ!');
     renderCourseHub(courseId);
   };
 }
@@ -4758,3 +4963,37 @@ async function requestNotificationPermission() {
 }
 
 window.requestNotificationPermission = requestNotificationPermission;
+
+window.openPendingReflectionsModal = () => {
+  const missing = getMissingReflections();
+  if (missing.length === 0) { showToast('🎉 ไม่มีงาน Reflection ค้างแล้ว'); return; }
+  
+  openModal('📝 สรุปการเรียนที่ค้างอยู่', `
+    <div style="padding:10px;">
+      <p style="font-size:13px; margin-bottom:15px; color:var(--c-rust); font-weight:700;">⚠️ ตรวจพบงานที่ค้างเกิน 24 ชม. (หลอกระบบหรือเปล่า? ทำไมเข้าเรียนแต่ไม่บันทึก!)</p>
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        ${missing.map(c => `
+          <div class="glass-card" style="padding:15px; border:1.5px solid black; background:white;">
+            <div style="font-weight:800;">${c.code} - ${c.nameTh}</div>
+            <textarea id="refl_${c.id}" class="nb-input" style="width:100%; margin-top:10px; min-height:60px;" placeholder="วันนี้เรียนรู้อะไรบ้าง..."></textarea>
+            <button class="nb-btn-primary sm full" style="margin-top:10px;" onclick="saveSingleReflection('${c.id}')">บันทึกวิชานี้</button>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `);
+};
+
+window.saveSingleReflection = async (id) => {
+  const val = document.getElementById(`refl_${id}`)?.value;
+  if (!val) { showToast('⚠️ กรุณากรอกเนื้อหา', 'err'); return; }
+  
+  state.reflections[id] = val;
+  localStorage.setItem('reflections', JSON.stringify(state.reflections));
+  await fsSet('reflections', id, { text: val, updatedAt: new Date().toISOString() });
+  showToast('✅ บันทึกสำเร็จ!');
+  const remaining = getMissingReflections();
+  if (remaining.length > 0) openPendingReflectionsModal(); 
+  else closeModal();
+  render();
+};
