@@ -5091,14 +5091,8 @@
     async function initWebPush() {
       if ('serviceWorker' in navigator) {
         try {
-          // ล้าง Service Worker เก่าที่อาจจะค้างอยู่ทิ้งก่อน
-          const registrations = await navigator.serviceWorker.getRegistrations();
-          for(let registration of registrations) {
-            await registration.unregister();
-          }
-          
-          const reg = await navigator.serviceWorker.register('firebase-messaging-sw.js');
-          console.log('Firebase Service Worker registered with scope:', reg.scope);
+          await navigator.serviceWorker.register('firebase-messaging-sw.js');
+          console.log('Firebase Service Worker registered');
         } catch (err) {
           console.warn('Service Worker registration failed:', err);
         }
@@ -5114,22 +5108,10 @@
       let permission = await Notification.requestPermission();
       if (permission === "granted") {
         try {
-          // รอให้ Service Worker พร้อมทำงาน 100%
-          let registration = await navigator.serviceWorker.ready;
-          
-          // ตรวจสอบสถานะว่า Active จริงๆ หรือยัง
-          if (registration.active && registration.active.state !== 'activated') {
-            await new Promise(resolve => {
-              const checkState = () => {
-                if (registration.active.state === 'activated') resolve();
-                else setTimeout(checkState, 100);
-              };
-              checkState();
-            });
-          }
+          const registration = await navigator.serviceWorker.ready;
           
           const currentToken = await getToken(messaging, { 
-            vapidKey: 'BGJJHyr07SwrKxHuo1w8HDRYCb6R-p6kZsk6yRaq-ho-iQ-7S0YdfTgz9KKDFW95jyQ927xCY51r6Wml84TonF4',
+            vapidKey: 'BGJJHyr07SwrKxHuo1w8HDRYCb6R-p6kZsk6yRaq-ho-iQ-7S0YdfTgz9KKDFW95jyQ927xCY51r6Wml84TonF4'.trim(),
             serviceWorkerRegistration: registration
           });
           
