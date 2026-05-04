@@ -1,8 +1,9 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp, where }
       from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
 
-    let db;
+    let db, messaging;
     async function startApp() {
       try {
         const firebaseConfig = await new Promise((res, rej) => {
@@ -27,6 +28,15 @@
             experimentalForceLongPolling: true
           });
         }
+        
+        messaging = getMessaging(app);
+        onMessage(messaging, (payload) => {
+          console.log('Message received. ', payload);
+          new Notification(payload.notification.title, {
+            body: payload.notification.body,
+            icon: payload.notification.image || "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+          });
+        });
         
         // Initial data load
         await loadAll();
@@ -3779,34 +3789,14 @@
     <div class="page-header"><h1 class="page-title">⚙️ ตั้งค่า</h1></div>
     
 <div class="settings-card" style="margin-bottom:15px;">
-  <div style="font-size:16px; font-weight:700; margin-bottom:10px;">🔔 การแจ้งเตือน</div>
-  <div class="settings-row" style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px; margin-bottom: 15px; border-bottom: 1px solid var(--c-border); padding-bottom: 15px;">
-    <div class="settings-label">
-      <div style="font-weight:600; font-size:14px;">Browser Push Notification</div>
-      <div style="font-size:12px; color:var(--c-muted); margin-top:4px;">รับการแจ้งเตือนโดยตรงผ่านเบราว์เซอร์ (ไม่ต้องมีแอป)</div>
-    </div>
-    <button class="btn-glass-primary" onclick="requestNotificationPermission()">เปิดการแจ้งเตือนบนเบราว์เซอร์</button>
-  </div>
+  <div style="font-size:16px; font-weight:700; margin-bottom:10px;">🔔 การแจ้งเตือนระบบ</div>
   <div class="settings-row" style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
     <div class="settings-label">
-      <div style="font-weight:600; font-size:14px;">Mobile App (ntfy)</div>
-      <div style="font-size:12px; color:var(--c-muted); margin-top:4px;">
-        สำหรับรับแจ้งเตือนบนมือถือผ่านแอป ntfy
-      </div>
+      <div style="font-weight:600; font-size:14px;">Browser Push Notification</div>
+      <div style="font-size:12px; color:var(--c-muted); margin-top:4px;">รับการแจ้งเตือนเดดไลน์และ GPA โดยตรงผ่านเบราว์เซอร์นี้</div>
     </div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <input 
-        type="text" 
-        id="ntfy-topic-input" 
-        class="glass-input" 
-        style="width:200px" 
-        placeholder="ชื่อ Topic ของคุณ"
-        value="${state.ntfyTopic || localStorage.getItem('ntfyTopic') || ''}"
-      >
-      <button class="btn-glass-primary" id="saveNtfyBtn">บันทึก Topic</button>
-    </div>
+    <button class="btn-glass-primary" onclick="requestNotificationPermission()">เปิดใช้งานการแจ้งเตือน</button>
   </div>
-  <div id="ntfy-status" style="font-size:12px;margin-top:6px;color:var(--c-muted)"></div>
 </div>
 
     <div class="glass-card settings-block">
@@ -5115,12 +5105,32 @@
       
       let permission = await Notification.requestPermission();
       if (permission === "granted") {
-        showToast("✅ เปิดการแจ้งเตือนสำเร็จ!");
-        // ส่งข้อความทดสอบ
-        new Notification("NITIPAT MANAGER", {
-          body: "ยินดีด้วย! คุณเปิดการแจ้งเตือนบนเบราว์เซอร์เรียบร้อยแล้ว",
-          icon: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
-        });
+        try {
+          const currentToken = await getToken(messaging, { 
+            vapidKey: 'BGJJHyr07SwrKxHuo1w8HDRYCb6R-p6kZsk6yRaq-ho-iQ-7S0YdfTgz9KKDFW95jyQ927xCY51r6Wml84TonF4' 
+          });
+          
+          if (currentToken) {
+            console.log('FCM Token:', currentToken);
+            // บันทึก Token ลง Firestore เพื่อให้ Backend ส่งแจ้งเตือนได้
+            await setDoc(doc(db, 'app_state', 'notification_token'), {
+              token: currentToken,
+              updatedAt: serverTimestamp(),
+              userId: STUDENT.id
+            });
+            
+            showToast("✅ เปิดการแจ้งเตือน FCM สำเร็จ!");
+            new Notification("NITIPAT MANAGER", {
+              body: "ระบบลงทะเบียนแจ้งเตือนแบบ Native สำเร็จแล้ว!",
+              icon: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+            });
+          } else {
+            showToast("⚠️ ไม่สามารถรับรหัสลงทะเบียนได้", "err");
+          }
+        } catch (err) {
+          console.error('An error occurred while retrieving token. ', err);
+          showToast("❌ เกิดข้อผิดพลาดในการลงทะเบียน FCM", "err");
+        }
       } else {
         showToast("⚠️ คุณยังไม่ได้อนุญาตการแจ้งเตือน", "err");
       }
