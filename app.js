@@ -5089,6 +5089,12 @@
     async function initWebPush() {
       if ('serviceWorker' in navigator) {
         try {
+          // ล้าง Service Worker เก่าที่อาจจะค้างอยู่ทิ้งก่อน
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          for(let registration of registrations) {
+            await registration.unregister();
+          }
+          
           const reg = await navigator.serviceWorker.register('firebase-messaging-sw.js');
           console.log('Firebase Service Worker registered with scope:', reg.scope);
         } catch (err) {
