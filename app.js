@@ -5087,10 +5087,10 @@
     }
     // ── Web Push & Notification Logic ──
     async function initWebPush() {
-      if ('serviceWorker' in navigator && 'PushManager' in window) {
+      if ('serviceWorker' in navigator) {
         try {
-          await navigator.serviceWorker.register('sw.js');
-          console.log('Service Worker registered');
+          const reg = await navigator.serviceWorker.register('firebase-messaging-sw.js');
+          console.log('Firebase Service Worker registered with scope:', reg.scope);
         } catch (err) {
           console.warn('Service Worker registration failed:', err);
         }
