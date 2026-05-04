@@ -1,261 +1,263 @@
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp, where }
-      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-    import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp, where }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
 
-    let db, messaging;
-    async function startApp() {
-      try {
-        const firebaseConfig = await new Promise((res, rej) => {
-          google.script.run.withSuccessHandler(res).withFailureHandler(rej).getFirebaseConfig();
-        });
-        
-        if (!firebaseConfig.apiKey) {
-          console.error("Firebase API Key is missing. Please set it in GAS Script Properties.");
-          showToast("⚠️ Firebase Config Missing", "err");
-          return;
-        }
+let db, messaging;
+async function startApp() {
+  try {
+    const firebaseConfig = await new Promise((res, rej) => {
+      google.script.run.withSuccessHandler(res).withFailureHandler(rej).getFirebaseConfig();
+    });
 
-        const app = initializeApp(firebaseConfig);
-        try {
-          db = initializeFirestore(app, {
-            localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-            experimentalForceLongPolling: true // Workaround for QUIC_PROTOCOL_ERROR
-          });
-        } catch (e) {
-          console.warn("Firestore persistent cache failed, using basic cache:", e);
-          db = initializeFirestore(app, {
-            experimentalForceLongPolling: true
-          });
-        }
-        
-        messaging = getMessaging(app);
-        onMessage(messaging, (payload) => {
-          console.log('Message received. ', payload);
-          new Notification(payload.notification.title, {
-            body: payload.notification.body,
-            icon: payload.notification.image || "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
-          });
-        });
-        
-        // Initial data load
-        await loadAll();
-        // Start hyper notifications after data is loaded
-        startHyperNotifications();
-        // Initialize Web Push
-        initWebPush();
-      } catch (err) {
-        console.error("App initialization failed:", err);
-      }
+    if (!firebaseConfig.apiKey) {
+      console.error("Firebase API Key is missing. Please set it in GAS Script Properties.");
+      showToast("⚠️ Firebase Config Missing", "err");
+      return;
     }
-    
-    // Start the app
-    startApp();
 
-    // ══════════════════════════════════════════════════
-    // COURSE DATABASE — วิชาทั้งหมดในหลักสูตร 137 หน่วยกิต
-    // ══════════════════════════════════════════════════
-    const COURSE_DB = {
-      // หมวดศึกษาทั่วไป
-      general: [
-        { code: "01175xxx", name: "กิจกรรมพลศึกษา", nameEn: "Physical Education", credits: 1, group: "อยู่ดีมีสุข" },
-        { code: "01200101", name: "การคิดเชิงนวัตกรรม", nameEn: "Innovative Thinking", credits: 3, group: "ศาสตร์ผู้ประกอบการ" },
-        { code: "01355101", name: "ภาษาอังกฤษเพื่อชีวิตประจำวัน", nameEn: "English for Everyday Life", credits: 3, group: "ภาษา" },
-        { code: "01355102", name: "ภาษาอังกฤษสำหรับชีวิตในมหาวิทยาลัย", nameEn: "English for University Life", credits: 3, group: "ภาษา" },
-        { code: "01355103", name: "ภาษาอังกฤษเพื่อโอกาสทางอาชีพ", nameEn: "English for Job Opportunities", credits: 3, group: "ภาษา" },
-        { code: "01371111", name: "สารสนเทศเพื่อการเรียนรู้", nameEn: "Information Media for Learning", credits: 1, group: "ภาษา" },
-        { code: "01999021", name: "ภาษาไทยเพื่อการสื่อสารทางวิชาการและวิชาชีพ", nameEn: "Thai for Academic Communication", credits: 3, group: "ภาษา" },
-        { code: "01999023", name: "ทักษะดิจิทัล", nameEn: "Digital Literacy", credits: 2, group: "ภาษา" },
-        { code: "01999111", name: "ศาสตร์แห่งแผ่นดิน", nameEn: "Knowledge of the Land", credits: 2, group: "พลเมือง" },
-        { code: "01385223", name: "วิวัฒนาการของเพลงลูกทุ่งไทย", nameEn: "Evolution of Thai Country Songs", credits: 3, group: "สุนทรียะ" },
-        { code: "01385261", name: "ดนตรีพื้นเมืองภาคเหนือ", nameEn: "Northern Thai Folk Music", credits: 3, group: "สุนทรียะ" },
-        { code: "01387101", name: "ศิลปะการอยู่ร่วมกับผู้อื่น", nameEn: "The Art of Living with Others", credits: 3, group: "อยู่ดีมีสุข" },
-        { code: "01204111", name: "คอมพิวเตอร์และการโปรแกรม", nameEn: "Computers and Programming", credits: 3, group: "ภาษา" },
-      ],
-      // พื้นฐานทางคณิตศาสตร์และวิทยาศาสตร์
-      science: [
-        { code: "01403114", name: "ปฏิบัติการหลักมูลเคมีทั่วไป", nameEn: "Laboratory in Fundamental of General Chemistry", credits: 1, prereq: [] },
-        { code: "01403117", name: "หลักมูลเคมีทั่วไป", nameEn: "Fundamental of General Chemistry", credits: 3, prereq: [] },
-        { code: "01417167", name: "คณิตศาสตร์วิศวกรรม I", nameEn: "Engineering Mathematics I", credits: 3, prereq: [] },
-        { code: "01417168", name: "คณิตศาสตร์วิศวกรรม II", nameEn: "Engineering Mathematics II", credits: 3, prereq: ["01417167"] },
-        { code: "01417267", name: "คณิตศาสตร์วิศวกรรม III", nameEn: "Engineering Mathematics III", credits: 3, prereq: ["01417168"] },
-        { code: "01420111", name: "ฟิสิกส์ทั่วไป I", nameEn: "General Physics I", credits: 3, prereq: [] },
-        { code: "01420112", name: "ฟิสิกส์ทั่วไป II", nameEn: "General Physics II", credits: 3, prereq: ["01420111"] },
-        { code: "01420113", name: "ปฏิบัติการฟิสิกส์ I", nameEn: "Laboratory in Physics I", credits: 1, prereq: [] },
-        { code: "01420114", name: "ปฏิบัติการฟิสิกส์ II", nameEn: "Laboratory in Physics II", credits: 1, prereq: [] },
-      ],
-      // พื้นฐานทางวิศวกรรม (Engineering Core)
-      engineering_basic: [
-        { code: "01205201", name: "วิศวกรรมไฟฟ้าเบื้องต้น", nameEn: "Introduction to Electrical Engineering", credits: 3, prereq: [] },
-        { code: "01205202", name: "ปฏิบัติการวิศวกรรมไฟฟ้า I", nameEn: "Electrical Engineering Laboratory I", credits: 1, prereq: ["01205201"] },
-        { code: "01206221", name: "ความน่าจะเป็นและสถิติประยุกต์สำหรับวิศวกร", nameEn: "Applied Probability and Statistics for Engineers", credits: 3, prereq: [] },
-        { code: "01208111", name: "การเขียนแบบวิศวกรรม", nameEn: "Engineering Drawing", credits: 3, prereq: [] },
-        { code: "01208221", name: "กลศาสตร์วิศวกรรม I", nameEn: "Engineering Mechanics I", credits: 3, prereq: [] },
-        { code: "01208281", name: "การฝึกงานโรงงาน", nameEn: "Workshop Practice", credits: 1, prereq: [] },
-        { code: "01213211", name: "วัสดุศาสตร์สำหรับวิศวกร", nameEn: "Materials Science for Engineers", credits: 3, prereq: [], description: "ความสัมพันธ์ระหว่างโครงสร้าง สมบัติ กระบวนการ และสมรรถนะของวัสดุวิศวกรรม แผนภาพสมดุลเฟสและการตีความ โครงสร้างจุลภาคและมหภาคที่สัมพันธ์กับสมบัติของวัสดุวิศวกรรม การตรวจสอบโครงสร้างของวัสดุ การทดสอบและการวิเคราะห์สมบัติของวัสดุ การกัดกร่อนและการเสื่อมของวัสดุ กระบวนการผลิตของวัสดุวิศวกรรม วัสดุประกอบและวัสดุก่อสร้าง" },
-      ],
-      // วิชาบังคับ (Major Required)
-      core: [
-        { code: "01213212", name: "หลักมูลของวัสดุอนินทรีย์", nameEn: "Fundamental of Inorganic Materials", credits: 4, prereq: [], description: "เวกเตอร์ระนาบ ดัชนีมิลเลอร์ และเทนเซอร์ ผลึกส่วนกลับและระนาบการเคลื่อน โครงสร้างผลึกของวัสดุ เคมีของตำหนิ ตำหนิในโครงสร้างผลึก กลไกของดิสโลเคชันและขอบเกรน โครงสร้างอสัณฐานของวัสดุอนินทรีย์และแก้วเซรามิก การเคลือบในเซรามิก ทฤษฎีควอนตัม พันธะในวัสดุอนินทรีย์ สมบัติทางไฟฟ้า สมบัติทางแสง สมบัติทางแม่เหล็ก สมบัติทางความร้อน ความสัมพันธ์ระหว่างโครงสร้างและสมบัติของวัสดุ" },
-        { code: "01213213", name: "หลักเคมีสำหรับวัสดุอินทรีย์", nameEn: "Principle Chemistry for Organic Materials", credits: 4, prereq: [], description: "พันธะและโครงสร้างของสารอินทรีย์ สเตอริโอเคมี ชนิดของปฏิกิริยาเคมีและกลไก ชีวโมเลกุล ชนิดของพอลิเมอร์และการจำแนก ชนิดและกลไกการเกิดพอลิเมอร์ โครงสร้างทางเคมีของพอลิเมอร์" },
-        { code: "01213214", name: "ปฏิบัติการหลักเคมีสำหรับวัสดุอินทรีย์", nameEn: "Principle Chemistry Laboratory for Organic Materials", credits: 1, prereq: ["01213213"], description: "ปฏิบัติการเกี่ยวกับหลักเคมีสำหรับวัสดุอินทรีย์" },
-        { code: "01213215", name: "หลักมูลของเทคโนโลยีวัสดุ", nameEn: "Fundamentals of Materials Technology", credits: 3, prereq: [] },
-        { code: "01213216", name: "พฤติกรรมทางกลของวัสดุ", nameEn: "Mechanical Behavior of Materials", credits: 4, prereq: ["01213212"], description: "พื้นฐานเกี่ยวกับความเค้นและความเครียด พฤติกรรมแบบยืดหยุ่นและพลาสติก กลไกการเสริมความแข็งแรงของวัสดุ ความวิบัติของวัสดุแบบต่างๆ การแตกร้าว ความล้า การคืบ การทดสอบสมบัติทางกลของวัสดุ การประยุกต์ใช้ในงานวิศวกรรม" },
-        { code: "01213217", name: "อุณหพลศาสตร์ของวัสดุ", nameEn: "Thermodynamics of Materials", credits: 3, prereq: ["01213213"], description: "กฎของอุณหพลศาสตร์ พลังงานและเอนโทรปี พลังงานอิสระของกิบบ์ส สมดุลเฟสในระบบสารบริสุทธิ์และสารละลาย สารละลายในอุดมคติและสารละลายจริง กิจกรรมทางเคมี แผนภูมิความร้อนของเฟส การประยุกต์ใช้ในงานวิศวกรรมวัสดุ" },
-        { code: "01213218", name: "กระบวนการผลิตสำหรับวิศวกรวัสดุ", nameEn: "Manufacturing Processes for Materials Engineers", credits: 3, prereq: ["01213212"], description: "กระบวนการผลิตสำหรับวิศวกรรมวัสดุ ได้แก่ กระบวนการหล่อ การขึ้นรูป การตัดแต่ง การเชื่อมต่อ การปรับปรุงสมบัติทางความร้อนและทางกล การผลิตวัสดุเซรามิกและพอลิเมอร์ เทคโนโลยีการผลิตสมัยใหม่" },
-        { code: "01213219", name: "ปฏิบัติการกระบวนการแปรรูปวัสดุ", nameEn: "Materials Processing Laboratory", credits: 1, prereq: ["01213218"], description: "ปฏิบัติการเกี่ยวกับการแปรรูปวัสดุสำหรับโลหะ เซรามิกและพอลิเมอร์ การออกแบบใช้คอมพิวเตอร์ช่วย การขึ้นรูปต้นแบบเร็ว เทคโนโลยีการพิมพ์แบบสามมิติ" },
-        { code: "01213311", name: "หลักของเทคนิคการศึกษาลักษณะเฉพาะ", nameEn: "Principle of Characterization Techniques", credits: 3, prereq: ["01213211"], description: "การวิเคราะห์พื้นผิวด้วยกล้องจุลทรรศน์แบบแสงและกล้องจุลทรรศน์อิเล็กตรอน โครงสร้างผลึกและการวิเคราะห์ด้วยมาตรการเลี้ยวเบนของรังสีเอ็กซ์ การวิเคราะห์พื้นที่ผิวและขนาดอนุภาค การวิเคราะห์ทางเคมีโดยสเปกโทรสโกปี การวิเคราะห์เชิงความร้อน" },
-        { code: "01213312", name: "ปฏิบัติการการศึกษาลักษณะเฉพาะและการวิเคราะห์สมบัติของวัสดุ", nameEn: "Materials Characterization and Properties Analysis Lab", credits: 1, prereq: ["01213311"], description: "ปฏิบัติการการเตรียมชิ้นงานตัวอย่างสำหรับการวิเคราะห์โครงสร้างจุลภาค โครงสร้างผลึก โครงสร้างพื้นผิว และสมบัติทางความร้อนของวัสดุ" },
-        { code: "01213313", name: "จลนพลศาสตร์และปรากฏการณ์การถ่ายโอนของวัสดุ", nameEn: "Kinetics and Transport Phenomena in Materials Engineering", credits: 4, prereq: ["01213217"], description: "ทฤษฎีจลนศาสตร์ประยุกต์สำหรับวิศวกรรมวัสดุและการแต่งแร่ ทฤษฎีการชน พลังงานกระตุ้น การไหลของของไหลในกระบวนการวัสดุ การถ่ายเทความร้อน: การนำความร้อน การพาความร้อน และการแผ่รังสีความร้อน การวิเคราะห์เชิงความร้อนโดยใช้คอมพิวเตอร์ช่วยวิศวกรรม การวิเคราะห์ความเค้นเชิงความร้อนโดยใช้คอมพิวเตอร์ช่วยวิศวกรรม การถ่ายเทมวล: การแพร่มวล การพามวล การเกิดนิวเคลียสและการเติบโต การแข็งตัว" },
-        { code: "01213314", name: "การวิเคราะห์ความวิบัติและการป้องกัน", nameEn: "Failure Analysis and Prevention", credits: 3, prereq: ["01213216"], description: "การวิเคราะห์ความวิบัติและการป้องกัน การเสื่อมสภาพของวัสดุและอุปกรณ์ ตำหนิของผลิตภัณฑ์และการทดสอบ ความวิบัติรูปแบบต่างๆ ในวัสดุ การวิเคราะห์รอยแตกและภาพรอยแตก ความวิบัติในเซรามิก ความวิบัติจากการกัดกร่อน การเสื่อมสภาพของพอลิเมอร์ ความวิบัติเนื่องจากความผิดพลาดในการผลิต กรณีศึกษา" },
-        { code: "01213316", name: "อุตสาหกรรมวัสดุในประเทศไทย", nameEn: "Materials Industry in Thailand", credits: 1, prereq: ["01213218"], description: "บทบาทของวัสดุศาสตร์และวิศวกรรมวัสดุในอุตสาหกรรม การประยุกต์และการผลิตวัสดุวิศวกรรม โดยอ้างอิงอุตสาหกรรมในประเทศไทย การจัดการในอุตสาหกรรม การเยี่ยมชมโรงงานอุตสาหกรรม" },
-        { code: "01213395", name: "การเตรียมข้อเสนอโครงการวิจัย", nameEn: "Research Proposal Preparation", credits: 1, prereq: [], description: "การอภิปรายและการสืบค้นถึงความก้าวหน้าทางเทคโนโลยีในปัจจุบันและปัญหาต่างๆ ในเทคโนโลยีของวัสดุ การวางแผนการวิจัย การเขียนข้อเสนอโครงงานวิจัยและนำเสนอข้อเสนอโครงงานวิจัย" },
-        { code: "01213411", name: "การคัดเลือกวัสดุและการออกแบบทางวิศวกรรม", nameEn: "Materials Selection and Engineering Design", credits: 3, prereq: ["01213216", "01213218"], description: "บทบาทของวัสดุในการออกแบบและพัฒนาผลิตภัณฑ์นวัตกรรม วัสดุและสมบัติ แผนภูมิวัสดุ ดัชนีวัสดุ การคัดเลือกวัสดุ การคัดเลือกวัสดุในกรณีหลายเงื่อนไขและวัตถุประสงค์ การคัดเลือกวัสดุและรูปร่าง การบูรณาการหลักการคัดเลือกวัสดุร่วมกับการใช้คอมพิวเตอร์ช่วยในการออกแบบและวิเคราะห์เชิงวิศวกรรม การคัดเลือกกระบวนการ เงื่อนไขสำคัญในการออกแบบและเลือกวัสดุสำหรับผลิตภัณฑ์พอลิเมอร์และพลาสติก การใช้คอมพิวเตอร์ช่วยในการออกแบบและผลิตผลิตภัณฑ์พอลิเมอร์และพลาสติก กรณีศึกษา" },
-        { code: "01213412", name: "การจัดการการผลิตในอุตสาหกรรมวัสดุ", nameEn: "Production Management for Materials Industry", credits: 3, prereq: [], description: "เทคนิคการพยากรณ์ การจัดการอุตสาหกรรมวัสดุ การควบคุมสินค้าคงคลัง การวางแผนความต้องการของวัสดุ การวางแผนกำลังการผลิต การจัดลำดับการผลิต การควบคุมการผลิตในอุตสาหกรรมวัสดุ การวิเคราะห์ต้นทุนทางอุตสาหกรรมวัสดุและจุดคุ้มทุน" },
-        { code: "01213497", name: "สัมมนา", nameEn: "Seminar", credits: 1, prereq: [] },
-        { code: "01213499", name: "โครงงานวิศวกรรมวัสดุ", nameEn: "Materials Engineering Project", credits: 3, prereq: ["01213395"] },
-      ],
-      // วิชาเลือก (Major Elective)
-      elective: [
-        { code: "01213399", name: "การฝึกงาน", nameEn: "Internship", credits: 1, prereq: [] },
-        { code: "01213421", name: "โลหกรรมกายภาพ", nameEn: "Physical Metallurgy", credits: 3, prereq: ["01213212"], description: "โครงสร้างโลหะและการเกิดผลึก ข้อบกพร่องในโครงสร้างผลึก ดิสโลเคชันและการเปลี่ยนรูปอย่างถาวร การเกิดนิวเคลียสและการแข็งตัว แผนภาพสมดุลของเฟส การอบชุบความร้อน การเปลี่ยนเฟส กลไกการเพิ่มความแข็งแรง การแพร่ในของแข็ง สมบัติและการใช้งานของโลหะผสมทั้งในและนอกกลุ่มเหล็ก" },
-        { code: "01213422", name: "โลหกรรมเชิงเคมี", nameEn: "Chemical Metallurgy", credits: 3, prereq: ["01213211"], description: "หลักการของโลหกรรมความร้อนสำหรับการสกัดโลหะจากแร่ การเตรียมแร่ การถลุง กระบวนการปรับเปลี่ยนและการทำให้บริสุทธิ์ การผลิตทองแดง การผลิตเหล็กและเหล็กกล้า หลักการของโลหกรรมสารละลายสำหรับการสกัดโลหะจากแร่โลหะ การสกัดโลหะโดยใช้ตัวทำละลาย กระบวนการทำให้โลหะเข้มข้น กระบวนการกู้ การใช้ประโยชน์โลหะ" },
-        { code: "01213423", name: "การขึ้นรูปและการหล่อโลหะ", nameEn: "Forming and Casting of Metals", credits: 3, prereq: ["01213218"], description: "ทฤษฎีและการพัฒนาสมัยใหม่ของกระบวนการหล่อโลหะ วิธีมาตรฐานและวิธีใหม่ การออกแบบระบบการไหลและรูล้น การออกแบบกระบวนการ การตกแต่งสำเร็จและการตรวจสอบงานหล่อ แหล่งและการกำจัดขีดจำกัดของการออกแบบ ทฤษฎีและปฏิบัติการของการรีด การตีขึ้นรูป การอัดขึ้นรูป การลากขึ้นรูป แหล่งและการกำจัดข้อบกพร่อง" },
-        { code: "01213424", name: "โลหกรรมเชิงผง", nameEn: "Powder Metallurgy", credits: 3, prereq: ["01213211"], description: "เทคนิคการผลิตผงโลหะ การศึกษาลักษณะเฉพาะของผงโลหะ วิธีการผสมและการขึ้นรูป การเผาผนึกโลหะ ทฤษฎีการเผาผนึก การปรับปรุงสมบัติด้วยความร้อน การปรับแต่งขั้นสุดท้าย โลหกรรมผงชั้นสูงประยุกต์" },
-        { code: "01213425", name: "เทคโนโลยีการบำบัดพื้นผิว", nameEn: "Surface Treatment Technology", credits: 3, prereq: ["01213421"], description: "การบำบัดพื้นผิวและการวิเคราะห์พื้นผิวของวัสดุที่ถูกบำบัด การบำบัดพื้นผิวทางความร้อน เคมี กายภาพและทางกล สมบัติและการประยุกต์วัสดุที่ผ่านการบำบัดพื้นผิวในอุตสาหกรรม" },
-        { code: "01213426", name: "วิศวกรรมโลหะผสม", nameEn: "Alloys Engineering", credits: 3, prereq: ["01213211"] },
-        { code: "01213427", name: "การกัดกร่อน", nameEn: "Corrosion", credits: 3, prereq: ["01213211"], description: "หลักการการกัดกร่อน วิธีการวัดและการคำนวณอัตราการกัดกร่อนโดยใช้เทคนิคทางเคมีไฟฟ้า รูปแบบของการกัดกร่อน การทดสอบการกัดกร่อน การกัดกร่อนในสภาพแวดล้อมจำเพาะ การกัดกร่อนที่อุณหภูมิสูง กรณีศึกษาการวิบัติของวัสดุในระหว่างใช้งานเนื่องจากการกัดกร่อน หลักการเลือกวัสดุและการออกแบบ สารยับยั้งการกัดกร่อน การป้องกันแบบแอโนดิกและแคโทดิก การเตรียมผิวและการเคลือบผิวเพื่อซ่อมบำรุง" },
-        { code: "01213431", name: "เซรามิกเบื้องต้น", nameEn: "Introduction to Ceramics", credits: 3, prereq: ["01213212"] },
-        { code: "01213432", name: "การแปรรูปเซรามิก", nameEn: "Ceramic Processing", credits: 3, prereq: ["01213212"], description: "ลักษณะเฉพาะของวัสดุเซรามิก ขนาดและรูปร่างของอนุภาค ความหนาแน่น โครงสร้างและพื้นผิวจำเพาะของรูพรุน เคมีภัณฑ์สำหรับการกระจายและรวมตัวของอนุภาค กลไกของอนุภาค การกระจายขนาดของอนุภาคและวิทยาการไหล การผสม การขึ้นรูปและกระบวนการหลังการขึ้นรูปของอุตสาหกรรมเซรามิก การอบแห้ง การตกแต่ง การเคลือบและการเผา กระบวนการผลิตเซรามิกในระดับห้องปฏิบัติการหรืออุตสาหกรรม" },
-        { code: "01213441", name: "หลักมูลของวัสดุพอลิเมอร์", nameEn: "Fundamental of Polymeric Materials", credits: 3, prereq: ["01213213"], description: "ความสัมพันธ์ของโครงสร้างทางเคมีและสมบัติของพอลิเมอร์ น้ำหนักโมเลกุลและการกระจายน้ำหนักโมเลกุล สัณฐานวิทยาของพอลิเมอร์ สารละลายพอลิเมอร์ พอลิเมอร์ผสม สมบัติของพอลิเมอร์และการทดสอบ วิทยากระแสของพอลิเมอร์ การแปรรูปพอลิเมอร์ สารเติมแต่ง เทคโนโลยีเส้นใย" },
-        { code: "01213442", name: "เทคโนโลยียาง", nameEn: "Rubber Technology", credits: 3, prereq: ["01213213"] },
-        { code: "01213451", name: "วัสดุประกอบ", nameEn: "Composite Materials", credits: 3, prereq: ["01213211"], description: "การจำแนกชนิดของวัสดุเชิงประกอบ ชนิดของสารเสริมแรง กระบวนการผลิต สมบัติเชิงกล กลไกการเพิ่มความแข็งแรงในวัสดุประกอบ การประยุกต์ใช้ในอุตสาหกรรม" },
-        { code: "01213452", name: "วัสดุชีวภาพเบื้องต้น", nameEn: "Introduction to Biomaterials", credits: 3, prereq: ["01213211"] },
-        { code: "01213453", name: "นวัตกรรมวิศวกรรมนาโน", nameEn: "Innovation of Nanoengineering", credits: 3, prereq: ["01213211"] },
-        { code: "01213455", name: "วัสดุและอุปกรณ์ไฟฟ้า แม่เหล็ก แสง", nameEn: "Electromagnetooptic Materials and Devices", credits: 3, prereq: ["01213212"] },
-        { code: "01213457", name: "วัสดุสำหรับเทคโนโลยีการเก็บเกี่ยวพลังงาน", nameEn: "Materials for Energy Harvesting Technology", credits: 3, prereq: ["01213212"] },
-        { code: "01213461", name: "โลหกรรมของการเชื่อมและการทดสอบแบบไม่ทำลาย", nameEn: "Welding Metallurgy and Non-destructive Testing", credits: 3, prereq: ["01213211"] },
-        { code: "01213471", name: "การจัดการพลังงานในอุตสาหกรรมวัสดุ", nameEn: "Energy Management in Materials Industries", credits: 3, prereq: ["01213217"], description: "เทอร์โมไดนามิกของกระบวนการผลิตวัสดุ การคำนวณการใช้พลังงาน การวิเคราะห์ต้นทุนพลังงาน การใช้พลังงานในอุตสาหกรรมผลิตโลหะ การใช้พลังงานในอุตสาหกรรมผลิตเซรามิก การใช้พลังงานในอุตสาหกรรมผลิตพอลิเมอร์ การเก็บเกี่ยวพลังงานความร้อนเหลือทิ้ง การออกแบบกระบวนการเพื่อลดการใช้พลังงาน กรณีศึกษา" },
-        { code: "01213472", name: "แบบจำลองคอมพิวเตอร์ของวัสดุ", nameEn: "Computer Modeling of Materials", credits: 3, prereq: ["01213212"], description: "การใช้คอมพิวเตอร์ช่วยคำนวณเบื้องต้น หลักเบื้องต้นของการใช้คอมพิวเตอร์ช่วยออกแบบ การวิเคราะห์ความเค้นความเครียดด้วยคอมพิวเตอร์ การจำลองแบบมัลติฟิสิกส์ แบบจำลองสนามเฟส การจำลองทางพลวัตของโมเลกุล การจำลองทางควอนตัม โครงข่ายประสาทเทียม" },
-        { code: "01213490", name: "สหกิจศึกษา", nameEn: "Co-operative Education", credits: 7, prereq: [] },
-      ]
-    };
+    const app = initializeApp(firebaseConfig);
+    try {
+      db = initializeFirestore(app, {
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+        experimentalForceLongPolling: true // Workaround for QUIC_PROTOCOL_ERROR
+      });
+    } catch (e) {
+      console.warn("Firestore persistent cache failed, using basic cache:", e);
+      db = initializeFirestore(app, {
+        experimentalForceLongPolling: true
+      });
+    }
 
-    const ALL_COURSES = [...COURSE_DB.general, ...COURSE_DB.science, ...COURSE_DB.engineering_basic, ...COURSE_DB.core, ...COURSE_DB.elective];
+    messaging = getMessaging(app);
+    onMessage(messaging, (payload) => {
+      console.log('Message received. ', payload);
+      new Notification(payload.notification.title, {
+        body: payload.notification.body,
+        icon: payload.notification.image || "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+      });
+    });
 
-    // ══════════════════════════════════════════════════
-    // ACADEMIC CALENDAR 2568-2569 (embedded)
-    // ══════════════════════════════════════════════════
-    const ACADEMIC_CALENDAR = {
-      "2568_1": {
-        name: "ภาคต้น 2568", year: 2568, term: 1,
-        start: "2025-06-23", end: "2025-11-02",
-        midterm_start: "2025-08-09", midterm_end: "2025-08-17",
-        final_start: "2025-10-19", final_end: "2025-10-31",
-        reg_start: "2025-06-02", reg_end: "2025-06-13",
-        reg_date_67: "2025-06-19",
-        add_drop_end: "2025-07-21",
-        withdraw_w_start: "2025-07-22", withdraw_w_end: "2025-08-20",
-        fee_start: "2025-06-02", fee_end: "2025-06-15"
-      },
-      "2568_2": {
-        name: "ภาคปลาย 2568", year: 2568, term: 2,
-        start: "2025-11-24", end: "2026-03-29",
-        midterm_start: "2026-01-10", midterm_end: "2026-01-18",
-        final_start: "2026-03-15", final_end: "2026-03-27",
-        reg_start: "2025-11-03", reg_end: "2025-11-14",
-        reg_date_67: "2025-11-20",
-        add_drop_end: "2025-12-22",
-        withdraw_w_start: "2025-12-23", withdraw_w_end: "2026-01-21",
-        fee_start: "2025-11-03", fee_end: "2025-11-16"
-      },
-      "2568_s": {
-        name: "ภาคฤดูร้อน 2568", year: 2568, term: 3,
-        start: "2026-04-20", end: "2026-06-01",
-        midterm_start: null, midterm_end: null,
-        final_start: "2026-05-30", final_end: "2026-06-01"
-      },
-      "2569_1": {
-        name: "ภาคต้น 2569", year: 2569, term: 1,
-        start: "2026-06-22", end: "2026-11-02",
-        midterm_start: "2026-08-15", midterm_end: "2026-08-23",
-        final_start: "2026-10-19", final_end: "2026-10-30",
-        reg_start: "2026-05-25", reg_end: "2026-06-12",
-        reg_date_67: "2026-06-17",
-        add_drop_end: "2026-07-21",
-        withdraw_w_start: "2026-07-22", withdraw_w_end: "2026-08-20"
-      }
-    };
+    // Initial data load
+    await loadAll();
+    // Start hyper notifications after data is loaded
+    startHyperNotifications();
+    // Initialize Web Push only if not already active to prevent reload loops
+    if ('serviceWorker' in navigator && !navigator.serviceWorker.controller) {
+      initWebPush();
+    }
+  } catch (err) {
+    console.error("App initialization failed:", err);
+  }
+}
 
-    // ══════════════════════════════════════════════════
-    // STUDENT DATA (ดึงจาก transcript)
-    // ══════════════════════════════════════════════════
-    const STUDENT = {
-      id: "20067105527480",
-      name: "Mr. Nitipat TIPCHAI",
-      nameTh: "นิติพัฒน์ ทิพย์ชัย",
-      faculty: "Engineering",
-      major: "Materials Engineering",
-      degree: "B.Eng. (Materials Engineering)",
-      dob: "March 22, 2006",
-      admitted: "June 24, 2024",
-      code: "67", // รหัส 67
-      totalRequiredCredits: 137,
-      // เกรดที่มีอยู่แล้วจาก transcript
-      existingGrades: {
-        "01208111": { grade: "D", credits: 3 }, "01355101": { grade: "P", credits: 3 },
-        "01355102": { grade: "D+", credits: 3 }, "01371111": { grade: "A", credits: 1 },
-        "01417167": { grade: "F", credits: 3 }, "01420111": { grade: "W", credits: 3 },
-        "01420113": { grade: "B+", credits: 1 }, "01999021": { grade: "B", credits: 3 },
-        "01999023": { grade: "A", credits: 2 }, "01999111": { grade: "A", credits: 2 },
-        "01200101": { grade: "A", credits: 3 }, "01204111": { grade: "F", credits: 3 },
-        "01213211": { grade: "D", credits: 3 }, "01385223": { grade: "A", credits: 3 },
-        "01403114": { grade: "C+", credits: 1 }, "01403117": { grade: "W", credits: 3 },
-        "01417167b": { grade: "W", credits: 3 }, "01420111b": { grade: "F", credits: 3 },
-        "01385261": { grade: "A", credits: 3 }, "01387101": { grade: "B+", credits: 3 },
-        "01417167c": { grade: "D", credits: 3 },
-        "01208221": { grade: "W", credits: 3 }, "01213212": { grade: "D", credits: 4 },
-        "01213213": { grade: "D+", credits: 4 }, "01213214": { grade: "A", credits: 1 },
-        "01213216": { grade: "D", credits: 4 }, "01208281": { grade: "A", credits: 1 },
-        "01213217": { grade: "W", credits: 3 }, "01213218": { grade: "C", credits: 3 },
-        "01213219": { grade: "A", credits: 1 }, "01420111c": { grade: "C+", credits: 3 },
-        "01403117b": { grade: "N", credits: 3 },
-        "01205201": { grade: "D+", credits: 3 }, "01417168": { grade: "D", credits: 3 },
-        "01355103": { grade: "D", credits: 3 }
-      }
-    };
+// Start the app
+startApp();
 
-    // ══════════════════════════════════════════════════
-    // STATE
-    // ══════════════════════════════════════════════════
-    let state = {
-      view: 'dashboard',
-      isLocked: sessionStorage.getItem('unlocked') !== 'true',
-      pin: null,
-      semesters: [], courses: {}, assignments: {}, exams: {}, grades: {},
-      habits: [], expenses: [], sleep: [], moods: [], notes: [],
-      clubTasks: JSON.parse(localStorage.getItem('clubTasks') || '[]'),
-      focusSessions: JSON.parse(localStorage.getItem('focusSessions') || '[]'),
-      focusActive: false, focusEndTime: null, focusTimer: null,
-      pomodoroWork: parseInt(localStorage.getItem('pomodoroWork') || '25'),
-      pomodoroBreak: parseInt(localStorage.getItem('pomodoroBreak') || '5'),
-      pomodoroActive: false, pomodoroEndTime: null, pomodoroTimer: null, pomodoroPhase: 'work',
-      pomodoroCount: 0,
+// ══════════════════════════════════════════════════
+// COURSE DATABASE — วิชาทั้งหมดในหลักสูตร 137 หน่วยกิต
+// ══════════════════════════════════════════════════
+const COURSE_DB = {
+  // หมวดศึกษาทั่วไป
+  general: [
+    { code: "01175xxx", name: "กิจกรรมพลศึกษา", nameEn: "Physical Education", credits: 1, group: "อยู่ดีมีสุข" },
+    { code: "01200101", name: "การคิดเชิงนวัตกรรม", nameEn: "Innovative Thinking", credits: 3, group: "ศาสตร์ผู้ประกอบการ" },
+    { code: "01355101", name: "ภาษาอังกฤษเพื่อชีวิตประจำวัน", nameEn: "English for Everyday Life", credits: 3, group: "ภาษา" },
+    { code: "01355102", name: "ภาษาอังกฤษสำหรับชีวิตในมหาวิทยาลัย", nameEn: "English for University Life", credits: 3, group: "ภาษา" },
+    { code: "01355103", name: "ภาษาอังกฤษเพื่อโอกาสทางอาชีพ", nameEn: "English for Job Opportunities", credits: 3, group: "ภาษา" },
+    { code: "01371111", name: "สารสนเทศเพื่อการเรียนรู้", nameEn: "Information Media for Learning", credits: 1, group: "ภาษา" },
+    { code: "01999021", name: "ภาษาไทยเพื่อการสื่อสารทางวิชาการและวิชาชีพ", nameEn: "Thai for Academic Communication", credits: 3, group: "ภาษา" },
+    { code: "01999023", name: "ทักษะดิจิทัล", nameEn: "Digital Literacy", credits: 2, group: "ภาษา" },
+    { code: "01999111", name: "ศาสตร์แห่งแผ่นดิน", nameEn: "Knowledge of the Land", credits: 2, group: "พลเมือง" },
+    { code: "01385223", name: "วิวัฒนาการของเพลงลูกทุ่งไทย", nameEn: "Evolution of Thai Country Songs", credits: 3, group: "สุนทรียะ" },
+    { code: "01385261", name: "ดนตรีพื้นเมืองภาคเหนือ", nameEn: "Northern Thai Folk Music", credits: 3, group: "สุนทรียะ" },
+    { code: "01387101", name: "ศิลปะการอยู่ร่วมกับผู้อื่น", nameEn: "The Art of Living with Others", credits: 3, group: "อยู่ดีมีสุข" },
+    { code: "01204111", name: "คอมพิวเตอร์และการโปรแกรม", nameEn: "Computers and Programming", credits: 3, group: "ภาษา" },
+  ],
+  // พื้นฐานทางคณิตศาสตร์และวิทยาศาสตร์
+  science: [
+    { code: "01403114", name: "ปฏิบัติการหลักมูลเคมีทั่วไป", nameEn: "Laboratory in Fundamental of General Chemistry", credits: 1, prereq: [] },
+    { code: "01403117", name: "หลักมูลเคมีทั่วไป", nameEn: "Fundamental of General Chemistry", credits: 3, prereq: [] },
+    { code: "01417167", name: "คณิตศาสตร์วิศวกรรม I", nameEn: "Engineering Mathematics I", credits: 3, prereq: [] },
+    { code: "01417168", name: "คณิตศาสตร์วิศวกรรม II", nameEn: "Engineering Mathematics II", credits: 3, prereq: ["01417167"] },
+    { code: "01417267", name: "คณิตศาสตร์วิศวกรรม III", nameEn: "Engineering Mathematics III", credits: 3, prereq: ["01417168"] },
+    { code: "01420111", name: "ฟิสิกส์ทั่วไป I", nameEn: "General Physics I", credits: 3, prereq: [] },
+    { code: "01420112", name: "ฟิสิกส์ทั่วไป II", nameEn: "General Physics II", credits: 3, prereq: ["01420111"] },
+    { code: "01420113", name: "ปฏิบัติการฟิสิกส์ I", nameEn: "Laboratory in Physics I", credits: 1, prereq: [] },
+    { code: "01420114", name: "ปฏิบัติการฟิสิกส์ II", nameEn: "Laboratory in Physics II", credits: 1, prereq: [] },
+  ],
+  // พื้นฐานทางวิศวกรรม (Engineering Core)
+  engineering_basic: [
+    { code: "01205201", name: "วิศวกรรมไฟฟ้าเบื้องต้น", nameEn: "Introduction to Electrical Engineering", credits: 3, prereq: [] },
+    { code: "01205202", name: "ปฏิบัติการวิศวกรรมไฟฟ้า I", nameEn: "Electrical Engineering Laboratory I", credits: 1, prereq: ["01205201"] },
+    { code: "01206221", name: "ความน่าจะเป็นและสถิติประยุกต์สำหรับวิศวกร", nameEn: "Applied Probability and Statistics for Engineers", credits: 3, prereq: [] },
+    { code: "01208111", name: "การเขียนแบบวิศวกรรม", nameEn: "Engineering Drawing", credits: 3, prereq: [] },
+    { code: "01208221", name: "กลศาสตร์วิศวกรรม I", nameEn: "Engineering Mechanics I", credits: 3, prereq: [] },
+    { code: "01208281", name: "การฝึกงานโรงงาน", nameEn: "Workshop Practice", credits: 1, prereq: [] },
+    { code: "01213211", name: "วัสดุศาสตร์สำหรับวิศวกร", nameEn: "Materials Science for Engineers", credits: 3, prereq: [], description: "ความสัมพันธ์ระหว่างโครงสร้าง สมบัติ กระบวนการ และสมรรถนะของวัสดุวิศวกรรม แผนภาพสมดุลเฟสและการตีความ โครงสร้างจุลภาคและมหภาคที่สัมพันธ์กับสมบัติของวัสดุวิศวกรรม การตรวจสอบโครงสร้างของวัสดุ การทดสอบและการวิเคราะห์สมบัติของวัสดุ การกัดกร่อนและการเสื่อมของวัสดุ กระบวนการผลิตของวัสดุวิศวกรรม วัสดุประกอบและวัสดุก่อสร้าง" },
+  ],
+  // วิชาบังคับ (Major Required)
+  core: [
+    { code: "01213212", name: "หลักมูลของวัสดุอนินทรีย์", nameEn: "Fundamental of Inorganic Materials", credits: 4, prereq: [], description: "เวกเตอร์ระนาบ ดัชนีมิลเลอร์ และเทนเซอร์ ผลึกส่วนกลับและระนาบการเคลื่อน โครงสร้างผลึกของวัสดุ เคมีของตำหนิ ตำหนิในโครงสร้างผลึก กลไกของดิสโลเคชันและขอบเกรน โครงสร้างอสัณฐานของวัสดุอนินทรีย์และแก้วเซรามิก การเคลือบในเซรามิก ทฤษฎีควอนตัม พันธะในวัสดุอนินทรีย์ สมบัติทางไฟฟ้า สมบัติทางแสง สมบัติทางแม่เหล็ก สมบัติทางความร้อน ความสัมพันธ์ระหว่างโครงสร้างและสมบัติของวัสดุ" },
+    { code: "01213213", name: "หลักเคมีสำหรับวัสดุอินทรีย์", nameEn: "Principle Chemistry for Organic Materials", credits: 4, prereq: [], description: "พันธะและโครงสร้างของสารอินทรีย์ สเตอริโอเคมี ชนิดของปฏิกิริยาเคมีและกลไก ชีวโมเลกุล ชนิดของพอลิเมอร์และการจำแนก ชนิดและกลไกการเกิดพอลิเมอร์ โครงสร้างทางเคมีของพอลิเมอร์" },
+    { code: "01213214", name: "ปฏิบัติการหลักเคมีสำหรับวัสดุอินทรีย์", nameEn: "Principle Chemistry Laboratory for Organic Materials", credits: 1, prereq: ["01213213"], description: "ปฏิบัติการเกี่ยวกับหลักเคมีสำหรับวัสดุอินทรีย์" },
+    { code: "01213215", name: "หลักมูลของเทคโนโลยีวัสดุ", nameEn: "Fundamentals of Materials Technology", credits: 3, prereq: [] },
+    { code: "01213216", name: "พฤติกรรมทางกลของวัสดุ", nameEn: "Mechanical Behavior of Materials", credits: 4, prereq: ["01213212"], description: "พื้นฐานเกี่ยวกับความเค้นและความเครียด พฤติกรรมแบบยืดหยุ่นและพลาสติก กลไกการเสริมความแข็งแรงของวัสดุ ความวิบัติของวัสดุแบบต่างๆ การแตกร้าว ความล้า การคืบ การทดสอบสมบัติทางกลของวัสดุ การประยุกต์ใช้ในงานวิศวกรรม" },
+    { code: "01213217", name: "อุณหพลศาสตร์ของวัสดุ", nameEn: "Thermodynamics of Materials", credits: 3, prereq: ["01213213"], description: "กฎของอุณหพลศาสตร์ พลังงานและเอนโทรปี พลังงานอิสระของกิบบ์ส สมดุลเฟสในระบบสารบริสุทธิ์และสารละลาย สารละลายในอุดมคติและสารละลายจริง กิจกรรมทางเคมี แผนภูมิความร้อนของเฟส การประยุกต์ใช้ในงานวิศวกรรมวัสดุ" },
+    { code: "01213218", name: "กระบวนการผลิตสำหรับวิศวกรวัสดุ", nameEn: "Manufacturing Processes for Materials Engineers", credits: 3, prereq: ["01213212"], description: "กระบวนการผลิตสำหรับวิศวกรรมวัสดุ ได้แก่ กระบวนการหล่อ การขึ้นรูป การตัดแต่ง การเชื่อมต่อ การปรับปรุงสมบัติทางความร้อนและทางกล การผลิตวัสดุเซรามิกและพอลิเมอร์ เทคโนโลยีการผลิตสมัยใหม่" },
+    { code: "01213219", name: "ปฏิบัติการกระบวนการแปรรูปวัสดุ", nameEn: "Materials Processing Laboratory", credits: 1, prereq: ["01213218"], description: "ปฏิบัติการเกี่ยวกับการแปรรูปวัสดุสำหรับโลหะ เซรามิกและพอลิเมอร์ การออกแบบใช้คอมพิวเตอร์ช่วย การขึ้นรูปต้นแบบเร็ว เทคโนโลยีการพิมพ์แบบสามมิติ" },
+    { code: "01213311", name: "หลักของเทคนิคการศึกษาลักษณะเฉพาะ", nameEn: "Principle of Characterization Techniques", credits: 3, prereq: ["01213211"], description: "การวิเคราะห์พื้นผิวด้วยกล้องจุลทรรศน์แบบแสงและกล้องจุลทรรศน์อิเล็กตรอน โครงสร้างผลึกและการวิเคราะห์ด้วยมาตรการเลี้ยวเบนของรังสีเอ็กซ์ การวิเคราะห์พื้นที่ผิวและขนาดอนุภาค การวิเคราะห์ทางเคมีโดยสเปกโทรสโกปี การวิเคราะห์เชิงความร้อน" },
+    { code: "01213312", name: "ปฏิบัติการการศึกษาลักษณะเฉพาะและการวิเคราะห์สมบัติของวัสดุ", nameEn: "Materials Characterization and Properties Analysis Lab", credits: 1, prereq: ["01213311"], description: "ปฏิบัติการการเตรียมชิ้นงานตัวอย่างสำหรับการวิเคราะห์โครงสร้างจุลภาค โครงสร้างผลึก โครงสร้างพื้นผิว และสมบัติทางความร้อนของวัสดุ" },
+    { code: "01213313", name: "จลนพลศาสตร์และปรากฏการณ์การถ่ายโอนของวัสดุ", nameEn: "Kinetics and Transport Phenomena in Materials Engineering", credits: 4, prereq: ["01213217"], description: "ทฤษฎีจลนศาสตร์ประยุกต์สำหรับวิศวกรรมวัสดุและการแต่งแร่ ทฤษฎีการชน พลังงานกระตุ้น การไหลของของไหลในกระบวนการวัสดุ การถ่ายเทความร้อน: การนำความร้อน การพาความร้อน และการแผ่รังสีความร้อน การวิเคราะห์เชิงความร้อนโดยใช้คอมพิวเตอร์ช่วยวิศวกรรม การวิเคราะห์ความเค้นเชิงความร้อนโดยใช้คอมพิวเตอร์ช่วยวิศวกรรม การถ่ายเทมวล: การแพร่มวล การพามวล การเกิดนิวเคลียสและการเติบโต การแข็งตัว" },
+    { code: "01213314", name: "การวิเคราะห์ความวิบัติและการป้องกัน", nameEn: "Failure Analysis and Prevention", credits: 3, prereq: ["01213216"], description: "การวิเคราะห์ความวิบัติและการป้องกัน การเสื่อมสภาพของวัสดุและอุปกรณ์ ตำหนิของผลิตภัณฑ์และการทดสอบ ความวิบัติรูปแบบต่างๆ ในวัสดุ การวิเคราะห์รอยแตกและภาพรอยแตก ความวิบัติในเซรามิก ความวิบัติจากการกัดกร่อน การเสื่อมสภาพของพอลิเมอร์ ความวิบัติเนื่องจากความผิดพลาดในการผลิต กรณีศึกษา" },
+    { code: "01213316", name: "อุตสาหกรรมวัสดุในประเทศไทย", nameEn: "Materials Industry in Thailand", credits: 1, prereq: ["01213218"], description: "บทบาทของวัสดุศาสตร์และวิศวกรรมวัสดุในอุตสาหกรรม การประยุกต์และการผลิตวัสดุวิศวกรรม โดยอ้างอิงอุตสาหกรรมในประเทศไทย การจัดการในอุตสาหกรรม การเยี่ยมชมโรงงานอุตสาหกรรม" },
+    { code: "01213395", name: "การเตรียมข้อเสนอโครงการวิจัย", nameEn: "Research Proposal Preparation", credits: 1, prereq: [], description: "การอภิปรายและการสืบค้นถึงความก้าวหน้าทางเทคโนโลยีในปัจจุบันและปัญหาต่างๆ ในเทคโนโลยีของวัสดุ การวางแผนการวิจัย การเขียนข้อเสนอโครงงานวิจัยและนำเสนอข้อเสนอโครงงานวิจัย" },
+    { code: "01213411", name: "การคัดเลือกวัสดุและการออกแบบทางวิศวกรรม", nameEn: "Materials Selection and Engineering Design", credits: 3, prereq: ["01213216", "01213218"], description: "บทบาทของวัสดุในการออกแบบและพัฒนาผลิตภัณฑ์นวัตกรรม วัสดุและสมบัติ แผนภูมิวัสดุ ดัชนีวัสดุ การคัดเลือกวัสดุ การคัดเลือกวัสดุในกรณีหลายเงื่อนไขและวัตถุประสงค์ การคัดเลือกวัสดุและรูปร่าง การบูรณาการหลักการคัดเลือกวัสดุร่วมกับการใช้คอมพิวเตอร์ช่วยในการออกแบบและวิเคราะห์เชิงวิศวกรรม การคัดเลือกกระบวนการ เงื่อนไขสำคัญในการออกแบบและเลือกวัสดุสำหรับผลิตภัณฑ์พอลิเมอร์และพลาสติก การใช้คอมพิวเตอร์ช่วยในการออกแบบและผลิตผลิตภัณฑ์พอลิเมอร์และพลาสติก กรณีศึกษา" },
+    { code: "01213412", name: "การจัดการการผลิตในอุตสาหกรรมวัสดุ", nameEn: "Production Management for Materials Industry", credits: 3, prereq: [], description: "เทคนิคการพยากรณ์ การจัดการอุตสาหกรรมวัสดุ การควบคุมสินค้าคงคลัง การวางแผนความต้องการของวัสดุ การวางแผนกำลังการผลิต การจัดลำดับการผลิต การควบคุมการผลิตในอุตสาหกรรมวัสดุ การวิเคราะห์ต้นทุนทางอุตสาหกรรมวัสดุและจุดคุ้มทุน" },
+    { code: "01213497", name: "สัมมนา", nameEn: "Seminar", credits: 1, prereq: [] },
+    { code: "01213499", name: "โครงงานวิศวกรรมวัสดุ", nameEn: "Materials Engineering Project", credits: 3, prereq: ["01213395"] },
+  ],
+  // วิชาเลือก (Major Elective)
+  elective: [
+    { code: "01213399", name: "การฝึกงาน", nameEn: "Internship", credits: 1, prereq: [] },
+    { code: "01213421", name: "โลหกรรมกายภาพ", nameEn: "Physical Metallurgy", credits: 3, prereq: ["01213212"], description: "โครงสร้างโลหะและการเกิดผลึก ข้อบกพร่องในโครงสร้างผลึก ดิสโลเคชันและการเปลี่ยนรูปอย่างถาวร การเกิดนิวเคลียสและการแข็งตัว แผนภาพสมดุลของเฟส การอบชุบความร้อน การเปลี่ยนเฟส กลไกการเพิ่มความแข็งแรง การแพร่ในของแข็ง สมบัติและการใช้งานของโลหะผสมทั้งในและนอกกลุ่มเหล็ก" },
+    { code: "01213422", name: "โลหกรรมเชิงเคมี", nameEn: "Chemical Metallurgy", credits: 3, prereq: ["01213211"], description: "หลักการของโลหกรรมความร้อนสำหรับการสกัดโลหะจากแร่ การเตรียมแร่ การถลุง กระบวนการปรับเปลี่ยนและการทำให้บริสุทธิ์ การผลิตทองแดง การผลิตเหล็กและเหล็กกล้า หลักการของโลหกรรมสารละลายสำหรับการสกัดโลหะจากแร่โลหะ การสกัดโลหะโดยใช้ตัวทำละลาย กระบวนการทำให้โลหะเข้มข้น กระบวนการกู้ การใช้ประโยชน์โลหะ" },
+    { code: "01213423", name: "การขึ้นรูปและการหล่อโลหะ", nameEn: "Forming and Casting of Metals", credits: 3, prereq: ["01213218"], description: "ทฤษฎีและการพัฒนาสมัยใหม่ของกระบวนการหล่อโลหะ วิธีมาตรฐานและวิธีใหม่ การออกแบบระบบการไหลและรูล้น การออกแบบกระบวนการ การตกแต่งสำเร็จและการตรวจสอบงานหล่อ แหล่งและการกำจัดขีดจำกัดของการออกแบบ ทฤษฎีและปฏิบัติการของการรีด การตีขึ้นรูป การอัดขึ้นรูป การลากขึ้นรูป แหล่งและการกำจัดข้อบกพร่อง" },
+    { code: "01213424", name: "โลหกรรมเชิงผง", nameEn: "Powder Metallurgy", credits: 3, prereq: ["01213211"], description: "เทคนิคการผลิตผงโลหะ การศึกษาลักษณะเฉพาะของผงโลหะ วิธีการผสมและการขึ้นรูป การเผาผนึกโลหะ ทฤษฎีการเผาผนึก การปรับปรุงสมบัติด้วยความร้อน การปรับแต่งขั้นสุดท้าย โลหกรรมผงชั้นสูงประยุกต์" },
+    { code: "01213425", name: "เทคโนโลยีการบำบัดพื้นผิว", nameEn: "Surface Treatment Technology", credits: 3, prereq: ["01213421"], description: "การบำบัดพื้นผิวและการวิเคราะห์พื้นผิวของวัสดุที่ถูกบำบัด การบำบัดพื้นผิวทางความร้อน เคมี กายภาพและทางกล สมบัติและการประยุกต์วัสดุที่ผ่านการบำบัดพื้นผิวในอุตสาหกรรม" },
+    { code: "01213426", name: "วิศวกรรมโลหะผสม", nameEn: "Alloys Engineering", credits: 3, prereq: ["01213211"] },
+    { code: "01213427", name: "การกัดกร่อน", nameEn: "Corrosion", credits: 3, prereq: ["01213211"], description: "หลักการการกัดกร่อน วิธีการวัดและการคำนวณอัตราการกัดกร่อนโดยใช้เทคนิคทางเคมีไฟฟ้า รูปแบบของการกัดกร่อน การทดสอบการกัดกร่อน การกัดกร่อนในสภาพแวดล้อมจำเพาะ การกัดกร่อนที่อุณหภูมิสูง กรณีศึกษาการวิบัติของวัสดุในระหว่างใช้งานเนื่องจากการกัดกร่อน หลักการเลือกวัสดุและการออกแบบ สารยับยั้งการกัดกร่อน การป้องกันแบบแอโนดิกและแคโทดิก การเตรียมผิวและการเคลือบผิวเพื่อซ่อมบำรุง" },
+    { code: "01213431", name: "เซรามิกเบื้องต้น", nameEn: "Introduction to Ceramics", credits: 3, prereq: ["01213212"] },
+    { code: "01213432", name: "การแปรรูปเซรามิก", nameEn: "Ceramic Processing", credits: 3, prereq: ["01213212"], description: "ลักษณะเฉพาะของวัสดุเซรามิก ขนาดและรูปร่างของอนุภาค ความหนาแน่น โครงสร้างและพื้นผิวจำเพาะของรูพรุน เคมีภัณฑ์สำหรับการกระจายและรวมตัวของอนุภาค กลไกของอนุภาค การกระจายขนาดของอนุภาคและวิทยาการไหล การผสม การขึ้นรูปและกระบวนการหลังการขึ้นรูปของอุตสาหกรรมเซรามิก การอบแห้ง การตกแต่ง การเคลือบและการเผา กระบวนการผลิตเซรามิกในระดับห้องปฏิบัติการหรืออุตสาหกรรม" },
+    { code: "01213441", name: "หลักมูลของวัสดุพอลิเมอร์", nameEn: "Fundamental of Polymeric Materials", credits: 3, prereq: ["01213213"], description: "ความสัมพันธ์ของโครงสร้างทางเคมีและสมบัติของพอลิเมอร์ น้ำหนักโมเลกุลและการกระจายน้ำหนักโมเลกุล สัณฐานวิทยาของพอลิเมอร์ สารละลายพอลิเมอร์ พอลิเมอร์ผสม สมบัติของพอลิเมอร์และการทดสอบ วิทยากระแสของพอลิเมอร์ การแปรรูปพอลิเมอร์ สารเติมแต่ง เทคโนโลยีเส้นใย" },
+    { code: "01213442", name: "เทคโนโลยียาง", nameEn: "Rubber Technology", credits: 3, prereq: ["01213213"] },
+    { code: "01213451", name: "วัสดุประกอบ", nameEn: "Composite Materials", credits: 3, prereq: ["01213211"], description: "การจำแนกชนิดของวัสดุเชิงประกอบ ชนิดของสารเสริมแรง กระบวนการผลิต สมบัติเชิงกล กลไกการเพิ่มความแข็งแรงในวัสดุประกอบ การประยุกต์ใช้ในอุตสาหกรรม" },
+    { code: "01213452", name: "วัสดุชีวภาพเบื้องต้น", nameEn: "Introduction to Biomaterials", credits: 3, prereq: ["01213211"] },
+    { code: "01213453", name: "นวัตกรรมวิศวกรรมนาโน", nameEn: "Innovation of Nanoengineering", credits: 3, prereq: ["01213211"] },
+    { code: "01213455", name: "วัสดุและอุปกรณ์ไฟฟ้า แม่เหล็ก แสง", nameEn: "Electromagnetooptic Materials and Devices", credits: 3, prereq: ["01213212"] },
+    { code: "01213457", name: "วัสดุสำหรับเทคโนโลยีการเก็บเกี่ยวพลังงาน", nameEn: "Materials for Energy Harvesting Technology", credits: 3, prereq: ["01213212"] },
+    { code: "01213461", name: "โลหกรรมของการเชื่อมและการทดสอบแบบไม่ทำลาย", nameEn: "Welding Metallurgy and Non-destructive Testing", credits: 3, prereq: ["01213211"] },
+    { code: "01213471", name: "การจัดการพลังงานในอุตสาหกรรมวัสดุ", nameEn: "Energy Management in Materials Industries", credits: 3, prereq: ["01213217"], description: "เทอร์โมไดนามิกของกระบวนการผลิตวัสดุ การคำนวณการใช้พลังงาน การวิเคราะห์ต้นทุนพลังงาน การใช้พลังงานในอุตสาหกรรมผลิตโลหะ การใช้พลังงานในอุตสาหกรรมผลิตเซรามิก การใช้พลังงานในอุตสาหกรรมผลิตพอลิเมอร์ การเก็บเกี่ยวพลังงานความร้อนเหลือทิ้ง การออกแบบกระบวนการเพื่อลดการใช้พลังงาน กรณีศึกษา" },
+    { code: "01213472", name: "แบบจำลองคอมพิวเตอร์ของวัสดุ", nameEn: "Computer Modeling of Materials", credits: 3, prereq: ["01213212"], description: "การใช้คอมพิวเตอร์ช่วยคำนวณเบื้องต้น หลักเบื้องต้นของการใช้คอมพิวเตอร์ช่วยออกแบบ การวิเคราะห์ความเค้นความเครียดด้วยคอมพิวเตอร์ การจำลองแบบมัลติฟิสิกส์ แบบจำลองสนามเฟส การจำลองทางพลวัตของโมเลกุล การจำลองทางควอนตัม โครงข่ายประสาทเทียม" },
+    { code: "01213490", name: "สหกิจศึกษา", nameEn: "Co-operative Education", credits: 7, prereq: [] },
+  ]
+};
 
-      modal: null,
-      selectedSemester: null,
-      darkMode: localStorage.getItem('darkMode') === 'true',
-      focusBlacklist: JSON.parse(localStorage.getItem('focusBlacklist') || '["youtube.com","facebook.com","instagram.com","twitter.com","tiktok.com","netflix.com"]'),
-      searchQuery: '',
-      tree: JSON.parse(localStorage.getItem('focusTree') || '{"level":0,"alive":true,"sessions":0}'),
-      badges: JSON.parse(localStorage.getItem('badges') || '[]'),
-      totalFocusHours: parseFloat(localStorage.getItem('totalFocusHours') || '0'),
-      focusScore: parseInt(localStorage.getItem('focusScore') || '100'),
-      selectedFocusCourseId: null,
-      isImmersiveFocus: false,
-      quickLinks: JSON.parse(localStorage.getItem('quickLinks') || '[{"name":"MyKU","url":"https://my.ku.th","icon":"🎓"},{"name":"ทะเบียน","url":"https://stdregis.ku.ac.th","icon":"📋"},{"name":"Maps","url":"https://www.google.com/maps?q=kasetsart+university","icon":"🗺"}]'),
-      profilePic: localStorage.getItem('profile_pic') || null,
-      idCard: JSON.parse(localStorage.getItem('id_card_config') || `{
+const ALL_COURSES = [...COURSE_DB.general, ...COURSE_DB.science, ...COURSE_DB.engineering_basic, ...COURSE_DB.core, ...COURSE_DB.elective];
+
+// ══════════════════════════════════════════════════
+// ACADEMIC CALENDAR 2568-2569 (embedded)
+// ══════════════════════════════════════════════════
+const ACADEMIC_CALENDAR = {
+  "2568_1": {
+    name: "ภาคต้น 2568", year: 2568, term: 1,
+    start: "2025-06-23", end: "2025-11-02",
+    midterm_start: "2025-08-09", midterm_end: "2025-08-17",
+    final_start: "2025-10-19", final_end: "2025-10-31",
+    reg_start: "2025-06-02", reg_end: "2025-06-13",
+    reg_date_67: "2025-06-19",
+    add_drop_end: "2025-07-21",
+    withdraw_w_start: "2025-07-22", withdraw_w_end: "2025-08-20",
+    fee_start: "2025-06-02", fee_end: "2025-06-15"
+  },
+  "2568_2": {
+    name: "ภาคปลาย 2568", year: 2568, term: 2,
+    start: "2025-11-24", end: "2026-03-29",
+    midterm_start: "2026-01-10", midterm_end: "2026-01-18",
+    final_start: "2026-03-15", final_end: "2026-03-27",
+    reg_start: "2025-11-03", reg_end: "2025-11-14",
+    reg_date_67: "2025-11-20",
+    add_drop_end: "2025-12-22",
+    withdraw_w_start: "2025-12-23", withdraw_w_end: "2026-01-21",
+    fee_start: "2025-11-03", fee_end: "2025-11-16"
+  },
+  "2568_s": {
+    name: "ภาคฤดูร้อน 2568", year: 2568, term: 3,
+    start: "2026-04-20", end: "2026-06-01",
+    midterm_start: null, midterm_end: null,
+    final_start: "2026-05-30", final_end: "2026-06-01"
+  },
+  "2569_1": {
+    name: "ภาคต้น 2569", year: 2569, term: 1,
+    start: "2026-06-22", end: "2026-11-02",
+    midterm_start: "2026-08-15", midterm_end: "2026-08-23",
+    final_start: "2026-10-19", final_end: "2026-10-30",
+    reg_start: "2026-05-25", reg_end: "2026-06-12",
+    reg_date_67: "2026-06-17",
+    add_drop_end: "2026-07-21",
+    withdraw_w_start: "2026-07-22", withdraw_w_end: "2026-08-20"
+  }
+};
+
+// ══════════════════════════════════════════════════
+// STUDENT DATA (ดึงจาก transcript)
+// ══════════════════════════════════════════════════
+const STUDENT = {
+  id: "20067105527480",
+  name: "Mr. Nitipat TIPCHAI",
+  nameTh: "นิติพัฒน์ ทิพย์ชัย",
+  faculty: "Engineering",
+  major: "Materials Engineering",
+  degree: "B.Eng. (Materials Engineering)",
+  dob: "March 22, 2006",
+  admitted: "June 24, 2024",
+  code: "67", // รหัส 67
+  totalRequiredCredits: 137,
+  // เกรดที่มีอยู่แล้วจาก transcript
+  existingGrades: {
+    "01208111": { grade: "D", credits: 3 }, "01355101": { grade: "P", credits: 3 },
+    "01355102": { grade: "D+", credits: 3 }, "01371111": { grade: "A", credits: 1 },
+    "01417167": { grade: "F", credits: 3 }, "01420111": { grade: "W", credits: 3 },
+    "01420113": { grade: "B+", credits: 1 }, "01999021": { grade: "B", credits: 3 },
+    "01999023": { grade: "A", credits: 2 }, "01999111": { grade: "A", credits: 2 },
+    "01200101": { grade: "A", credits: 3 }, "01204111": { grade: "F", credits: 3 },
+    "01213211": { grade: "D", credits: 3 }, "01385223": { grade: "A", credits: 3 },
+    "01403114": { grade: "C+", credits: 1 }, "01403117": { grade: "W", credits: 3 },
+    "01417167b": { grade: "W", credits: 3 }, "01420111b": { grade: "F", credits: 3 },
+    "01385261": { grade: "A", credits: 3 }, "01387101": { grade: "B+", credits: 3 },
+    "01417167c": { grade: "D", credits: 3 },
+    "01208221": { grade: "W", credits: 3 }, "01213212": { grade: "D", credits: 4 },
+    "01213213": { grade: "D+", credits: 4 }, "01213214": { grade: "A", credits: 1 },
+    "01213216": { grade: "D", credits: 4 }, "01208281": { grade: "A", credits: 1 },
+    "01213217": { grade: "W", credits: 3 }, "01213218": { grade: "C", credits: 3 },
+    "01213219": { grade: "A", credits: 1 }, "01420111c": { grade: "C+", credits: 3 },
+    "01403117b": { grade: "N", credits: 3 },
+    "01205201": { grade: "D+", credits: 3 }, "01417168": { grade: "D", credits: 3 },
+    "01355103": { grade: "D", credits: 3 }
+  }
+};
+
+// ══════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════
+let state = {
+  view: 'dashboard',
+  isLocked: sessionStorage.getItem('unlocked') !== 'true',
+  pin: null,
+  semesters: [], courses: {}, assignments: {}, exams: {}, grades: {},
+  habits: [], expenses: [], sleep: [], moods: [], notes: [],
+  clubTasks: JSON.parse(localStorage.getItem('clubTasks') || '[]'),
+  focusSessions: JSON.parse(localStorage.getItem('focusSessions') || '[]'),
+  focusActive: false, focusEndTime: null, focusTimer: null,
+  pomodoroWork: parseInt(localStorage.getItem('pomodoroWork') || '25'),
+  pomodoroBreak: parseInt(localStorage.getItem('pomodoroBreak') || '5'),
+  pomodoroActive: false, pomodoroEndTime: null, pomodoroTimer: null, pomodoroPhase: 'work',
+  pomodoroCount: 0,
+
+  modal: null,
+  selectedSemester: null,
+  darkMode: localStorage.getItem('darkMode') === 'true',
+  focusBlacklist: JSON.parse(localStorage.getItem('focusBlacklist') || '["youtube.com","facebook.com","instagram.com","twitter.com","tiktok.com","netflix.com"]'),
+  searchQuery: '',
+  tree: JSON.parse(localStorage.getItem('focusTree') || '{"level":0,"alive":true,"sessions":0}'),
+  badges: JSON.parse(localStorage.getItem('badges') || '[]'),
+  totalFocusHours: parseFloat(localStorage.getItem('totalFocusHours') || '0'),
+  focusScore: parseInt(localStorage.getItem('focusScore') || '100'),
+  selectedFocusCourseId: null,
+  isImmersiveFocus: false,
+  quickLinks: JSON.parse(localStorage.getItem('quickLinks') || '[{"name":"MyKU","url":"https://my.ku.th","icon":"🎓"},{"name":"ทะเบียน","url":"https://stdregis.ku.ac.th","icon":"📋"},{"name":"Maps","url":"https://www.google.com/maps?q=kasetsart+university","icon":"🗺"}]'),
+  profilePic: localStorage.getItem('profile_pic') || null,
+  idCard: JSON.parse(localStorage.getItem('id_card_config') || `{
         "color": "#e0f2fe",
         "name": "${STUDENT.nameTh}",
         "studentId": "20067105527480",
@@ -263,389 +265,389 @@
         "birthday": "22-03-2006",
         "logoType": "SSC"
       }`),
-      attendanceReasons: JSON.parse(localStorage.getItem('att_reasons') || '{}'),
-      reflections: JSON.parse(localStorage.getItem('reflections') || '{}'),
-      calendarSettings: JSON.parse(localStorage.getItem('calendar_settings') || '{}'),
-      courseStructures: JSON.parse(localStorage.getItem('course_structures') || '{}'),
-      targetGPA: parseFloat(localStorage.getItem('target_gpax') || '2.00'),
-      isReflectionMandatory: true,
-      lastReflectionCheck: null,
-      topicMastery: JSON.parse(localStorage.getItem('topic_mastery') || '{}'),
-      attendanceHistory: JSON.parse(localStorage.getItem('attendance_history') || '{}'),
-      pomodoroTimeRemaining: 0,
-      customMusicUrls: JSON.parse(localStorage.getItem('custom_music_urls') || '[]'),
-      courseFocusStats: JSON.parse(localStorage.getItem('course_focus_stats') || '{}'),
-      lastScoreReset: localStorage.getItem('last_score_reset') || '',
-      deviceId: Math.random().toString(36).substring(7),
-      activeCourseId: null,
-      currentFolderId: null,
-      folderPath: [], // Breadcrumbs: [{name, id}]
-      selectedItems: new Set(),
-      isRenaming: null,
-      links: JSON.parse(localStorage.getItem('course_links') || '{}') // courseId -> [{name, url}]
-    };
+  attendanceReasons: JSON.parse(localStorage.getItem('att_reasons') || '{}'),
+  reflections: JSON.parse(localStorage.getItem('reflections') || '{}'),
+  calendarSettings: JSON.parse(localStorage.getItem('calendar_settings') || '{}'),
+  courseStructures: JSON.parse(localStorage.getItem('course_structures') || '{}'),
+  targetGPA: parseFloat(localStorage.getItem('target_gpax') || '2.00'),
+  isReflectionMandatory: true,
+  lastReflectionCheck: null,
+  topicMastery: JSON.parse(localStorage.getItem('topic_mastery') || '{}'),
+  attendanceHistory: JSON.parse(localStorage.getItem('attendance_history') || '{}'),
+  pomodoroTimeRemaining: 0,
+  customMusicUrls: JSON.parse(localStorage.getItem('custom_music_urls') || '[]'),
+  courseFocusStats: JSON.parse(localStorage.getItem('course_focus_stats') || '{}'),
+  lastScoreReset: localStorage.getItem('last_score_reset') || '',
+  deviceId: Math.random().toString(36).substring(7),
+  activeCourseId: null,
+  currentFolderId: null,
+  folderPath: [], // Breadcrumbs: [{name, id}]
+  selectedItems: new Set(),
+  isRenaming: null,
+  links: JSON.parse(localStorage.getItem('course_links') || '{}') // courseId -> [{name, url}]
+};
 
-    const FOCUS_PRESETS = [
-      { name: 'Pomodoro', work: 25, break: 5, icon: '🍅' },
-      { name: 'Deep Work', work: 50, break: 10, icon: '⚡' },
-      { name: 'Long Focus', work: 90, break: 15, icon: '🧘' }
-    ];
+const FOCUS_PRESETS = [
+  { name: 'Pomodoro', work: 25, break: 5, icon: '🍅' },
+  { name: 'Deep Work', work: 50, break: 10, icon: '⚡' },
+  { name: 'Long Focus', work: 90, break: 15, icon: '🧘' }
+];
 
-    /**
-     * 📀 MGR Audio Database (Google Drive IDs)
-     */
-    const MGR_AUDIO_DATABASE = {
-      morning: ["1x1umD0OX2uFJukPKgvi1O5K1mE0Zb2zN", "180L3lpxTNrVgFsGIprEbqUSc8kurKvFJ", "1Pk1nw_e276Vx3xy5fvHIMi7Gp1D80284", "1Pf_y2W6MOPk2Ky-jyuHIX6g20HOhYSji", "1_8hQVqoAdDTEoJ8PDgf7Dzue81INnX3n", "1yH8t3UBrp2_OVI8LDoD5nrEwcTfMDQQk", "1FBQKNJ19589rh68ojFwL92Azv3PWf4Jb"],
-      afternoon: ["1loLOrzrzQNKvwPdy7wBNG1Pax3CYeD52", "1bjKsBuL0o-MMFq3bPqy13OaD6laF8dE7", "1636AP2tsWZlhbFEfq8LfszsRwotQUzOR", "1nrGZavcWfGhAx8fep12teR7b1qqmssii", "1oQowQgQiBCTIFs4hvop8bb4s4Z1i-h6k", "1EBoajtvqdzC8grasBUb0_zzQB0CSpCK3", "1pbxKmKdl_N5n7VIZcx0MUrG7LValmBaq"],
-      night: ["1xUNr9oz0vRg2YT_sB7NJQBsiEEaOMfm1", "1LKykxZWMiuJ7nAHKwfaNjmk_KNRTzLAJ", "1A5SePiU0snXti4tRWSDZ_qx_71xru3Yw", "1XgnxOjTM4KRXHN44d_4x_cE9N1BNhxbZ", "1xD1pWpM9arPPYetVFRbEfluCt4GwRG8v", "14xeeWwXY0F288XqGlcFAXBzvsvhel8Dd", "1D9SGkMoMKebFJqvKjnGIpB3hkAlQZkwp", "1CdbgKRLfMW30EIg_LSeQCKH4JMdxqwiA"],
-      start: ["11vII4lmTi1UBYg14iuWxV_okY1lFHzjg", "1aZGx5bgFf6rWAg1rYp4bV-Eq2j_EtFIA", "11d8ADTh7_eA72k964h_gkQYccXvQh47c"],
-      pause: ["1LPFV4giMm4VGdrlDNH6yH6qBQMZ1n_Sw", "1FYMWoUyyXQPEqQEjYFvMupBYso1tms7x"],
-      complete: ["1PR4T7FayCGKHdGL3OpFhFYl__T7vHCku", "1j9OysfFjZPMyOvDFGtqGXKSGsJ0zar_U", "1Io5uQTcnkgrtd-kS2KQnnp5Vn8jIXo3u"],
-      lofi: ["https://www.dropbox.com/scl/fi/0rge299tcx5tuz0t1jesx/Ytmp3.gg_YouTube_45-Minute-Timer-Lofi_Media_rGXWHmb9vEQ_009_128k.mp3?rlkey=5xt97s6fmild8ellrnoz6s0ak&st=4g3864q0&dl=1"],
-      groove: ["https://www.dropbox.com/scl/fi/m9wfjxbog3mqub56lbuzg/GROOVE-POP-laid-back-Vol.13-A-Groove-That-Lifts-Your-Mood-grgr_playlist-128k.mp3?rlkey=5rfmqtievcm60vzyezgstxd2c&st=j94ekyh8&dl=1"]
-    };
+/**
+ * 📀 MGR Audio Database (Google Drive IDs)
+ */
+const MGR_AUDIO_DATABASE = {
+  morning: ["1x1umD0OX2uFJukPKgvi1O5K1mE0Zb2zN", "180L3lpxTNrVgFsGIprEbqUSc8kurKvFJ", "1Pk1nw_e276Vx3xy5fvHIMi7Gp1D80284", "1Pf_y2W6MOPk2Ky-jyuHIX6g20HOhYSji", "1_8hQVqoAdDTEoJ8PDgf7Dzue81INnX3n", "1yH8t3UBrp2_OVI8LDoD5nrEwcTfMDQQk", "1FBQKNJ19589rh68ojFwL92Azv3PWf4Jb"],
+  afternoon: ["1loLOrzrzQNKvwPdy7wBNG1Pax3CYeD52", "1bjKsBuL0o-MMFq3bPqy13OaD6laF8dE7", "1636AP2tsWZlhbFEfq8LfszsRwotQUzOR", "1nrGZavcWfGhAx8fep12teR7b1qqmssii", "1oQowQgQiBCTIFs4hvop8bb4s4Z1i-h6k", "1EBoajtvqdzC8grasBUb0_zzQB0CSpCK3", "1pbxKmKdl_N5n7VIZcx0MUrG7LValmBaq"],
+  night: ["1xUNr9oz0vRg2YT_sB7NJQBsiEEaOMfm1", "1LKykxZWMiuJ7nAHKwfaNjmk_KNRTzLAJ", "1A5SePiU0snXti4tRWSDZ_qx_71xru3Yw", "1XgnxOjTM4KRXHN44d_4x_cE9N1BNhxbZ", "1xD1pWpM9arPPYetVFRbEfluCt4GwRG8v", "14xeeWwXY0F288XqGlcFAXBzvsvhel8Dd", "1D9SGkMoMKebFJqvKjnGIpB3hkAlQZkwp", "1CdbgKRLfMW30EIg_LSeQCKH4JMdxqwiA"],
+  start: ["11vII4lmTi1UBYg14iuWxV_okY1lFHzjg", "1aZGx5bgFf6rWAg1rYp4bV-Eq2j_EtFIA", "11d8ADTh7_eA72k964h_gkQYccXvQh47c"],
+  pause: ["1LPFV4giMm4VGdrlDNH6yH6qBQMZ1n_Sw", "1FYMWoUyyXQPEqQEjYFvMupBYso1tms7x"],
+  complete: ["1PR4T7FayCGKHdGL3OpFhFYl__T7vHCku", "1j9OysfFjZPMyOvDFGtqGXKSGsJ0zar_U", "1Io5uQTcnkgrtd-kS2KQnnp5Vn8jIXo3u"],
+  lofi: ["https://www.dropbox.com/scl/fi/0rge299tcx5tuz0t1jesx/Ytmp3.gg_YouTube_45-Minute-Timer-Lofi_Media_rGXWHmb9vEQ_009_128k.mp3?rlkey=5xt97s6fmild8ellrnoz6s0ak&st=4g3864q0&dl=1"],
+  groove: ["https://www.dropbox.com/scl/fi/m9wfjxbog3mqub56lbuzg/GROOVE-POP-laid-back-Vol.13-A-Groove-That-Lifts-Your-Mood-grgr_playlist-128k.mp3?rlkey=5rfmqtievcm60vzyezgstxd2c&st=j94ekyh8&dl=1"]
+};
 
-    class RadioController {
-      constructor() {
-        this.musicAudio = new Audio();
-        this.djAudio = new Audio();
-        this.triggerAudio = new Audio();
-        this.playedTracks = new Set();
-        this.audioCache = {};
-        this.interruptionTimer = null;
+class RadioController {
+  constructor() {
+    this.musicAudio = new Audio();
+    this.djAudio = new Audio();
+    this.triggerAudio = new Audio();
+    this.playedTracks = new Set();
+    this.audioCache = {};
+    this.interruptionTimer = null;
+    this.musicTrackCount = 0;
+    this.mode = 'lofi';
+    this.isPlaying = false; // Flag ตรวจสอบสถานะการเล่นจริง
+
+    this.musicAudio.volume = 0.6;
+    this.djAudio.volume = 0.8;
+    this.triggerAudio.volume = 0.9;
+
+    this.musicAudio.onended = () => {
+      if (!this.isPlaying) return;
+      this.musicTrackCount++;
+      if (this.musicTrackCount >= 2) {
         this.musicTrackCount = 0;
-        this.mode = 'lofi';
-        this.isPlaying = false; // Flag ตรวจสอบสถานะการเล่นจริง
-
-        this.musicAudio.volume = 0.6;
-        this.djAudio.volume = 0.8;
-        this.triggerAudio.volume = 0.9;
-
-        this.musicAudio.onended = () => {
-          if (!this.isPlaying) return;
-          this.musicTrackCount++;
-          if (this.musicTrackCount >= 2) {
-            this.musicTrackCount = 0;
-            this.playDJInterrupt();
-          } else {
-            this.playMusic();
-          }
-        };
-
-        // Pre-create some context to help mobile
-        this.silentAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFWm51bQAAAAADAAEAgD4AAIA+AAABAAgAZGF0YQAAAAA=');
+        this.playDJInterrupt();
+      } else {
+        this.playMusic();
       }
-
-      async warmUp() {
-        console.log("🔊 DJ Brain: Warming up audio context...");
-        try {
-          const warm = async (a) => { a.play().then(() => a.pause()).catch(() => { }); };
-          await warm(this.musicAudio);
-          await warm(this.djAudio);
-          await warm(this.triggerAudio);
-          await warm(this.silentAudio);
-        } catch (e) { console.warn("Warmup failed", e); }
-      }
-
-      async init() {
-        console.log("🎙️ DJ Brain: Pre-caching critical sounds...");
-        const criticalCategories = ['start', 'pause', 'complete'];
-        for (const cat of criticalCategories) {
-          this.preCacheCategory(cat);
-        }
-        // 2. โหลดเสียงดีเจตามช่วงเวลาปัจจุบัน
-        const h = new Date().getHours();
-        let currentDJ = 'night';
-        if (h >= 6 && h < 12) currentDJ = 'morning';
-        else if (h >= 12 && h < 18) currentDJ = 'afternoon';
-        this.preCacheCategory(currentDJ);
-      }
-
-      async preCacheCategory(category) {
-        const ids = MGR_AUDIO_DATABASE[category];
-        if (!ids) return;
-        for (const id of ids) {
-          if (!this.audioCache[id]) {
-            this.loadAudioSource(id).then(dataUri => {
-              if (dataUri) this.audioCache[id] = dataUri;
-            });
-          }
-        }
-      }
-
-      async loadAudioSource(id) {
-        // ถ้าเป็น URL ตรงๆ (เช่น Dropbox) ให้ส่งกลับไปเลย ไม่ต้องผ่าน Proxy
-        if (id.startsWith('http')) return id;
-
-        if (this.audioCache[id]) return this.audioCache[id];
-        return new Promise((resolve) => {
-          google.script.run
-            .withSuccessHandler(dataUri => {
-              if (!dataUri) {
-                console.warn("⚠️ ไฟล์ใหญ่อาจเกิน 50MB (Proxy ล้มเหลว) ลองใช้ Direct URL แทน:", id);
-                resolve(`https://drive.google.com/uc?export=download&id=${id}`);
-              } else {
-                resolve(dataUri);
-              }
-            })
-            .withFailureHandler(err => {
-              console.warn("⚠️ Proxy Error:", err);
-              resolve(`https://drive.google.com/uc?export=download&id=${id}`);
-            })
-            .getAudioDataProxy(id);
-        });
-      }
-
-      pickRandomId(category) {
-        let ids = MGR_AUDIO_DATABASE[category];
-        if (category === 'lofi' || category === 'groove') {
-          // Inject custom URLs
-          ids = [...ids, ...(state.customMusicUrls || [])];
-        }
-        if (!ids || ids.length === 0) return null;
-        const available = ids.filter(id => !this.playedTracks.has(id));
-        if (available.length === 0) {
-          ids.forEach(id => this.playedTracks.delete(id));
-          return this.pickRandomId(category);
-        }
-        const id = available[Math.floor(Math.random() * available.length)];
-        this.playedTracks.add(id);
-        return id;
-      }
-
-      async fadeVolume(audio, target, duration = 1500) {
-        const startVol = audio.volume;
-        const steps = 30;
-        const interval = duration / steps;
-        for (let i = 1; i <= steps; i++) {
-          await new Promise(r => setTimeout(r, interval));
-          audio.volume = startVol + (target - startVol) * (i / steps);
-        }
-        audio.volume = target;
-      }
-
-      async playMusic() {
-        if (!this.isPlaying) return;
-        const id = this.pickRandomId(this.mode);
-        if (id) {
-          const dataUri = await this.loadAudioSource(id);
-          if (dataUri && this.isPlaying) {
-            this.musicAudio.src = dataUri;
-            this.musicAudio.play().then(() => {
-              this.resetInterruptionTimer();
-            }).catch(e => {
-              console.error("❌ Music Playback Error (ข้ามไปเพลงถัดไป):", e);
-              // ข้ามไปเล่นเพลงถัดไปถ้าเล่นไม่ได้ (เช่นติด CSP หรือไฟล์พัง)
-              setTimeout(() => this.playMusic(), 1000);
-            });
-          } else if (!dataUri && this.isPlaying) {
-            setTimeout(() => this.playMusic(), 1000);
-          }
-        }
-      }
-
-      resetInterruptionTimer() {
-        if (this.interruptionTimer) clearTimeout(this.interruptionTimer);
-        if (!this.isPlaying) return;
-        const delay = (15 + Math.random() * 5) * 60 * 1000;
-        this.interruptionTimer = setTimeout(() => this.playDJInterrupt(), delay);
-      }
-
-      async playDJInterrupt() {
-        if (!this.isPlaying) return;
-        const h = new Date().getHours();
-        let cat = 'night';
-        if (h >= 6 && h < 12) cat = 'morning';
-        else if (h >= 12 && h < 18) cat = 'afternoon';
-
-        const id = this.pickRandomId(cat);
-        if (!id) return this.playMusic();
-
-        const dataUri = await this.loadAudioSource(id);
-        if (!dataUri || !this.isPlaying) {
-          if (this.isPlaying && this.musicAudio.paused) this.playMusic();
-          return;
-        }
-
-        await this.fadeVolume(this.musicAudio, 0.1, 1500);
-        if (!this.isPlaying) return;
-        this.djAudio.src = dataUri;
-        this.djAudio.play().catch(e => {
-          console.error("❌ DJ Playback Error:", e);
-          this.fadeVolume(this.musicAudio, 0.6, 1000);
-          this.resetInterruptionTimer();
-        });
-        this.djAudio.onended = async () => {
-          if (!this.isPlaying) return;
-          await this.fadeVolume(this.musicAudio, 0.6, 2000);
-          if (this.musicAudio.paused && this.isPlaying) this.playMusic();
-          else this.resetInterruptionTimer();
-        };
-      }
-
-      async playTrigger(type) {
-        const id = this.pickRandomId(type);
-        if (id) {
-          const dataUri = await this.loadAudioSource(id);
-          if (dataUri) {
-            this.triggerAudio.src = dataUri;
-            this.triggerAudio.play().catch(() => { });
-          }
-        }
-      }
-
-      onPomodoroStart() {
-        this.isPlaying = true;
-        this.stopAll(false);
-        this.playTrigger('start').then(() => {
-          this.triggerAudio.onended = () => {
-            if (this.isPlaying) this.playMusic();
-          }
-        });
-      }
-
-      async onPomodoroPause() {
-        this.isPlaying = false;
-        if (this.interruptionTimer) clearTimeout(this.interruptionTimer);
-        await this.fadeVolume(this.musicAudio, 0, 1000);
-        this.musicAudio.pause();
-        this.playTrigger('pause');
-      }
-
-      onResume() {
-        this.isPlaying = true;
-        if (this.musicAudio.src) {
-          this.musicAudio.volume = 0.6;
-          this.musicAudio.play().catch(() => this.playMusic());
-          this.resetInterruptionTimer();
-        } else {
-          this.playMusic();
-        }
-      }
-
-      onPomodoroComplete() {
-        this.isPlaying = false;
-        this.stopAll();
-        this.playTrigger('complete');
-      }
-
-      stopAll(resetIsPlaying = true) {
-        if (resetIsPlaying) this.isPlaying = false;
-        this.musicAudio.pause();
-        this.djAudio.pause();
-        this.triggerAudio.pause();
-        this.silentAudio.pause();
-        if (this.interruptionTimer) clearTimeout(this.interruptionTimer);
-      }
-    }
-
-    const Radio = new RadioController();
-
-    // ══════════════════════════════════════════════════
-    // ADVANCED LOGIC: GEOLOCATION & HAVERSINE
-    // ══════════════════════════════════════════════════
-    function getDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371; // km
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
-    }
-
-    // ══════════════════════════════════════════════════
-    // ADVANCED LOGIC: REVERSE GPA ALGORITHM
-    // ══════════════════════════════════════════════════
-    function suggestGradesForTarget(targetGPA) {
-      const allPast = [];
-      state.semesters.forEach(s => {
-        (state.courses[s.id] || []).forEach(c => {
-          if (c.grade && GRADE_PTS[c.grade] !== null) allPast.push(c);
-        });
-      });
-
-      const curSem = getCurrentSemester();
-      if (!curSem) return { error: 'ไม่มีเทอมปัจจุบัน' };
-      const currentCourses = (state.courses[curSem.id] || []).filter(c => !c.grade);
-      if (currentCourses.length === 0) return { error: 'ไม่มีวิชาที่กำลังเรียน' };
-
-      let pastPts = 0, pastCr = 0;
-      allPast.forEach(c => { pastPts += GRADE_PTS[c.grade] * c.credits; pastCr += c.credits; });
-
-      const currentTotalCr = currentCourses.reduce((sum, c) => sum + c.credits, 0);
-      const totalCr = pastCr + currentTotalCr;
-      const neededTotalPts = targetGPA * totalCr;
-      const neededCurPts = neededTotalPts - pastPts;
-
-      const targetAvg = neededCurPts / currentTotalCr;
-      if (targetAvg > 4) return { error: 'เป้าหมายสูงเกินความเป็นไปได้ (ต้องการเกรดเฉลี่ย > 4.00)' };
-
-      // Simple heuristic: suggest grades
-      const grades = ['A', 'B+', 'B', 'C+', 'C', 'D+', 'D'];
-      let suggestion = [];
-      currentCourses.forEach(c => {
-        let best = 'F';
-        for (let g of grades) { if (GRADE_PTS[g] >= targetAvg) best = g; }
-        suggestion.push({ code: c.code, suggest: best });
-      });
-      return { avg: targetAvg.toFixed(2), suggestion };
-    }
-
-    // ══════════════════════════════════════════════════
-    // ADVANCED LOGIC: SOS ANALYZER
-    // ══════════════════════════════════════════════════
-    function analyzeSOS(courseId) {
-      const all = [];
-      let targetCourse = null;
-      state.semesters.forEach(s => {
-        (state.courses[s.id] || []).forEach(c => {
-          if (c.id === courseId) targetCourse = c;
-          if (c.grade && GRADE_PTS[c.grade] !== null) all.push(c);
-        });
-      });
-
-      if (!targetCourse) return null;
-
-      const currentGPA = parseFloat(calcGPAFromList(all));
-
-      // Option 1: Keep and get D/F
-      const withD = [...all, { ...targetCourse, grade: 'D' }];
-      const withF = [...all, { ...targetCourse, grade: 'F' }];
-      const gpaD = calcGPAFromList(withD);
-      const gpaF = calcGPAFromList(withF);
-
-      // Option 2: Withdraw (W)
-      const gpaW = currentGPA; // W doesn't affect GPA
-
-      return {
-        current: currentGPA,
-        ifD: gpaD,
-        ifF: gpaF,
-        ifW: gpaW,
-        recommend: (gpaF < 2.0 && gpaW >= 2.0) ? 'ถอน (Withdraw) เพื่อรักษา GPAX' : 'สู้ต่อ (Keep Fighting)'
-      };
-    }
-
-    // ══════════════════════════════════════════════════
-    // GRADE UTILS
-    // ══════════════════════════════════════════════════
-    const GRADE_PTS = { A: 4, 'B+': 3.5, B: 3, 'C+': 2.5, C: 2, 'D+': 1.5, D: 1, F: 0, W: null, 'W-Late': null, N: null, I: null, P: null };
-    const GRADE_COLORS = {
-      A: '#84cc16', 'B+': '#84cc16', B: '#84cc16', 'C+': '#84cc16', C: '#84cc16', 'D+': '#84cc16', D: '#84cc16',
-      F: '#e11d48', W: '#e11d48', 'W-Late': '#e11d48', N: '#94a3b8', '-': '#6366f1'
     };
 
-    function renderTopicMastery(courseId, parentId = null) {
-      const allTopics = state.topicMastery[courseId] || [];
-      const topics = allTopics.filter(t => t.parentId === parentId);
-      const total = allTopics.length;
-      const mastered = allTopics.filter(t => t.level === 'mastered').length;
-      const progressPct = total > 0 ? ((mastered / total) * 100).toFixed(0) : 0;
-      let html = '';
+    // Pre-create some context to help mobile
+    this.silentAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFWm51bQAAAAADAAEAgD4AAIA+AAABAAgAZGF0YQAAAAA=');
+  }
 
-      // FIX 3: Mastery Summary Bar
-      if (parentId === null && total > 0) {
-        html += `
+  async warmUp() {
+    console.log("🔊 DJ Brain: Warming up audio context...");
+    try {
+      const warm = async (a) => { a.play().then(() => a.pause()).catch(() => { }); };
+      await warm(this.musicAudio);
+      await warm(this.djAudio);
+      await warm(this.triggerAudio);
+      await warm(this.silentAudio);
+    } catch (e) { console.warn("Warmup failed", e); }
+  }
+
+  async init() {
+    console.log("🎙️ DJ Brain: Pre-caching critical sounds...");
+    const criticalCategories = ['start', 'pause', 'complete'];
+    for (const cat of criticalCategories) {
+      this.preCacheCategory(cat);
+    }
+    // 2. โหลดเสียงดีเจตามช่วงเวลาปัจจุบัน
+    const h = new Date().getHours();
+    let currentDJ = 'night';
+    if (h >= 6 && h < 12) currentDJ = 'morning';
+    else if (h >= 12 && h < 18) currentDJ = 'afternoon';
+    this.preCacheCategory(currentDJ);
+  }
+
+  async preCacheCategory(category) {
+    const ids = MGR_AUDIO_DATABASE[category];
+    if (!ids) return;
+    for (const id of ids) {
+      if (!this.audioCache[id]) {
+        this.loadAudioSource(id).then(dataUri => {
+          if (dataUri) this.audioCache[id] = dataUri;
+        });
+      }
+    }
+  }
+
+  async loadAudioSource(id) {
+    // ถ้าเป็น URL ตรงๆ (เช่น Dropbox) ให้ส่งกลับไปเลย ไม่ต้องผ่าน Proxy
+    if (id.startsWith('http')) return id;
+
+    if (this.audioCache[id]) return this.audioCache[id];
+    return new Promise((resolve) => {
+      google.script.run
+        .withSuccessHandler(dataUri => {
+          if (!dataUri) {
+            console.warn("⚠️ ไฟล์ใหญ่อาจเกิน 50MB (Proxy ล้มเหลว) ลองใช้ Direct URL แทน:", id);
+            resolve(`https://drive.google.com/uc?export=download&id=${id}`);
+          } else {
+            resolve(dataUri);
+          }
+        })
+        .withFailureHandler(err => {
+          console.warn("⚠️ Proxy Error:", err);
+          resolve(`https://drive.google.com/uc?export=download&id=${id}`);
+        })
+        .getAudioDataProxy(id);
+    });
+  }
+
+  pickRandomId(category) {
+    let ids = MGR_AUDIO_DATABASE[category];
+    if (category === 'lofi' || category === 'groove') {
+      // Inject custom URLs
+      ids = [...ids, ...(state.customMusicUrls || [])];
+    }
+    if (!ids || ids.length === 0) return null;
+    const available = ids.filter(id => !this.playedTracks.has(id));
+    if (available.length === 0) {
+      ids.forEach(id => this.playedTracks.delete(id));
+      return this.pickRandomId(category);
+    }
+    const id = available[Math.floor(Math.random() * available.length)];
+    this.playedTracks.add(id);
+    return id;
+  }
+
+  async fadeVolume(audio, target, duration = 1500) {
+    const startVol = audio.volume;
+    const steps = 30;
+    const interval = duration / steps;
+    for (let i = 1; i <= steps; i++) {
+      await new Promise(r => setTimeout(r, interval));
+      audio.volume = startVol + (target - startVol) * (i / steps);
+    }
+    audio.volume = target;
+  }
+
+  async playMusic() {
+    if (!this.isPlaying) return;
+    const id = this.pickRandomId(this.mode);
+    if (id) {
+      const dataUri = await this.loadAudioSource(id);
+      if (dataUri && this.isPlaying) {
+        this.musicAudio.src = dataUri;
+        this.musicAudio.play().then(() => {
+          this.resetInterruptionTimer();
+        }).catch(e => {
+          console.error("❌ Music Playback Error (ข้ามไปเพลงถัดไป):", e);
+          // ข้ามไปเล่นเพลงถัดไปถ้าเล่นไม่ได้ (เช่นติด CSP หรือไฟล์พัง)
+          setTimeout(() => this.playMusic(), 1000);
+        });
+      } else if (!dataUri && this.isPlaying) {
+        setTimeout(() => this.playMusic(), 1000);
+      }
+    }
+  }
+
+  resetInterruptionTimer() {
+    if (this.interruptionTimer) clearTimeout(this.interruptionTimer);
+    if (!this.isPlaying) return;
+    const delay = (15 + Math.random() * 5) * 60 * 1000;
+    this.interruptionTimer = setTimeout(() => this.playDJInterrupt(), delay);
+  }
+
+  async playDJInterrupt() {
+    if (!this.isPlaying) return;
+    const h = new Date().getHours();
+    let cat = 'night';
+    if (h >= 6 && h < 12) cat = 'morning';
+    else if (h >= 12 && h < 18) cat = 'afternoon';
+
+    const id = this.pickRandomId(cat);
+    if (!id) return this.playMusic();
+
+    const dataUri = await this.loadAudioSource(id);
+    if (!dataUri || !this.isPlaying) {
+      if (this.isPlaying && this.musicAudio.paused) this.playMusic();
+      return;
+    }
+
+    await this.fadeVolume(this.musicAudio, 0.1, 1500);
+    if (!this.isPlaying) return;
+    this.djAudio.src = dataUri;
+    this.djAudio.play().catch(e => {
+      console.error("❌ DJ Playback Error:", e);
+      this.fadeVolume(this.musicAudio, 0.6, 1000);
+      this.resetInterruptionTimer();
+    });
+    this.djAudio.onended = async () => {
+      if (!this.isPlaying) return;
+      await this.fadeVolume(this.musicAudio, 0.6, 2000);
+      if (this.musicAudio.paused && this.isPlaying) this.playMusic();
+      else this.resetInterruptionTimer();
+    };
+  }
+
+  async playTrigger(type) {
+    const id = this.pickRandomId(type);
+    if (id) {
+      const dataUri = await this.loadAudioSource(id);
+      if (dataUri) {
+        this.triggerAudio.src = dataUri;
+        this.triggerAudio.play().catch(() => { });
+      }
+    }
+  }
+
+  onPomodoroStart() {
+    this.isPlaying = true;
+    this.stopAll(false);
+    this.playTrigger('start').then(() => {
+      this.triggerAudio.onended = () => {
+        if (this.isPlaying) this.playMusic();
+      }
+    });
+  }
+
+  async onPomodoroPause() {
+    this.isPlaying = false;
+    if (this.interruptionTimer) clearTimeout(this.interruptionTimer);
+    await this.fadeVolume(this.musicAudio, 0, 1000);
+    this.musicAudio.pause();
+    this.playTrigger('pause');
+  }
+
+  onResume() {
+    this.isPlaying = true;
+    if (this.musicAudio.src) {
+      this.musicAudio.volume = 0.6;
+      this.musicAudio.play().catch(() => this.playMusic());
+      this.resetInterruptionTimer();
+    } else {
+      this.playMusic();
+    }
+  }
+
+  onPomodoroComplete() {
+    this.isPlaying = false;
+    this.stopAll();
+    this.playTrigger('complete');
+  }
+
+  stopAll(resetIsPlaying = true) {
+    if (resetIsPlaying) this.isPlaying = false;
+    this.musicAudio.pause();
+    this.djAudio.pause();
+    this.triggerAudio.pause();
+    this.silentAudio.pause();
+    if (this.interruptionTimer) clearTimeout(this.interruptionTimer);
+  }
+}
+
+const Radio = new RadioController();
+
+// ══════════════════════════════════════════════════
+// ADVANCED LOGIC: GEOLOCATION & HAVERSINE
+// ══════════════════════════════════════════════════
+function getDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// ══════════════════════════════════════════════════
+// ADVANCED LOGIC: REVERSE GPA ALGORITHM
+// ══════════════════════════════════════════════════
+function suggestGradesForTarget(targetGPA) {
+  const allPast = [];
+  state.semesters.forEach(s => {
+    (state.courses[s.id] || []).forEach(c => {
+      if (c.grade && GRADE_PTS[c.grade] !== null) allPast.push(c);
+    });
+  });
+
+  const curSem = getCurrentSemester();
+  if (!curSem) return { error: 'ไม่มีเทอมปัจจุบัน' };
+  const currentCourses = (state.courses[curSem.id] || []).filter(c => !c.grade);
+  if (currentCourses.length === 0) return { error: 'ไม่มีวิชาที่กำลังเรียน' };
+
+  let pastPts = 0, pastCr = 0;
+  allPast.forEach(c => { pastPts += GRADE_PTS[c.grade] * c.credits; pastCr += c.credits; });
+
+  const currentTotalCr = currentCourses.reduce((sum, c) => sum + c.credits, 0);
+  const totalCr = pastCr + currentTotalCr;
+  const neededTotalPts = targetGPA * totalCr;
+  const neededCurPts = neededTotalPts - pastPts;
+
+  const targetAvg = neededCurPts / currentTotalCr;
+  if (targetAvg > 4) return { error: 'เป้าหมายสูงเกินความเป็นไปได้ (ต้องการเกรดเฉลี่ย > 4.00)' };
+
+  // Simple heuristic: suggest grades
+  const grades = ['A', 'B+', 'B', 'C+', 'C', 'D+', 'D'];
+  let suggestion = [];
+  currentCourses.forEach(c => {
+    let best = 'F';
+    for (let g of grades) { if (GRADE_PTS[g] >= targetAvg) best = g; }
+    suggestion.push({ code: c.code, suggest: best });
+  });
+  return { avg: targetAvg.toFixed(2), suggestion };
+}
+
+// ══════════════════════════════════════════════════
+// ADVANCED LOGIC: SOS ANALYZER
+// ══════════════════════════════════════════════════
+function analyzeSOS(courseId) {
+  const all = [];
+  let targetCourse = null;
+  state.semesters.forEach(s => {
+    (state.courses[s.id] || []).forEach(c => {
+      if (c.id === courseId) targetCourse = c;
+      if (c.grade && GRADE_PTS[c.grade] !== null) all.push(c);
+    });
+  });
+
+  if (!targetCourse) return null;
+
+  const currentGPA = parseFloat(calcGPAFromList(all));
+
+  // Option 1: Keep and get D/F
+  const withD = [...all, { ...targetCourse, grade: 'D' }];
+  const withF = [...all, { ...targetCourse, grade: 'F' }];
+  const gpaD = calcGPAFromList(withD);
+  const gpaF = calcGPAFromList(withF);
+
+  // Option 2: Withdraw (W)
+  const gpaW = currentGPA; // W doesn't affect GPA
+
+  return {
+    current: currentGPA,
+    ifD: gpaD,
+    ifF: gpaF,
+    ifW: gpaW,
+    recommend: (gpaF < 2.0 && gpaW >= 2.0) ? 'ถอน (Withdraw) เพื่อรักษา GPAX' : 'สู้ต่อ (Keep Fighting)'
+  };
+}
+
+// ══════════════════════════════════════════════════
+// GRADE UTILS
+// ══════════════════════════════════════════════════
+const GRADE_PTS = { A: 4, 'B+': 3.5, B: 3, 'C+': 2.5, C: 2, 'D+': 1.5, D: 1, F: 0, W: null, 'W-Late': null, N: null, I: null, P: null };
+const GRADE_COLORS = {
+  A: '#84cc16', 'B+': '#84cc16', B: '#84cc16', 'C+': '#84cc16', C: '#84cc16', 'D+': '#84cc16', D: '#84cc16',
+  F: '#e11d48', W: '#e11d48', 'W-Late': '#e11d48', N: '#94a3b8', '-': '#6366f1'
+};
+
+function renderTopicMastery(courseId, parentId = null) {
+  const allTopics = state.topicMastery[courseId] || [];
+  const topics = allTopics.filter(t => t.parentId === parentId);
+  const total = allTopics.length;
+  const mastered = allTopics.filter(t => t.level === 'mastered').length;
+  const progressPct = total > 0 ? ((mastered / total) * 100).toFixed(0) : 0;
+  let html = '';
+
+  // FIX 3: Mastery Summary Bar
+  if (parentId === null && total > 0) {
+    html += `
           <div class="glass-card nb-card" style="margin-bottom:15px; background:rgba(132,204,22,0.05); border-color:var(--c-lime);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                <div style="font-size:14px; font-weight:800; color:var(--c-lime);">📊 Mastery Progress</div>
@@ -655,13 +657,13 @@
             <div style="font-size:11px; margin-top:6px; font-weight:600; opacity:0.7;">เชี่ยวชาญแล้ว ${mastered}/${total} หัวข้อ</div>
           </div>
         `;
-      }
+  }
 
-      if (topics.length === 0 && parentId === null) {
-        return `<div class="empty-sm">ยังไม่มีหัวข้อที่เรียน <br> <button class="nb-btn sm" style="margin-top:10px;" onclick="addTopic('${courseId}', null)">➕ เพิ่มหัวข้อหลัก</button></div>`;
-      }
+  if (topics.length === 0 && parentId === null) {
+    return `<div class="empty-sm">ยังไม่มีหัวข้อที่เรียน <br> <button class="nb-btn sm" style="margin-top:10px;" onclick="addTopic('${courseId}', null)">➕ เพิ่มหัวข้อหลัก</button></div>`;
+  }
 
-      html += `<div class="${parentId ? 'topic-branch' : ''}">
+  html += `<div class="${parentId ? 'topic-branch' : ''}">
         ${topics.map((t, idx) => `
           <div style="margin-bottom:12px;">
             <div class="topic-item nb-card" style="padding:10px 15px; background:white;">
@@ -682,40 +684,40 @@
         `).join('')}
         ${!parentId ? `<button class="nb-btn sm" style="width:100%; margin-top:5px; background:#f8fafc;" onclick="addTopic('${courseId}', null)">➕ เพิ่มหัวข้อหลัก</button>` : ''}
       </div>`;
-      return html;
-    }
+  return html;
+}
 
-    function calcGPAFromList(list) {
-      let pts = 0, cr = 0;
-      list.forEach(c => {
-        const g = GRADE_PTS[c.grade];
-        if (g !== null && g !== undefined && c.grade !== 'W' && c.grade !== 'W-Late' && c.grade !== 'P' && c.grade !== 'N') { pts += g * c.credits; cr += c.credits; }
-      });
-      return cr > 0 ? (pts / cr).toFixed(2) : '-';
-    }
+function calcGPAFromList(list) {
+  let pts = 0, cr = 0;
+  list.forEach(c => {
+    const g = GRADE_PTS[c.grade];
+    if (g !== null && g !== undefined && c.grade !== 'W' && c.grade !== 'W-Late' && c.grade !== 'P' && c.grade !== 'N') { pts += g * c.credits; cr += c.credits; }
+  });
+  return cr > 0 ? (pts / cr).toFixed(2) : '-';
+}
 
-    // ══════════════════════════════════════════════════
-    // MICRO-GRADE & WHAT-IF LOGIC
-    // ══════════════════════════════════════════════════
-    function renderGradeStructure(courseId) {
-      const structure = state.courseStructures[courseId] || { components: [] };
-      if (structure.components.length === 0) {
-        return `<div class="empty-sm" style="background:rgba(255,255,255,0.05); padding:12px; border-radius:12px; border:1px dashed var(--glass-border);">
+// ══════════════════════════════════════════════════
+// MICRO-GRADE & WHAT-IF LOGIC
+// ══════════════════════════════════════════════════
+function renderGradeStructure(courseId) {
+  const structure = state.courseStructures[courseId] || { components: [] };
+  if (structure.components.length === 0) {
+    return `<div class="empty-sm" style="background:rgba(255,255,255,0.05); padding:12px; border-radius:12px; border:1px dashed var(--glass-border);">
       ยังไม่มีโครงสร้างคะแนน <br> <button class="btn-glass sm" style="margin-top:8px;" id="setupGradeBtn">🛠 ตั้งค่าโครงสร้าง</button>
     </div>`;
-      }
+  }
 
-      let totalWeight = 0;
-      let earnedPct = 0;
-      let html = `<div class="grade-rows" style="display:flex; flex-direction:column; gap:8px;">`;
-      structure.components.forEach((comp, idx) => {
-        const score = parseFloat(comp.earned) || 0;
-        const max = parseFloat(comp.max) || 100;
-        const weight = parseFloat(comp.weight) || 0;
-        const contribution = (score / max) * weight;
-        totalWeight += weight;
-        earnedPct += contribution;
-        html += `
+  let totalWeight = 0;
+  let earnedPct = 0;
+  let html = `<div class="grade-rows" style="display:flex; flex-direction:column; gap:8px;">`;
+  structure.components.forEach((comp, idx) => {
+    const score = parseFloat(comp.earned) || 0;
+    const max = parseFloat(comp.max) || 100;
+    const weight = parseFloat(comp.weight) || 0;
+    const contribution = (score / max) * weight;
+    totalWeight += weight;
+    earnedPct += contribution;
+    html += `
       <div class="grade-row-item">
         <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:2px;">
           <span>${comp.name} (${weight}%)</span>
@@ -723,10 +725,10 @@
         </div>
         <div class="prog-bar-bg" style="height:6px; background:rgba(255,255,255,0.1);"><div class="prog-bar-fill" style="width:${(score / max) * 100}%; background:var(--c-accent); box-shadow:0 0 10px var(--c-accent);"></div></div>
       </div>`;
-      });
+  });
 
-      const remainingWeight = 100 - totalWeight;
-      html += `</div>
+  const remainingWeight = 100 - totalWeight;
+  html += `</div>
     <div style="margin-top:12px; padding:12px; background:rgba(79,70,229,0.1); border-radius:12px; border:1px solid rgba(79,70,229,0.2);">
       <div style="font-size:14px; font-weight:700; color:var(--c-accent);">คะแนนปัจจุบัน: ${earnedPct.toFixed(1)} / ${totalWeight}%</div>
       ${remainingWeight > 0 ? `
@@ -744,14 +746,14 @@
       ` : ''}
     </div>
     <button class="btn-text-sm" style="margin-top:10px; width:100%;" id="editGradeStructureBtn">✏️ แก้ไขคะแนนย่อย</button>`;
-      return html;
-    }
+  return html;
+}
 
-    function setupGradeStructure(courseId) {
-      const structure = state.courseStructures[courseId] || { components: [] };
-      let tempComponents = [...structure.components];
+function setupGradeStructure(courseId) {
+  const structure = state.courseStructures[courseId] || { components: [] };
+  let tempComponents = [...structure.components];
 
-      const renderTemp = () => tempComponents.map((c, i) => `
+  const renderTemp = () => tempComponents.map((c, i) => `
     <div class="glass-card-sm" style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr 30px; gap:8px; align-items:center; margin-bottom:8px; padding:10px;">
       <input class="glass-input sm f-comp-name" placeholder="ชื่อ (เช่น Midterm)" value="${c.name}" data-idx="${i}">
       <input type="number" class="glass-input sm f-comp-earned" placeholder="ได้" value="${c.earned}" data-idx="${i}">
@@ -761,7 +763,7 @@
     </div>
   `).join('');
 
-      openModal('ตั้งค่าโครงสร้างคะแนน', `
+  openModal('ตั้งค่าโครงสร้างคะแนน', `
     <div class="form-grid">
       <div id="compList">${renderTemp()}</div>
       <button class="btn-glass sm" id="addCompBtn">+ เพิ่มรายการ</button>
@@ -769,578 +771,584 @@
     </div>
   `, `<button class="btn-glass-primary" id="saveCompBtn">บันทึกโครงสร้าง</button>`);
 
-      window.updateCompUI = () => {
-        const list = document.getElementById('compList');
-        if (list) {
-          list.innerHTML = renderTemp();
-          attachCompEvents();
-        }
-      };
-      const attachCompEvents = () => {
-        document.querySelectorAll('.f-comp-name').forEach(el => el.onchange = (e) => tempComponents[e.target.dataset.idx].name = e.target.value);
-        document.querySelectorAll('.f-comp-earned').forEach(el => el.onchange = (e) => tempComponents[e.target.dataset.idx].earned = e.target.value);
-        document.querySelectorAll('.f-comp-max').forEach(el => el.onchange = (e) => tempComponents[e.target.dataset.idx].max = e.target.value);
-        document.querySelectorAll('.f-comp-weight').forEach(el => el.onchange = (e) => tempComponents[e.target.dataset.idx].weight = e.target.value);
-      };
-      document.getElementById('addCompBtn').onclick = () => { tempComponents.push({ name: '', earned: 0, max: 100, weight: 0 }); window.updateCompUI(); };
+  window.updateCompUI = () => {
+    const list = document.getElementById('compList');
+    if (list) {
+      list.innerHTML = renderTemp();
       attachCompEvents();
+    }
+  };
+  const attachCompEvents = () => {
+    document.querySelectorAll('.f-comp-name').forEach(el => el.onchange = (e) => tempComponents[e.target.dataset.idx].name = e.target.value);
+    document.querySelectorAll('.f-comp-earned').forEach(el => el.onchange = (e) => tempComponents[e.target.dataset.idx].earned = e.target.value);
+    document.querySelectorAll('.f-comp-max').forEach(el => el.onchange = (e) => tempComponents[e.target.dataset.idx].max = e.target.value);
+    document.querySelectorAll('.f-comp-weight').forEach(el => el.onchange = (e) => tempComponents[e.target.dataset.idx].weight = e.target.value);
+  };
+  document.getElementById('addCompBtn').onclick = () => { tempComponents.push({ name: '', earned: 0, max: 100, weight: 0 }); window.updateCompUI(); };
+  attachCompEvents();
 
-      document.getElementById('saveCompBtn').onclick = async () => {
-        state.courseStructures[courseId] = { components: tempComponents };
-        localStorage.setItem('course_structures', JSON.stringify(state.courseStructures));
-        showToast('✅ บันทึกโครงสร้างคะแนนแล้ว');
-        closeModal();
-        render();
-      };
+  document.getElementById('saveCompBtn').onclick = async () => {
+    state.courseStructures[courseId] = { components: tempComponents };
+    localStorage.setItem('course_structures', JSON.stringify(state.courseStructures));
+
+    showToast('⏳ กำลังซิงก์ข้อมูลโครงสร้างคะแนน...');
+    await fsSet('course_structures', courseId, { components: tempComponents });
+
+    showToast('✅ บันทึกโครงสร้างคะแนนเรียบร้อย');
+    closeModal();
+    render();
+  };
+}
+
+function getCumGPA() {
+  const all = [];
+  state.semesters.forEach(s => { (state.courses[s.id] || []).forEach(c => { if (c.grade) all.push(c); }); });
+  return calcGPAFromList(all);
+}
+
+function getTotalPassedCredits() {
+  let t = 0;
+  state.semesters.forEach(s => {
+    (state.courses[s.id] || []).forEach(c => {
+      if (c.grade && c.grade !== 'F' && c.grade !== 'W' && c.grade !== 'W-Late' && c.grade !== 'N' && c.grade !== 'I') t += c.credits;
+    });
+  });
+  return t;
+}
+
+function getProStatus(gpa) {
+  const g = parseFloat(gpa);
+  if (isNaN(g) || gpa === '-') return null;
+  if (g < 1.5) return 'expelled';
+  if (g < 1.75) return 'pro-high';
+  if (g < 2.0) return 'pro-low';
+  return 'safe';
+}
+
+function getDaysUntil(d) { return Math.ceil((new Date(d) - new Date()) / (864e5)); }
+
+function getCurrentSemester() {
+  const today = new Date();
+  return state.semesters.find(s => {
+    const a = new Date(s.startDate), b = new Date(s.endDate);
+    return today >= a && today <= b;
+  });
+}
+
+// ══════════════════════════════════════════════════
+// FIREBASE CRUD
+// ══════════════════════════════════════════════════
+function showLoadingBlocker() {
+  let b = document.getElementById('globalLoadingBlocker');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'globalLoadingBlocker';
+    b.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(255,255,255,0.4); z-index:99999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(3px); cursor:wait;';
+    b.innerHTML = '<div style="background:var(--text); color:white; padding:15px 30px; border-radius:12px; font-weight:600; box-shadow:0 10px 25px rgba(0,0,0,0.1); display:flex; align-items:center; gap:10px;"><div class="spinner"></div>กำลังบันทึกข้อมูล...</div>';
+    const style = document.createElement('style');
+    style.innerHTML = '.spinner { width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; } @keyframes spin { to { transform: rotate(360deg); } }';
+    document.head.appendChild(style);
+    document.body.appendChild(b);
+  }
+  b.style.display = 'flex';
+}
+function hideLoadingBlocker() {
+  const b = document.getElementById('globalLoadingBlocker');
+  if (b) b.style.display = 'none';
+}
+
+async function fsSet(col, id, data) {
+  showLoadingBlocker();
+  try {
+    const plainData = JSON.parse(JSON.stringify(data));
+    await setDoc(doc(db, col, id), { ...plainData, _t: serverTimestamp() });
+  } catch (e) {
+    handleFirebaseError(e, 'fsSet');
+  }
+  saveToLocalStorage();
+  hideLoadingBlocker();
+}
+async function fsDel(col, id) {
+  showLoadingBlocker();
+  try {
+    await deleteDoc(doc(db, col, id));
+  } catch (e) {
+    handleFirebaseError(e, 'fsDel');
+  }
+  saveToLocalStorage();
+  hideLoadingBlocker();
+}
+async function fsUpd(col, id, data) {
+  showLoadingBlocker();
+  try {
+    const plainData = JSON.parse(JSON.stringify(data));
+    await updateDoc(doc(db, col, id), plainData);
+  } catch (e) {
+    handleFirebaseError(e, 'fsUpd');
+  }
+  saveToLocalStorage();
+  hideLoadingBlocker();
+}
+
+function handleFirebaseError(e, source) {
+  console.warn(`Firebase Error (${source}):`, e.message);
+  if (e.message.toLowerCase().includes('blocked') || e.message.toLowerCase().includes('failed to fetch') || e.code === 'unavailable') {
+    showToast('⚠️ การเชื่อมต่อฐานข้อมูลล้มเหลว กรุณาปิด Brave Shields หรือ AdBlocker สำหรับเว็บไซต์นี้', 'err');
+  }
+}
+
+// ── โหลดข้อมูลจาก localStorage ก่อน (fast) แล้วค่อย sync Firebase ──
+function loadFromLocalStorage() {
+  try {
+    const saved = localStorage.getItem('nitipat_state');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.semesters) state.semesters = parsed.semesters;
+      if (parsed.courses) state.courses = parsed.courses;
+      if (parsed.assignments) state.assignments = parsed.assignments;
+      if (parsed.exams) state.exams = parsed.exams;
+      if (parsed.topicMastery) state.topicMastery = parsed.topicMastery;
+      if (parsed.attendanceHistory) state.attendanceHistory = parsed.attendanceHistory;
+    }
+    const pin = localStorage.getItem('user_pin');
+    if (pin) {
+      state.pin = pin;
+      state.isLocked = true;
+    }
+  } catch (e) { console.warn('localStorage load error:', e); }
+}
+
+function saveToLocalStorage() {
+  try {
+    localStorage.setItem('nitipat_state', JSON.stringify({
+      semesters: state.semesters,
+      courses: state.courses,
+      assignments: state.assignments,
+      exams: state.exams,
+      topicMastery: state.topicMastery,
+      attendanceHistory: state.attendanceHistory
+    }));
+  } catch (e) { console.warn('localStorage save error:', e); }
+}
+
+async function loadAll() {
+  state.isInitializing = true;
+  loadFromLocalStorage();
+
+  const today = new Date().toDateString();
+  if (state.lastScoreReset !== today) {
+    state.focusScore = 100;
+    state.lastScoreReset = today;
+    localStorage.setItem('focusScore', 100);
+    localStorage.setItem('last_score_reset', today);
+  }
+  render();
+
+  try {
+    const [sSnap, cSnap, aSnap, eSnap, secSnap] = await Promise.all([
+      getDocs(collection(db, "semesters")),
+      getDocs(collection(db, "courses")),
+      getDocs(collection(db, "assignments")),
+      getDocs(collection(db, "exams")),
+      getDoc(doc(db, "app_settings", "security"))
+    ]);
+
+    if (secSnap.exists()) {
+      state.pin = secSnap.data().global_pin;
+      if (state.pin && sessionStorage.getItem('unlocked') !== 'true') state.isLocked = true;
+      else state.isLocked = false;
     }
 
-    function getCumGPA() {
-      const all = [];
-      state.semesters.forEach(s => { (state.courses[s.id] || []).forEach(c => { if (c.grade) all.push(c); }); });
-      return calcGPAFromList(all);
-    }
+    state.semesters = sSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.order - b.order);
+    state.courses = {};
+    cSnap.docs.forEach(d => { const c = { id: d.id, ...d.data() }; if (!state.courses[c.semId]) state.courses[c.semId] = []; state.courses[c.semId].push(c); });
+    state.assignments = {};
+    aSnap.docs.forEach(d => { const a = { id: d.id, ...d.data() }; if (!state.assignments[a.courseId]) state.assignments[a.courseId] = []; state.assignments[a.courseId].push(a); });
+    state.exams = {};
+    eSnap.docs.forEach(d => { const e = { id: d.id, ...d.data() }; if (!state.exams[e.courseId]) state.exams[e.courseId] = []; state.exams[e.courseId].push(e); });
 
-    function getTotalPassedCredits() {
-      let t = 0;
-      state.semesters.forEach(s => {
-        (state.courses[s.id] || []).forEach(c => {
-          if (c.grade && c.grade !== 'F' && c.grade !== 'W' && c.grade !== 'W-Late' && c.grade !== 'N' && c.grade !== 'I') t += c.credits;
-        });
-      });
-      return t;
-    }
-
-    function getProStatus(gpa) {
-      const g = parseFloat(gpa);
-      if (isNaN(g) || gpa === '-') return null;
-      if (g < 1.5) return 'expelled';
-      if (g < 1.75) return 'pro-high';
-      if (g < 2.0) return 'pro-low';
-      return 'safe';
-    }
-
-    function getDaysUntil(d) { return Math.ceil((new Date(d) - new Date()) / (864e5)); }
-
-    function getCurrentSemester() {
-      const today = new Date();
-      return state.semesters.find(s => {
-        const a = new Date(s.startDate), b = new Date(s.endDate);
-        return today >= a && today <= b;
-      });
-    }
-
-    // ══════════════════════════════════════════════════
-    // FIREBASE CRUD
-    // ══════════════════════════════════════════════════
-    function showLoadingBlocker() {
-      let b = document.getElementById('globalLoadingBlocker');
-      if (!b) {
-        b = document.createElement('div');
-        b.id = 'globalLoadingBlocker';
-        b.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(255,255,255,0.4); z-index:99999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(3px); cursor:wait;';
-        b.innerHTML = '<div style="background:var(--text); color:white; padding:15px 30px; border-radius:12px; font-weight:600; box-shadow:0 10px 25px rgba(0,0,0,0.1); display:flex; align-items:center; gap:10px;"><div class="spinner"></div>กำลังบันทึกข้อมูล...</div>';
-        const style = document.createElement('style');
-        style.innerHTML = '.spinner { width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; } @keyframes spin { to { transform: rotate(360deg); } }';
-        document.head.appendChild(style);
-        document.body.appendChild(b);
-      }
-      b.style.display = 'flex';
-    }
-    function hideLoadingBlocker() {
-      const b = document.getElementById('globalLoadingBlocker');
-      if (b) b.style.display = 'none';
-    }
-
-    async function fsSet(col, id, data) {
-      showLoadingBlocker();
-      try {
-        const plainData = JSON.parse(JSON.stringify(data));
-        await setDoc(doc(db, col, id), { ...plainData, _t: serverTimestamp() });
-      } catch (e) {
-        handleFirebaseError(e, 'fsSet');
-      }
-      saveToLocalStorage();
-      hideLoadingBlocker();
-    }
-    async function fsDel(col, id) {
-      showLoadingBlocker();
-      try {
-        await deleteDoc(doc(db, col, id));
-      } catch (e) {
-        handleFirebaseError(e, 'fsDel');
-      }
-      saveToLocalStorage();
-      hideLoadingBlocker();
-    }
-    async function fsUpd(col, id, data) {
-      showLoadingBlocker();
-      try {
-        const plainData = JSON.parse(JSON.stringify(data));
-        await updateDoc(doc(db, col, id), plainData);
-      } catch (e) {
-        handleFirebaseError(e, 'fsUpd');
-      }
-      saveToLocalStorage();
-      hideLoadingBlocker();
-    }
-
-    function handleFirebaseError(e, source) {
-      console.warn(`Firebase Error (${source}):`, e.message);
-      if (e.message.toLowerCase().includes('blocked') || e.message.toLowerCase().includes('failed to fetch') || e.code === 'unavailable') {
-        showToast('⚠️ การเชื่อมต่อฐานข้อมูลล้มเหลว กรุณาปิด Brave Shields หรือ AdBlocker สำหรับเว็บไซต์นี้', 'err');
-      }
-    }
-
-    // ── โหลดข้อมูลจาก localStorage ก่อน (fast) แล้วค่อย sync Firebase ──
-    function loadFromLocalStorage() {
-      try {
-        const saved = localStorage.getItem('nitipat_state');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed.semesters) state.semesters = parsed.semesters;
-          if (parsed.courses) state.courses = parsed.courses;
-          if (parsed.assignments) state.assignments = parsed.assignments;
-          if (parsed.exams) state.exams = parsed.exams;
-          if (parsed.topicMastery) state.topicMastery = parsed.topicMastery;
-          if (parsed.attendanceHistory) state.attendanceHistory = parsed.attendanceHistory;
+    // Focus Sync Listener
+    onSnapshot(doc(db, 'app_state', 'focus_session'), (snap) => {
+      const data = snap.data();
+      if (data && data.active) {
+        if (!state.pomodoroActive && data.initiatorId !== state.deviceId) {
+          state.pomodoroPhase = data.phase;
+          state.pomodoroWork = data.work;
+          state.pomodoroBreak = data.break;
+          state.selectedFocusCourseId = data.courseId;
+          state.lastInitiatorId = data.initiatorId;
+          const elapsed = (Date.now() - data.startTime) / 1000;
+          const total = (data.phase === 'work' ? data.work : data.break) * 60;
+          state.pomodoroTimeRemaining = Math.max(0, total - elapsed);
+          startPomodoro(true);
         }
-        const pin = localStorage.getItem('user_pin');
-        if (pin) {
-          state.pin = pin;
-          state.isLocked = true;
-        }
-      } catch (e) { console.warn('localStorage load error:', e); }
-    }
-
-    function saveToLocalStorage() {
-      try {
-        localStorage.setItem('nitipat_state', JSON.stringify({
-          semesters: state.semesters,
-          courses: state.courses,
-          assignments: state.assignments,
-          exams: state.exams,
-          topicMastery: state.topicMastery,
-          attendanceHistory: state.attendanceHistory
-        }));
-      } catch (e) { console.warn('localStorage save error:', e); }
-    }
-
-    async function loadAll() {
-      loadFromLocalStorage();
-
-      // Daily Reset Logic
-      const today = new Date().toDateString();
-      if (state.lastScoreReset !== today) {
-        state.focusScore = 100;
-        state.lastScoreReset = today;
-        localStorage.setItem('focusScore', 100);
-        localStorage.setItem('last_score_reset', today);
+      } else if (state.pomodoroActive && state.lastInitiatorId && state.lastInitiatorId !== state.deviceId) {
+        stopPomodoro(false);
       }
-      render();
+    });
 
-      try {
-        const [sSnap, cSnap, aSnap, eSnap, secSnap] = await Promise.all([
-          getDocs(collection(db, "semesters")),
-          getDocs(collection(db, "courses")),
-          getDocs(collection(db, "assignments")),
-          getDocs(collection(db, "exams")),
-          getDoc(doc(db, "app_settings", "security"))
-        ]);
-
-        if (secSnap.exists()) {
-          state.pin = secSnap.data().global_pin;
-          if (state.pin && sessionStorage.getItem('unlocked') !== 'true') state.isLocked = true;
-          else state.isLocked = false;
-        }
-
-        state.semesters = sSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.order - b.order);
-        state.courses = {};
-        cSnap.docs.forEach(d => { const c = { id: d.id, ...d.data() }; if (!state.courses[c.semId]) state.courses[c.semId] = []; state.courses[c.semId].push(c); });
-        state.assignments = {};
-        aSnap.docs.forEach(d => { const a = { id: d.id, ...d.data() }; if (!state.assignments[a.courseId]) state.assignments[a.courseId] = []; state.assignments[a.courseId].push(a); });
-        state.exams = {};
-        eSnap.docs.forEach(d => { const e = { id: d.id, ...d.data() }; if (!state.exams[e.courseId]) state.exams[e.courseId] = []; state.exams[e.courseId].push(e); });
-
-        // Focus Sync Listener
-        onSnapshot(doc(db, 'app_state', 'focus_session'), (snap) => {
-          const data = snap.data();
-          if (data && data.active) {
-            if (!state.pomodoroActive && data.initiatorId !== state.deviceId) {
-              state.pomodoroPhase = data.phase;
-              state.pomodoroWork = data.work;
-              state.pomodoroBreak = data.break;
-              state.selectedFocusCourseId = data.courseId;
-              state.lastInitiatorId = data.initiatorId;
-              const elapsed = (Date.now() - data.startTime) / 1000;
-              const total = (data.phase === 'work' ? data.work : data.break) * 60;
-              state.pomodoroTimeRemaining = Math.max(0, total - elapsed);
-              startPomodoro(true);
-            }
-          } else if (state.pomodoroActive && state.lastInitiatorId && state.lastInitiatorId !== state.deviceId) {
-            stopPomodoro(false);
-          }
-        });
-
-        onSnapshot(collection(db, 'attendance_history'), (snap) => {
-          let updated = false;
-          snap.forEach(doc => {
-            const courseId = doc.id;
-            const data = doc.data();
-            if (data.history) {
-              state.attendanceHistory[courseId] = data.history;
-              updated = true;
-            }
-          });
-          if (updated) {
-            localStorage.setItem('attendance_history', JSON.stringify(state.attendanceHistory));
-            if (state.activeHubTab === 'Attendance') render();
-          }
-        });
-
-        saveToLocalStorage();
-        await autoArchiveCourses();
-        if (!state.modal) render();
-      } catch (e) {
-        handleFirebaseError(e, 'loadAll');
-      }
-    }
-
-    async function autoArchiveCourses() {
-      const today = new Date();
-      let changed = false;
-      state.semesters.forEach(s => {
-        const endD = new Date(s.endDate);
-        if (today > endD) {
-          const courses = state.courses[s.id] || [];
-          courses.forEach(c => {
-            if (!c.isArchived && c.grade && c.grade !== '-' && c.grade !== 'I' && c.grade !== 'N' && c.grade !== 'P' && c.grade !== 'F') {
-              c.isArchived = true;
-              fsUpd('courses', c.id, { isArchived: true });
-              changed = true;
-            }
-          });
+    onSnapshot(collection(db, 'attendance_history'), (snap) => {
+      let updated = false;
+      snap.forEach(doc => {
+        const courseId = doc.id;
+        const data = doc.data();
+        if (data.history) {
+          state.attendanceHistory[courseId] = data.history;
+          updated = true;
         }
       });
-      if (changed) saveToLocalStorage();
+      if (updated) {
+        localStorage.setItem('attendance_history', JSON.stringify(state.attendanceHistory));
+        if (state.activeHubTab === 'Attendance') render();
+      }
+    });
+
+    saveToLocalStorage();
+    await autoArchiveCourses();
+    state.isInitializing = false;
+    if (!state.modal) render();
+  } catch (e) {
+    state.isInitializing = false;
+    handleFirebaseError(e, 'loadAll');
+  }
+}
+
+async function autoArchiveCourses() {
+  const today = new Date();
+  let changed = false;
+  state.semesters.forEach(s => {
+    const endD = new Date(s.endDate);
+    if (today > endD) {
+      const courses = state.courses[s.id] || [];
+      courses.forEach(c => {
+        if (!c.isArchived && c.grade && c.grade !== '-' && c.grade !== 'I' && c.grade !== 'N' && c.grade !== 'P' && c.grade !== 'F') {
+          c.isArchived = true;
+          fsUpd('courses', c.id, { isArchived: true });
+          changed = true;
+        }
+      });
     }
+  });
+  if (changed) saveToLocalStorage();
+}
 
-    // ══════════════════════════════════════════════════
-    // NOTIFICATIONS
-    // ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+// NOTIFICATIONS
+// ══════════════════════════════════════════════════
 
 
 
-    // ══════════════════════════════════════════════════
-    // POMODORO / FOCUS
-    // ══════════════════════════════════════════════════
-    async function startPomodoro(isRemote = false) {
-      if (!isRemote) {
-        await Radio.warmUp();
-        // Sync to Firestore
-        const settings = {
-          active: true,
-          phase: state.pomodoroPhase,
-          work: state.pomodoroWork,
-          break: state.pomodoroBreak,
-          courseId: state.selectedFocusCourseId,
-          initiatorId: state.deviceId,
-          startTime: Date.now()
-        };
-        await fsSet('app_state', 'focus_session', settings);
-      }
+// ══════════════════════════════════════════════════
+// POMODORO / FOCUS
+// ══════════════════════════════════════════════════
+async function startPomodoro(isRemote = false) {
+  if (!isRemote) {
+    await Radio.warmUp();
+    // Sync to Firestore
+    const settings = {
+      active: true,
+      phase: state.pomodoroPhase,
+      work: state.pomodoroWork,
+      break: state.pomodoroBreak,
+      courseId: state.selectedFocusCourseId,
+      initiatorId: state.deviceId,
+      startTime: Date.now()
+    };
+    await fsSet('app_state', 'focus_session', settings);
+  }
 
-      state.pomodoroActive = true;
+  state.pomodoroActive = true;
 
-      if (state.pomodoroTimeRemaining <= 0) {
-        const mins = state.pomodoroPhase === 'work' ? state.pomodoroWork : state.pomodoroBreak;
-        state.pomodoroTimeRemaining = mins * 60;
-      }
+  if (state.pomodoroTimeRemaining <= 0) {
+    const mins = state.pomodoroPhase === 'work' ? state.pomodoroWork : state.pomodoroBreak;
+    state.pomodoroTimeRemaining = mins * 60;
+  }
 
-      state.pomodoroEndTime = Date.now() + (state.pomodoroTimeRemaining * 1000);
+  state.pomodoroEndTime = Date.now() + (state.pomodoroTimeRemaining * 1000);
+
+  if (state.pomodoroPhase === 'work') {
+    state.isImmersiveFocus = true;
+    // Only play audio on the device that initiated the session (or if forced)
+    if (!isRemote || state.deviceId === state.lastInitiatorId) {
+      Radio.onPomodoroStart();
+    }
+  }
+
+  state.pomodoroTimer = setInterval(async () => {
+    const now = Date.now();
+    state.pomodoroTimeRemaining = Math.max(0, Math.round((state.pomodoroEndTime - now) / 1000));
+
+    if (now >= state.pomodoroEndTime) {
+      clearInterval(state.pomodoroTimer);
+      state.pomodoroTimeRemaining = 0;
 
       if (state.pomodoroPhase === 'work') {
-        state.isImmersiveFocus = true;
-        // Only play audio on the device that initiated the session (or if forced)
-        if (!isRemote || state.deviceId === state.lastInitiatorId) {
-          Radio.onPomodoroStart();
+        state.pomodoroCount++;
+        const focusedMins = state.pomodoroWork;
+        state.totalFocusHours += (focusedMins / 60);
+
+        if (state.selectedFocusCourseId) {
+          state.courseFocusStats[state.selectedFocusCourseId] = (state.courseFocusStats[state.selectedFocusCourseId] || 0) + focusedMins;
+          localStorage.setItem('course_focus_stats', JSON.stringify(state.courseFocusStats));
+          fsSet('course_focus_stats', state.selectedFocusCourseId, { minutes: state.courseFocusStats[state.selectedFocusCourseId] });
         }
+
+        state.focusScore = Math.min(100, state.focusScore + 10);
+        localStorage.setItem('focusScore', state.focusScore);
+        localStorage.setItem('totalFocusHours', state.totalFocusHours.toFixed(2));
+
+        checkBadges();
+        state.pomodoroPhase = 'break';
+        showToast('✅ Focus Complete!', 'info');
+        Radio.onPomodoroComplete();
+        growTree();
+
+        // Auto-start break
+        startPomodoro(isRemote);
+      } else {
+        state.pomodoroPhase = 'work';
+        showToast('☕ Break Over', 'info');
+        // Auto-start next work session
+        startPomodoro(isRemote);
       }
-
-      state.pomodoroTimer = setInterval(async () => {
-        const now = Date.now();
-        state.pomodoroTimeRemaining = Math.max(0, Math.round((state.pomodoroEndTime - now) / 1000));
-
-        if (now >= state.pomodoroEndTime) {
-          clearInterval(state.pomodoroTimer);
-          state.pomodoroTimeRemaining = 0;
-
-          if (state.pomodoroPhase === 'work') {
-            state.pomodoroCount++;
-            const focusedMins = state.pomodoroWork;
-            state.totalFocusHours += (focusedMins / 60);
-
-            if (state.selectedFocusCourseId) {
-              state.courseFocusStats[state.selectedFocusCourseId] = (state.courseFocusStats[state.selectedFocusCourseId] || 0) + focusedMins;
-              localStorage.setItem('course_focus_stats', JSON.stringify(state.courseFocusStats));
-              fsSet('course_focus_stats', state.selectedFocusCourseId, { minutes: state.courseFocusStats[state.selectedFocusCourseId] });
-            }
-
-            state.focusScore = Math.min(100, state.focusScore + 10);
-            localStorage.setItem('focusScore', state.focusScore);
-            localStorage.setItem('totalFocusHours', state.totalFocusHours.toFixed(2));
-
-            checkBadges();
-            state.pomodoroPhase = 'break';
-            showToast('✅ Focus Complete!', 'info');
-            Radio.onPomodoroComplete();
-            growTree();
-
-            // Auto-start break
-            startPomodoro(isRemote);
-          } else {
-            state.pomodoroPhase = 'work';
-            showToast('☕ Break Over', 'info');
-            // Auto-start next work session
-            startPomodoro(isRemote);
-          }
-        } else {
-          updateFocusProgressUI();
-        }
-      }, 1000);
-      render();
+    } else {
+      updateFocusProgressUI();
     }
+  }, 1000);
+  render();
+}
 
-    async function stopPomodoro(manual = true) {
-      clearInterval(state.pomodoroTimer);
-      state.pomodoroActive = false;
-      state.isImmersiveFocus = false;
-      state.pomodoroTimeRemaining = 0;
-      Radio.stopAll();
-      if (document.fullscreenElement) try { document.exitFullscreen(); } catch (e) { }
+async function stopPomodoro(manual = true) {
+  clearInterval(state.pomodoroTimer);
+  state.pomodoroActive = false;
+  state.isImmersiveFocus = false;
+  state.pomodoroTimeRemaining = 0;
+  Radio.stopAll();
+  if (document.fullscreenElement) try { document.exitFullscreen(); } catch (e) { }
 
-      if (manual) {
-        await fsSet('app_state', 'focus_session', { active: false });
-        if (state.pomodoroPhase === 'work') {
-          handleFocusDistraction("เซสชันถูกยกเลิกด้วยตัวเอง");
-        }
-      }
-
-      state.pomodoroPhase = 'work';
-      render();
+  if (manual) {
+    await fsSet('app_state', 'focus_session', { active: false });
+    if (state.pomodoroPhase === 'work') {
+      handleFocusDistraction("เซสชันถูกยกเลิกด้วยตัวเอง");
     }
+  }
 
-    function handleFocusDistraction(reason) {
-      state.focusScore = Math.max(0, state.focusScore - 5);
-      localStorage.setItem('focusScore', state.focusScore);
-      showToast(`⚠️ ${reason}! คะแนน Focus -5`, 'err');
+  state.pomodoroPhase = 'work';
+  render();
+}
 
-      // Visual feedback for distraction
-      document.body.classList.add('distraction-flash');
-      setTimeout(() => document.body.classList.remove('distraction-flash'), 1000);
-    }
+function handleFocusDistraction(reason) {
+  state.focusScore = Math.max(0, state.focusScore - 5);
+  localStorage.setItem('focusScore', state.focusScore);
+  showToast(`⚠️ ${reason}! คะแนน Focus -5`, 'err');
 
-    function updateFocusProgressUI() {
-      const rem = state.pomodoroTimeRemaining;
-      const total = (state.pomodoroPhase === 'work' ? state.pomodoroWork : state.pomodoroBreak) * 60;
-      const progress = (1 - rem / total) * 100;
+  // Visual feedback for distraction
+  document.body.classList.add('distraction-flash');
+  setTimeout(() => document.body.classList.remove('distraction-flash'), 1000);
+}
 
-      const ring = document.getElementById('pomRingProgress');
-      if (ring) {
-        const dash = 377; // 2 * pi * 60
-        ring.style.strokeDashoffset = dash - (progress / 100) * dash;
-      }
-      const timeEl = document.getElementById('pomTimeDisplay');
-      if (timeEl) timeEl.textContent = fmtTime(rem);
-    }
+function updateFocusProgressUI() {
+  const rem = state.pomodoroTimeRemaining;
+  const total = (state.pomodoroPhase === 'work' ? state.pomodoroWork : state.pomodoroBreak) * 60;
+  const progress = (1 - rem / total) * 100;
 
-    function findCourseById(id) {
-      return Object.values(state.courses).flat().find(c => c.id === id);
-    }
+  const ring = document.getElementById('pomRingProgress');
+  if (ring) {
+    const dash = 377; // 2 * pi * 60
+    ring.style.strokeDashoffset = dash - (progress / 100) * dash;
+  }
+  const timeEl = document.getElementById('pomTimeDisplay');
+  if (timeEl) timeEl.textContent = fmtTime(rem);
+}
 
-    // Anti-Distraction Listeners
-    document.addEventListener('fullscreenchange', () => {
-      if (!document.fullscreenElement && state.isImmersiveFocus && state.pomodoroActive) {
-        handleFocusDistraction("ออกจากโหมดเต็มหน้าจอ");
+function findCourseById(id) {
+  return Object.values(state.courses).flat().find(c => c.id === id);
+}
+
+// Anti-Distraction Listeners
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && state.isImmersiveFocus && state.pomodoroActive) {
+    handleFocusDistraction("ออกจากโหมดเต็มหน้าจอ");
+  }
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && state.isImmersiveFocus && state.pomodoroActive) {
+    handleFocusDistraction("มีการสลับหน้าจอ/แอป");
+    // Auto pause or just deduct points? User said "หยุดเวลาชั่วคราว"
+    // To keep it simple, we just deduct and keep running, or we can pause.
+    // Let's pause as requested.
+    clearInterval(state.pomodoroTimer);
+    state.pomodoroActive = false;
+    Radio.onPomodoroPause();
+    render();
+  }
+});
+
+function growTree() {
+  state.tree.sessions++;
+  state.tree.level = Math.floor(state.tree.sessions / 3);
+  state.tree.alive = true;
+  localStorage.setItem('focusTree', JSON.stringify(state.tree));
+}
+
+function checkBadges() {
+  const h = state.totalFocusHours;
+  const newBadges = [];
+  if (h >= 1 && !state.badges.includes('first_hour')) newBadges.push('first_hour');
+  if (h >= 10 && !state.badges.includes('10h')) newBadges.push('10h');
+  if (h >= 25 && !state.badges.includes('25h')) newBadges.push('25h');
+  if (h >= 100 && !state.badges.includes('100h')) newBadges.push('100h');
+  if (state.pomodoroCount >= 10 && !state.badges.includes('10pomo')) newBadges.push('10pomo');
+  newBadges.forEach(b => {
+    state.badges.push(b);
+    const labels = { 'first_hour': '🏅 ชั่วโมงแรก!', '10h': '🥈 10 ชั่วโมงโฟกัส', '25h': '🥇 25 ชั่วโมง Warrior', '100h': '🏆 100h Legend', '10pomo': '🍅 Pomodoro Pro' };
+    showToast('🎉 ได้ Badge ใหม่: ' + labels[b], 'success');
+  });
+  localStorage.setItem('badges', JSON.stringify(state.badges));
+}
+
+function getPomodoroRemaining() {
+  if (!state.pomodoroActive) return state.pomodoroWork * 60;
+  return Math.max(0, Math.ceil((state.pomodoroEndTime - Date.now()) / 1000));
+}
+
+function fmtTime(s) { return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; }
+
+// ══════════════════════════════════════════════════
+// TREE EMOJI
+// ══════════════════════════════════════════════════
+function getTreeEmoji() {
+  const lvl = state.tree.level;
+  if (!state.tree.alive) return '🪨';
+  if (lvl === 0) return '🌱';
+  if (lvl === 1) return '🌿';
+  if (lvl === 2) return '🌳';
+  if (lvl >= 3) return '🌲';
+}
+
+function getTreeSVG() {
+  const lvl = state.tree.level;
+  if (!state.tree.alive) return `<svg width="120" height="120" viewBox="0 0 100 100"><path d="M30 80 Q50 60 70 80 Z" fill="#6b7280"/></svg>`;
+  if (lvl === 0) return `<svg width="120" height="120" viewBox="0 0 100 100"><path d="M50 80 L50 60 Q60 50 70 55" stroke="#22c55e" stroke-width="6" stroke-linecap="round" fill="none"/></svg>`;
+  if (lvl === 1) return `<svg width="120" height="120" viewBox="0 0 100 100"><path d="M50 80 L50 40 Q70 30 75 40 M50 60 Q30 50 35 60" stroke="#22c55e" stroke-width="8" stroke-linecap="round" fill="none"/></svg>`;
+  if (lvl === 2) return `<svg width="120" height="120" viewBox="0 0 100 100"><path d="M44 60 h12 v25 h-12 z" fill="#78350f"/><circle cx="50" cy="45" r="25" fill="#22c55e"/></svg>`;
+  return `<svg width="120" height="120" viewBox="0 0 100 100" style="filter:drop-shadow(0 8px 16px rgba(21,128,61,0.3))"><path d="M42 50 h16 v35 h-16 z" fill="#78350f"/><circle cx="50" cy="35" r="30" fill="#15803d"/><circle cx="30" cy="45" r="20" fill="#16a34a"/><circle cx="70" cy="45" r="20" fill="#16a34a"/></svg>`;
+}
+
+
+// ══════════════════════════════════════════════════
+// DARK QUOTES
+// ══════════════════════════════════════════════════
+const QUOTES = [
+  '"เกรด 1.98 กับเส้นโปร 2.00 ห่างกันแค่ A เดียว" – ขอให้ได้',
+  '"วิศวะไม่ได้ฆ่าคน มันแค่ทำให้คนแข็งแกร่งขึ้น" – บางครั้งก็ไม่แน่ใจ',
+  '"ถ้าผ่านวิชา Mechanical Behavior ได้ อะไรก็ผ่านได้" – รุ่นพี่วิศวะวัสดุ',
+  '"จงทนอยู่ตราบที่พ่อแม่ยังรอ" – สติที่แท้จริง',
+  '"F ไม่ใช่จุดสิ้นสุด มันแค่ทำให้เส้นโค้ง GPA ลาดชัน" – ทฤษฎีล้วนๆ',
+  '"ทุกวิชาที่ยากคือ Story ที่คุณจะเล่าให้ลูกฟังวันหนึ่ง" – ถ้าได้จบ',
+  '"Sleep ก็ต้องการ Prerequisite: ปิดโทรศัพท์" – บทเรียนชีวิต',
+  '"หน่วยกิตทุก Credit ที่ผ่านมาคือชัยชนะ" – เริ่มนับจาก 1',
+];
+
+function getTodayQuote() { return QUOTES[new Date().getDate() % QUOTES.length]; }
+
+// ══════════════════════════════════════════════════
+// WHAT-IF CALCULATOR
+// ══════════════════════════════════════════════════
+function calcWhatIf(changes) {
+  // changes = [{courseId, grade}]
+  const overrides = {};
+  changes.forEach(c => overrides[c.courseId] = c.grade);
+  let pts = 0, cr = 0;
+  state.semesters.forEach(s => {
+    (state.courses[s.id] || []).forEach(c => {
+      const g = GRADE_PTS[overrides[c.id] ?? c.grade];
+      if (g !== null && g !== undefined && (overrides[c.id] ?? c.grade) !== 'W' && (overrides[c.id] ?? c.grade) !== 'P') {
+        pts += g * c.credits; cr += c.credits;
       }
     });
+  });
+  return cr > 0 ? (pts / cr).toFixed(2) : '-';
+}
 
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden && state.isImmersiveFocus && state.pomodoroActive) {
-        handleFocusDistraction("มีการสลับหน้าจอ/แอป");
-        // Auto pause or just deduct points? User said "หยุดเวลาชั่วคราว"
-        // To keep it simple, we just deduct and keep running, or we can pause.
-        // Let's pause as requested.
-        clearInterval(state.pomodoroTimer);
-        state.pomodoroActive = false;
-        Radio.onPomodoroPause();
-        render();
-      }
+function neededGPA(targetGPA) {
+  // คำนวณว่าต้องได้ GPA เทอมนี้เท่าไหร่เพื่อให้ GPAX ถึง target
+  const curSem = getCurrentSemester();
+  if (!curSem) return null;
+  const curCourses = state.courses[curSem.id] || [];
+  const curCr = curCourses.reduce((s, c) => s + c.credits, 0);
+  // GPAX_new = (GPAX_old * cr_old + GPA_new * cr_new) / (cr_old+cr_new)
+  let oldPts = 0, oldCr = 0;
+  state.semesters.forEach(s => {
+    if (s.id === curSem.id) return;
+    (state.courses[s.id] || []).forEach(c => {
+      const g = GRADE_PTS[c.grade];
+      if (g !== null && g !== undefined && c.grade !== 'W' && c.grade !== 'P') { oldPts += g * c.credits; oldCr += c.credits; }
     });
+  });
+  if (curCr === 0) return null;
+  const needed = (parseFloat(targetGPA) * (oldCr + curCr) - oldPts) / curCr;
+  return needed.toFixed(2);
+}
 
-    function growTree() {
-      state.tree.sessions++;
-      state.tree.level = Math.floor(state.tree.sessions / 3);
-      state.tree.alive = true;
-      localStorage.setItem('focusTree', JSON.stringify(state.tree));
-    }
+// ══════════════════════════════════════════════════
+// SEARCH
+// ══════════════════════════════════════════════════
+function globalSearch(q) {
+  if (!q) return [];
+  q = q.toLowerCase();
+  const results = [];
+  Object.values(state.courses).flat().forEach(c => {
+    if (c.code?.toLowerCase().includes(q) || c.nameTh?.toLowerCase().includes(q) || c.nameEn?.toLowerCase().includes(q))
+      results.push({ type: 'course', item: c, label: `📚 ${c.code} — ${c.nameTh}` });
+  });
+  Object.values(state.assignments).flat().forEach(a => {
+    if (a.title?.toLowerCase().includes(q)) results.push({ type: 'assign', item: a, label: `📋 ${a.title} — ${a.courseName}` });
+  });
+  Object.values(state.exams).flat().forEach(e => {
+    if (e.title?.toLowerCase().includes(q)) results.push({ type: 'exam', item: e, label: `📝 ${e.title}` });
+  });
+  ALL_COURSES.forEach(c => {
+    if (c.code?.toLowerCase().includes(q) || c.name?.toLowerCase().includes(q) || c.nameEn?.toLowerCase().includes(q))
+      results.push({ type: 'db_course', item: c, label: `🗃 ${c.code} — ${c.name} (ฐานข้อมูล)` });
+  });
+  return results.slice(0, 12);
+}
 
-    function checkBadges() {
-      const h = state.totalFocusHours;
-      const newBadges = [];
-      if (h >= 1 && !state.badges.includes('first_hour')) newBadges.push('first_hour');
-      if (h >= 10 && !state.badges.includes('10h')) newBadges.push('10h');
-      if (h >= 25 && !state.badges.includes('25h')) newBadges.push('25h');
-      if (h >= 100 && !state.badges.includes('100h')) newBadges.push('100h');
-      if (state.pomodoroCount >= 10 && !state.badges.includes('10pomo')) newBadges.push('10pomo');
-      newBadges.forEach(b => {
-        state.badges.push(b);
-        const labels = { 'first_hour': '🏅 ชั่วโมงแรก!', '10h': '🥈 10 ชั่วโมงโฟกัส', '25h': '🥇 25 ชั่วโมง Warrior', '100h': '🏆 100h Legend', '10pomo': '🍅 Pomodoro Pro' };
-        showToast('🎉 ได้ Badge ใหม่: ' + labels[b], 'success');
-      });
-      localStorage.setItem('badges', JSON.stringify(state.badges));
-    }
+// ══════════════════════════════════════════════════
+// PREREQUISITE CHECKER
+// ══════════════════════════════════════════════════
+function checkPrereqs(courseCode) {
+  const dbCourse = ALL_COURSES.find(c => c.code === courseCode);
+  if (!dbCourse || !dbCourse.prereq || dbCourse.prereq.length === 0) return { ok: true, missing: [] };
+  const passedCodes = new Set();
+  state.semesters.forEach(s => {
+    (state.courses[s.id] || []).forEach(c => {
+      if (c.grade && c.grade !== 'F' && c.grade !== 'W' && c.grade !== 'N') passedCodes.add(c.code);
+    });
+  });
+  const missing = dbCourse.prereq.filter(p => !passedCodes.has(p));
+  return { ok: missing.length === 0, missing };
+}
 
-    function getPomodoroRemaining() {
-      if (!state.pomodoroActive) return state.pomodoroWork * 60;
-      return Math.max(0, Math.ceil((state.pomodoroEndTime - Date.now()) / 1000));
-    }
+// ══════════════════════════════════════════════════
+// AUTO-COMPLETE for course search
+// ══════════════════════════════════════════════════
+function searchCourseDB(q) {
+  if (!q || q.length < 2) return [];
+  q = q.toLowerCase();
+  return ALL_COURSES.filter(c => c.code?.toLowerCase().includes(q) || c.name?.toLowerCase().includes(q) || c.nameEn?.toLowerCase().includes(q)).slice(0, 8);
+}
 
-    function fmtTime(s) { return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; }
-
-    // ══════════════════════════════════════════════════
-    // TREE EMOJI
-    // ══════════════════════════════════════════════════
-    function getTreeEmoji() {
-      const lvl = state.tree.level;
-      if (!state.tree.alive) return '🪨';
-      if (lvl === 0) return '🌱';
-      if (lvl === 1) return '🌿';
-      if (lvl === 2) return '🌳';
-      if (lvl >= 3) return '🌲';
-    }
-
-    function getTreeSVG() {
-      const lvl = state.tree.level;
-      if (!state.tree.alive) return `<svg width="120" height="120" viewBox="0 0 100 100"><path d="M30 80 Q50 60 70 80 Z" fill="#6b7280"/></svg>`;
-      if (lvl === 0) return `<svg width="120" height="120" viewBox="0 0 100 100"><path d="M50 80 L50 60 Q60 50 70 55" stroke="#22c55e" stroke-width="6" stroke-linecap="round" fill="none"/></svg>`;
-      if (lvl === 1) return `<svg width="120" height="120" viewBox="0 0 100 100"><path d="M50 80 L50 40 Q70 30 75 40 M50 60 Q30 50 35 60" stroke="#22c55e" stroke-width="8" stroke-linecap="round" fill="none"/></svg>`;
-      if (lvl === 2) return `<svg width="120" height="120" viewBox="0 0 100 100"><path d="M44 60 h12 v25 h-12 z" fill="#78350f"/><circle cx="50" cy="45" r="25" fill="#22c55e"/></svg>`;
-      return `<svg width="120" height="120" viewBox="0 0 100 100" style="filter:drop-shadow(0 8px 16px rgba(21,128,61,0.3))"><path d="M42 50 h16 v35 h-16 z" fill="#78350f"/><circle cx="50" cy="35" r="30" fill="#15803d"/><circle cx="30" cy="45" r="20" fill="#16a34a"/><circle cx="70" cy="45" r="20" fill="#16a34a"/></svg>`;
-    }
-
-
-    // ══════════════════════════════════════════════════
-    // DARK QUOTES
-    // ══════════════════════════════════════════════════
-    const QUOTES = [
-      '"เกรด 1.98 กับเส้นโปร 2.00 ห่างกันแค่ A เดียว" – ขอให้ได้',
-      '"วิศวะไม่ได้ฆ่าคน มันแค่ทำให้คนแข็งแกร่งขึ้น" – บางครั้งก็ไม่แน่ใจ',
-      '"ถ้าผ่านวิชา Mechanical Behavior ได้ อะไรก็ผ่านได้" – รุ่นพี่วิศวะวัสดุ',
-      '"จงทนอยู่ตราบที่พ่อแม่ยังรอ" – สติที่แท้จริง',
-      '"F ไม่ใช่จุดสิ้นสุด มันแค่ทำให้เส้นโค้ง GPA ลาดชัน" – ทฤษฎีล้วนๆ',
-      '"ทุกวิชาที่ยากคือ Story ที่คุณจะเล่าให้ลูกฟังวันหนึ่ง" – ถ้าได้จบ',
-      '"Sleep ก็ต้องการ Prerequisite: ปิดโทรศัพท์" – บทเรียนชีวิต',
-      '"หน่วยกิตทุก Credit ที่ผ่านมาคือชัยชนะ" – เริ่มนับจาก 1',
-    ];
-
-    function getTodayQuote() { return QUOTES[new Date().getDate() % QUOTES.length]; }
-
-    // ══════════════════════════════════════════════════
-    // WHAT-IF CALCULATOR
-    // ══════════════════════════════════════════════════
-    function calcWhatIf(changes) {
-      // changes = [{courseId, grade}]
-      const overrides = {};
-      changes.forEach(c => overrides[c.courseId] = c.grade);
-      let pts = 0, cr = 0;
-      state.semesters.forEach(s => {
-        (state.courses[s.id] || []).forEach(c => {
-          const g = GRADE_PTS[overrides[c.id] ?? c.grade];
-          if (g !== null && g !== undefined && (overrides[c.id] ?? c.grade) !== 'W' && (overrides[c.id] ?? c.grade) !== 'P') {
-            pts += g * c.credits; cr += c.credits;
-          }
-        });
-      });
-      return cr > 0 ? (pts / cr).toFixed(2) : '-';
-    }
-
-    function neededGPA(targetGPA) {
-      // คำนวณว่าต้องได้ GPA เทอมนี้เท่าไหร่เพื่อให้ GPAX ถึง target
-      const curSem = getCurrentSemester();
-      if (!curSem) return null;
-      const curCourses = state.courses[curSem.id] || [];
-      const curCr = curCourses.reduce((s, c) => s + c.credits, 0);
-      // GPAX_new = (GPAX_old * cr_old + GPA_new * cr_new) / (cr_old+cr_new)
-      let oldPts = 0, oldCr = 0;
-      state.semesters.forEach(s => {
-        if (s.id === curSem.id) return;
-        (state.courses[s.id] || []).forEach(c => {
-          const g = GRADE_PTS[c.grade];
-          if (g !== null && g !== undefined && c.grade !== 'W' && c.grade !== 'P') { oldPts += g * c.credits; oldCr += c.credits; }
-        });
-      });
-      if (curCr === 0) return null;
-      const needed = (parseFloat(targetGPA) * (oldCr + curCr) - oldPts) / curCr;
-      return needed.toFixed(2);
-    }
-
-    // ══════════════════════════════════════════════════
-    // SEARCH
-    // ══════════════════════════════════════════════════
-    function globalSearch(q) {
-      if (!q) return [];
-      q = q.toLowerCase();
-      const results = [];
-      Object.values(state.courses).flat().forEach(c => {
-        if (c.code?.toLowerCase().includes(q) || c.nameTh?.toLowerCase().includes(q) || c.nameEn?.toLowerCase().includes(q))
-          results.push({ type: 'course', item: c, label: `📚 ${c.code} — ${c.nameTh}` });
-      });
-      Object.values(state.assignments).flat().forEach(a => {
-        if (a.title?.toLowerCase().includes(q)) results.push({ type: 'assign', item: a, label: `📋 ${a.title} — ${a.courseName}` });
-      });
-      Object.values(state.exams).flat().forEach(e => {
-        if (e.title?.toLowerCase().includes(q)) results.push({ type: 'exam', item: e, label: `📝 ${e.title}` });
-      });
-      ALL_COURSES.forEach(c => {
-        if (c.code?.toLowerCase().includes(q) || c.name?.toLowerCase().includes(q) || c.nameEn?.toLowerCase().includes(q))
-          results.push({ type: 'db_course', item: c, label: `🗃 ${c.code} — ${c.name} (ฐานข้อมูล)` });
-      });
-      return results.slice(0, 12);
-    }
-
-    // ══════════════════════════════════════════════════
-    // PREREQUISITE CHECKER
-    // ══════════════════════════════════════════════════
-    function checkPrereqs(courseCode) {
-      const dbCourse = ALL_COURSES.find(c => c.code === courseCode);
-      if (!dbCourse || !dbCourse.prereq || dbCourse.prereq.length === 0) return { ok: true, missing: [] };
-      const passedCodes = new Set();
-      state.semesters.forEach(s => {
-        (state.courses[s.id] || []).forEach(c => {
-          if (c.grade && c.grade !== 'F' && c.grade !== 'W' && c.grade !== 'N') passedCodes.add(c.code);
-        });
-      });
-      const missing = dbCourse.prereq.filter(p => !passedCodes.has(p));
-      return { ok: missing.length === 0, missing };
-    }
-
-    // ══════════════════════════════════════════════════
-    // AUTO-COMPLETE for course search
-    // ══════════════════════════════════════════════════
-    function searchCourseDB(q) {
-      if (!q || q.length < 2) return [];
-      q = q.toLowerCase();
-      return ALL_COURSES.filter(c => c.code?.toLowerCase().includes(q) || c.name?.toLowerCase().includes(q) || c.nameEn?.toLowerCase().includes(q)).slice(0, 8);
-    }
-
-    // ══════════════════════════════════════════════════
-    // GRADE REPORT EXPORT
-    // ══════════════════════════════════════════════════
-    function exportGradeReport() {
-      const gpa = getCumGPA();
-      const pro = getProStatus(gpa);
-      const proLabels = { safe: 'ปลอดภัย ✅', 'pro-low': 'ติดโปรต่ำ ⚠️', 'pro-high': 'ติดโปรสูง 🚨', 'expelled': 'พ้นสภาพ ❌' };
-      let html = `<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><style>
+// ══════════════════════════════════════════════════
+// GRADE REPORT EXPORT
+// ══════════════════════════════════════════════════
+function exportGradeReport() {
+  const gpa = getCumGPA();
+  const pro = getProStatus(gpa);
+  const proLabels = { safe: 'ปลอดภัย ✅', 'pro-low': 'ติดโปรต่ำ ⚠️', 'pro-high': 'ติดโปรสูง 🚨', 'expelled': 'พ้นสภาพ ❌' };
+  let html = `<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><style>
     body{font-family:Sarabun,sans-serif;padding:32px;color:#111;max-width:700px;margin:auto;}
     h1{color:#1a56db;font-size:22px;} h2{color:#374151;font-size:16px;margin:20px 0 8px;}
     .gpax{font-size:32px;font-weight:700;color:#1a56db;} .pro{font-weight:600;font-size:18px;}
@@ -1441,148 +1449,148 @@
   <span class="pro ${pro === 'safe' ? '' : ' warn'}">${pro ? proLabels[pro] : '-'}</span></p>
   <p>หน่วยกิตที่ผ่าน: ${getTotalPassedCredits()} / 137 หน่วยกิต</p>`;
 
-      state.semesters.forEach(s => {
-        const courses = state.courses[s.id] || [];
-        const semGPA = calcGPAFromList(courses);
-        html += `<h2>${s.name} — GPA: ${semGPA}</h2>
+  state.semesters.forEach(s => {
+    const courses = state.courses[s.id] || [];
+    const semGPA = calcGPAFromList(courses);
+    html += `<h2>${s.name} — GPA: ${semGPA}</h2>
     <table><tr><th>รหัสวิชา</th><th>ชื่อวิชา</th><th>หน่วยกิต</th><th>เกรด</th></tr>
     ${courses.map(c => `<tr><td style="font-family:monospace">${c.code}</td><td>${c.nameTh}</td><td style="text-align:center">${c.credits}</td>
     <td style="text-align:center"><span class="badge ${c.grade?.replace('+', 'plus') || ''}">${c.grade || '-'}</span></td></tr>`).join('')}
     </table>`;
-      });
-      html += `<p style="margin-top:24px;font-size:12px;color:#6b7280">สร้างโดย NITIPAT MANAGER • ${new Date().toLocaleDateString('th-TH')}</p></body></html>`;
-      const b = new Blob([html], { type: 'text/html' });
-      const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `grade_report_${Date.now()}.html`; a.click();
-      showToast('📄 ดาวน์โหลดใบสรุปเกรดแล้ว');
-    }
+  });
+  html += `<p style="margin-top:24px;font-size:12px;color:#6b7280">สร้างโดย NITIPAT MANAGER • ${new Date().toLocaleDateString('th-TH')}</p></body></html>`;
+  const b = new Blob([html], { type: 'text/html' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `grade_report_${Date.now()}.html`; a.click();
+  showToast('📄 ดาวน์โหลดใบสรุปเกรดแล้ว');
+}
 
-    // ══════════════════════════════════════════════════
-    // CANVAS SCHEDULE EXPORT
-    // ══════════════════════════════════════════════════
-    function exportScheduleAsImage() {
-      const canvas = document.createElement('canvas');
-      canvas.width = 1080; canvas.height = 1920;
-      const ctx = canvas.getContext('2d');
-      // Background gradient
-      const grd = ctx.createLinearGradient(0, 0, 0, 1920);
-      grd.addColorStop(0, '#e0e7ff'); grd.addColorStop(1, '#f0f4ff');
-      ctx.fillStyle = grd; ctx.fillRect(0, 0, 1080, 1920);
-      // Title
-      ctx.fillStyle = '#1a1a2e'; ctx.font = 'bold 48px Kanit'; ctx.textAlign = 'center';
-      ctx.fillText('ตารางเรียนของฉัน', 540, 80);
-      const curSem = state.selectedSemester ? state.semesters.find(s => s.id === state.selectedSemester) : getCurrentSemester();
-      if (curSem) { ctx.font = '32px Kanit'; ctx.fillStyle = '#4f46e5'; ctx.fillText(curSem.name, 540, 130); }
-      // Days header
-      const days = ['จ', 'อ', 'พ', 'พฤ', 'ศ'];
-      const cellW = 200, cellH = 80, startX = 80, startY = 170;
-      ctx.font = 'bold 28px Kanit'; ctx.fillStyle = '#312e81';
-      days.forEach((d, i) => { ctx.textAlign = 'center'; ctx.fillText(d, startX + (i + 0.5) * cellW, startY + 40); });
-      // Hours
-      for (let h = 8; h <= 19; h++) {
-        const y = startY + 60 + (h - 8) * cellH;
-        ctx.font = '22px JetBrains Mono'; ctx.fillStyle = '#6b7280'; ctx.textAlign = 'right';
-        ctx.fillText(`${h}:00`, startX - 8, y + cellH / 2 + 8);
-        // Grid lines
-        ctx.strokeStyle = '#e0e7ff'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(startX, y); ctx.lineTo(startX + 5 * cellW, y); ctx.stroke();
-      }
-      // Courses
-      const courses = curSem ? (state.courses[curSem.id] || []) : [];
-      courses.forEach(c => {
-        (c.schedule || []).forEach(slot => {
-          const x = startX + slot.day * cellW;
-          const y = startY + 60 + (slot.startHour - 8) * cellH;
-          const h = (slot.endHour - slot.startHour) * cellH;
-          ctx.fillStyle = (c.color || '#4f46e5') + 'cc';
-          roundRect(ctx, x + 2, y + 2, cellW - 4, h - 4, 12);
-          ctx.fill();
-          ctx.fillStyle = '#fff'; ctx.font = 'bold 24px Kanit'; ctx.textAlign = 'center';
-          ctx.fillText(c.code, x + cellW / 2, y + h / 2);
-        });
-      });
-      ctx.font = '20px Kanit'; ctx.fillStyle = '#6b7280'; ctx.textAlign = 'center';
-      ctx.fillText('NITIPAT MANAGER • ม.เกษตรศาสตร์', 540, 1880);
-      canvas.toBlob(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'schedule.png'; a.click(); });
-      showToast('📸 บันทึกตารางเรียนเป็นรูปแล้ว');
-    }
+// ══════════════════════════════════════════════════
+// CANVAS SCHEDULE EXPORT
+// ══════════════════════════════════════════════════
+function exportScheduleAsImage() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1080; canvas.height = 1920;
+  const ctx = canvas.getContext('2d');
+  // Background gradient
+  const grd = ctx.createLinearGradient(0, 0, 0, 1920);
+  grd.addColorStop(0, '#e0e7ff'); grd.addColorStop(1, '#f0f4ff');
+  ctx.fillStyle = grd; ctx.fillRect(0, 0, 1080, 1920);
+  // Title
+  ctx.fillStyle = '#1a1a2e'; ctx.font = 'bold 48px Kanit'; ctx.textAlign = 'center';
+  ctx.fillText('ตารางเรียนของฉัน', 540, 80);
+  const curSem = state.selectedSemester ? state.semesters.find(s => s.id === state.selectedSemester) : getCurrentSemester();
+  if (curSem) { ctx.font = '32px Kanit'; ctx.fillStyle = '#4f46e5'; ctx.fillText(curSem.name, 540, 130); }
+  // Days header
+  const days = ['จ', 'อ', 'พ', 'พฤ', 'ศ'];
+  const cellW = 200, cellH = 80, startX = 80, startY = 170;
+  ctx.font = 'bold 28px Kanit'; ctx.fillStyle = '#312e81';
+  days.forEach((d, i) => { ctx.textAlign = 'center'; ctx.fillText(d, startX + (i + 0.5) * cellW, startY + 40); });
+  // Hours
+  for (let h = 8; h <= 19; h++) {
+    const y = startY + 60 + (h - 8) * cellH;
+    ctx.font = '22px JetBrains Mono'; ctx.fillStyle = '#6b7280'; ctx.textAlign = 'right';
+    ctx.fillText(`${h}:00`, startX - 8, y + cellH / 2 + 8);
+    // Grid lines
+    ctx.strokeStyle = '#e0e7ff'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(startX, y); ctx.lineTo(startX + 5 * cellW, y); ctx.stroke();
+  }
+  // Courses
+  const courses = curSem ? (state.courses[curSem.id] || []) : [];
+  courses.forEach(c => {
+    (c.schedule || []).forEach(slot => {
+      const x = startX + slot.day * cellW;
+      const y = startY + 60 + (slot.startHour - 8) * cellH;
+      const h = (slot.endHour - slot.startHour) * cellH;
+      ctx.fillStyle = (c.color || '#4f46e5') + 'cc';
+      roundRect(ctx, x + 2, y + 2, cellW - 4, h - 4, 12);
+      ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 24px Kanit'; ctx.textAlign = 'center';
+      ctx.fillText(c.code, x + cellW / 2, y + h / 2);
+    });
+  });
+  ctx.font = '20px Kanit'; ctx.fillStyle = '#6b7280'; ctx.textAlign = 'center';
+  ctx.fillText('NITIPAT MANAGER • ม.เกษตรศาสตร์', 540, 1880);
+  canvas.toBlob(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'schedule.png'; a.click(); });
+  showToast('📸 บันทึกตารางเรียนเป็นรูปแล้ว');
+}
 
-    function roundRect(ctx, x, y, w, h, r) {
-      ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-      ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + r, y + h);
-      ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
-    }
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
+}
 
-    // ══════════════════════════════════════════════════
-    // TOAST
-    // ══════════════════════════════════════════════════
-    function showToast(msg, type = 'info') {
-      const t = document.createElement('div');
-      t.className = `toast toast-${type}`; t.textContent = msg;
-      document.body.appendChild(t);
-      setTimeout(() => t.classList.add('show'), 10);
-      setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 400); }, 3000);
-    }
+// ══════════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════════
+function showToast(msg, type = 'info') {
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.classList.add('show'), 10);
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 400); }, 3000);
+}
 
-    // ══════════════════════════════════════════════════
-    // MODAL
-    // ══════════════════════════════════════════════════
-    function openModal(title, body, footer = '') {
-      state.modal = { title, body, footer }; render();
-      setTimeout(() => document.querySelector('.modal')?.classList.add('show'), 10);
-    }
-    function closeModal() { state.modal = null; render(); }
+// ══════════════════════════════════════════════════
+// MODAL
+// ══════════════════════════════════════════════════
+function openModal(title, body, footer = '') {
+  state.modal = { title, body, footer }; render();
+  setTimeout(() => document.querySelector('.modal')?.classList.add('show'), 10);
+}
+function closeModal() { state.modal = null; render(); }
 
-    // ══════════════════════════════════════════════════
-    // RENDER ENGINE & LAYOUT REDESIGN
-    // ══════════════════════════════════════════════════
-    function getTodayDayIndex() {
-      return (new Date().getDay() + 6) % 7; // 0=Mon, 1=Tue...
-    }
+// ══════════════════════════════════════════════════
+// RENDER ENGINE & LAYOUT REDESIGN
+// ══════════════════════════════════════════════════
+function getTodayDayIndex() {
+  return (new Date().getDay() + 6) % 7; // 0=Mon, 1=Tue...
+}
 
-    function getMissingReflections() {
-      const now = new Date();
-      const dayIdx = getTodayDayIndex();
-      const currentTimeVal = now.getHours() + (now.getMinutes() / 60);
-      const curSem = getCurrentSemester();
-      if (!curSem) return [];
+function getMissingReflections() {
+  const now = new Date();
+  const dayIdx = getTodayDayIndex();
+  const currentTimeVal = now.getHours() + (now.getMinutes() / 60);
+  const curSem = getCurrentSemester();
+  if (!curSem) return [];
 
-      const todayClasses = (state.courses[curSem.id] || []).flatMap(c =>
-        (c.schedules || c.schedule || []).filter(s => s.day === dayIdx).map(s => ({ ...c, slot: s }))
-      );
+  const todayClasses = (state.courses[curSem.id] || []).flatMap(c =>
+    (c.schedules || c.schedule || []).filter(s => s.day === dayIdx).map(s => ({ ...c, slot: s }))
+  );
 
-      return todayClasses.filter(c => {
-        const reflection = state.reflections[c.id] || "";
-        return currentTimeVal >= c.slot.endHour && reflection.trim().length < 10;
-      });
-    }
+  return todayClasses.filter(c => {
+    const reflection = state.reflections[c.id] || "";
+    return currentTimeVal >= c.slot.endHour && reflection.trim().length < 10;
+  });
+}
 
-    function render() {
-      // FIX 2: 30-minute Auto-Lock Security Check
-      const unlockedAt = sessionStorage.getItem('unlocked_at');
-      if (unlockedAt && Date.now() - parseInt(unlockedAt) > 1800000) { // 1800000ms = 30 mins
-        sessionStorage.removeItem('unlocked');
-        sessionStorage.removeItem('unlocked_at');
-        state.isLocked = true;
-      }
+function render() {
+  if (state.isInitializing) return;
+  // FIX 2: 30-minute Auto-Lock Security Check
+  const unlockedAt = sessionStorage.getItem('unlocked_at');
+  if (unlockedAt && Date.now() - parseInt(unlockedAt) > 1800000) { // 1800000ms = 30 mins
+  if (unlockedAt && Date.now() - parseInt(unlockedAt) > 1800000) { 
+    sessionStorage.removeItem('unlocked');
+    sessionStorage.removeItem('unlocked_at');
+    state.isLocked = true;
+  }
 
-      const app = document.getElementById('app');
-      if (!app) return;
+  const app = document.getElementById('app');
+  if (!app) return;
 
-      // Immersive Mode Body Class
-      document.body.classList.toggle('is-focus-immersive', state.isImmersiveFocus && state.pomodoroActive);
+  document.body.classList.toggle('is-focus-immersive', state.isImmersiveFocus && state.pomodoroActive);
 
-      // ── PIN LOCK SCREEN ──
-      if (state.isLocked) {
-        app.innerHTML = renderLockScreen() + (state.modal ? renderModal() : '');
-        attachLockScreenEvents();
-        return;
-      }
+  if (state.isLocked) {
+    app.innerHTML = renderLockScreen() + (state.modal ? renderModal() : '');
+    attachLockScreenEvents();
+    return;
+  }
 
-      const gpa = getCumGPA();
-      const pro = getProStatus(gpa);
-      const curSem = getCurrentSemester();
+  const gpa = getCumGPA();
+  const pro = getProStatus(gpa);
+  const curSem = getCurrentSemester();
 
-      app.innerHTML = `
+  app.innerHTML = `
     <div class="app-container">
       ${renderDynamicIsland()}
       ${renderTopNav(gpa, pro, curSem)}
@@ -1594,43 +1602,42 @@
     ${renderFAB()}
     ${state.modal ? renderModal() : ''}
   `;
-      attachAllEvents();
-      if (state.pomodoroActive) updatePomodoroDisplay();
-      if (state.view === 'dashboard') renderGPAXChart();
-    }
+  attachAllEvents();
+  if (state.pomodoroActive) updatePomodoroDisplay();
+  if (state.view === 'dashboard') renderGPAXChart();
+}
 
-    function renderDynamicIsland() {
-      const now = new Date();
-      const dayIdx = now.getDay(); // 0=Sunday, 1=Monday... 6=Saturday
-      const h = now.getHours();
-      const m = now.getMinutes();
-      const currentTimeVal = h + (m / 60);
-      const curSem = getCurrentSemester();
+function renderDynamicIsland() {
+  const now = new Date();
+  const h = now.getHours();
+  const m = now.getMinutes();
+  const currentTimeVal = h + (m / 60);
+  const curSem = getCurrentSemester();
 
-      let activeClass = null;
-      let nextClass = null;
+  let activeClass = null;
+  let nextClass = null;
 
-      if (curSem) {
-        const adjustedDay = getTodayDayIndex();
+  if (curSem) {
+    const adjustedDay = getTodayDayIndex();
 
-        const todayClasses = (state.courses[curSem.id] || []).flatMap(c =>
-          (c.schedules || c.schedule || []).filter(s => s.day === adjustedDay).map(s => ({ ...c, slot: s }))
-        ).sort((a, b) => a.slot.startHour - b.slot.startHour);
+    const todayClasses = (state.courses[curSem.id] || []).flatMap(c =>
+      (c.schedules || c.schedule || []).filter(s => s.day === adjustedDay).map(s => ({ ...c, slot: s }))
+    ).sort((a, b) => a.slot.startHour - b.slot.startHour);
 
-        activeClass = todayClasses.find(c => currentTimeVal >= c.slot.startHour && currentTimeVal < c.slot.endHour);
-        nextClass = todayClasses.find(c => c.slot.startHour > currentTimeVal);
-      }
+    activeClass = todayClasses.find(c => currentTimeVal >= c.slot.startHour && currentTimeVal < c.slot.endHour);
+    nextClass = todayClasses.find(c => c.slot.startHour > currentTimeVal);
+  }
 
-      if (activeClass) {
-        const remainingMins = Math.round((activeClass.slot.endHour - currentTimeVal) * 60);
-        const totalMins = (activeClass.slot.endHour - activeClass.slot.startHour) * 60;
-        const progress = ((totalMins - remainingMins) / totalMins) * 100;
+  if (activeClass) {
+    const remainingMins = Math.round((activeClass.slot.endHour - currentTimeVal) * 60);
+    const totalMins = (activeClass.slot.endHour - activeClass.slot.startHour) * 60;
+    const progress = ((totalMins - remainingMins) / totalMins) * 100;
 
-        const history = state.attendanceHistory[activeClass.id] || {};
-        const todayStr = new Date().toLocaleDateString('en-CA');
-        const checkedInToday = history[todayStr] && !history[todayStr].status.includes('ขาดเรียน');
+    const history = state.attendanceHistory[activeClass.id] || {};
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    const checkedInToday = history[todayStr] && !history[todayStr].status.includes('ขาดเรียน');
 
-        return `
+    return `
       <div class="dynamic-island-container" onclick="this.querySelector('.dynamic-island').classList.toggle('expanded')">
         <div class="dynamic-island">
           <div class="di-content">
@@ -1648,9 +1655,9 @@
           </div>
         </div>
       </div>`;
-      } else if (nextClass) {
-        const diffMins = Math.round((nextClass.slot.startHour - currentTimeVal) * 60);
-        return `
+  } else if (nextClass) {
+    const diffMins = Math.round((nextClass.slot.startHour - currentTimeVal) * 60);
+    return `
       <div class="dynamic-island-container">
         <div class="dynamic-island">
           <div class="di-content">
@@ -1662,9 +1669,9 @@
           </div>
         </div>
       </div>`;
-      }
+  }
 
-      return `
+  return `
     <div class="dynamic-island-container">
       <div class="dynamic-island">
         <div class="di-content">
@@ -1673,34 +1680,34 @@
         </div>
       </div>
     </div>`;
-    }
+}
 
-    function renderGPAXChart() {
-      const container = document.getElementById('gpaxChart');
-      if (!container) return;
+function renderGPAXChart() {
+  const container = document.getElementById('gpaxChart');
+  if (!container) return;
 
-      const semesters = state.semesters.filter(s => (state.courses[s.id] || []).some(c => c.grade));
-      if (semesters.length < 1) {
-        container.innerHTML = '<div class="empty-sm">ข้อมูลไม่เพียงพอในการสร้างกราฟ</div>';
-        return;
-      }
+  const semesters = state.semesters.filter(s => (state.courses[s.id] || []).some(c => c.grade));
+  if (semesters.length < 1) {
+    container.innerHTML = '<div class="empty-sm">ข้อมูลไม่เพียงพอในการสร้างกราฟ</div>';
+    return;
+  }
 
-      const data = semesters.map(s => parseFloat(calcGPAFromList(state.courses[s.id] || [])));
-      const labels = semesters.map(s => s.name);
+  const data = semesters.map(s => parseFloat(calcGPAFromList(state.courses[s.id] || [])));
+  const labels = semesters.map(s => s.name);
 
-      const width = container.clientWidth || 300;
-      const height = 120;
-      const padding = 20;
+  const width = container.clientWidth || 300;
+  const height = 120;
+  const padding = 20;
 
-      const xStep = (width - padding * 2) / (Math.max(1, data.length - 1));
-      const getY = (val) => height - padding - ((val / 4) * (height - padding * 2));
+  const xStep = (width - padding * 2) / (Math.max(1, data.length - 1));
+  const getY = (val) => height - padding - ((val / 4) * (height - padding * 2));
 
-      let points = data.map((v, i) => `${padding + i * xStep},${getY(v)}`).join(' ');
+  let points = data.map((v, i) => `${padding + i * xStep},${getY(v)}`).join(' ');
 
-      const thresholdY2 = getY(2.0);
-      const thresholdY175 = getY(1.75);
+  const thresholdY2 = getY(2.0);
+  const thresholdY175 = getY(1.75);
 
-      container.innerHTML = `
+  container.innerHTML = `
     <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
       <line class="chart-threshold" x1="${padding}" y1="${thresholdY2}" x2="${width - padding}" y2="${thresholdY2}" stroke="#22c55e" />
       <line class="chart-threshold" x1="${padding}" y1="${thresholdY175}" x2="${width - padding}" y2="${thresholdY175}" stroke="#ef4444" />
@@ -1710,10 +1717,10 @@
         <text class="chart-label" x="${padding + i * xStep}" y="${height - 5}" text-anchor="middle">${labels[i].substring(0, 6)}</text>
       `).join('')}
     </svg>`;
-    }
+}
 
-    function renderLockScreen() {
-      return `<style>
+function renderLockScreen() {
+  return `<style>
     .realistic-lock { background: rgba(10, 10, 10, 0.75) !important; backdrop-filter: blur(30px) saturate(150%); -webkit-backdrop-filter: blur(30px) saturate(150%); color: white; display: flex !important; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999; align-items: center; justify-content: center; }
     .realistic-lock .lock-content { text-align: center; width: 100%; max-width: 320px; padding: 20px; animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
     .realistic-pin { display: flex; justify-content: center; gap: 20px; margin: 25px 0 45px; }
@@ -1760,109 +1767,66 @@
       </div>
     </div>
   </div>`;
-    }
+}
 
-    function attachLockScreenEvents() {
-      const pins = document.querySelectorAll('.pin-dot');
-      const numPad = document.querySelectorAll('.num-btn[data-num]');
-      const pinClear = document.getElementById('pinClear');
-      const pinDel = document.getElementById('pinDel');
-      const showIdBtn = document.getElementById('showIdOnLock');
-      let currentInput = "";
+function attachLockScreenEvents() {
+  const pins = document.querySelectorAll('.pin-dot');
+  const numPad = document.querySelectorAll('.num-btn[data-num]');
+  const pinClear = document.getElementById('pinClear');
+  const pinDel = document.getElementById('pinDel');
+  const showIdBtn = document.getElementById('showIdOnLock');
+  let currentInput = "";
 
-      let audioCtx = null;
-      const playKeySound = () => {
-        try {
-          if (!audioCtx) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-          }
-          if (audioCtx.state === 'suspended') {
-            audioCtx.resume();
-          }
-          const osc = audioCtx.createOscillator();
-          const gainNode = audioCtx.createGain();
-          osc.connect(gainNode);
-          gainNode.connect(audioCtx.destination);
+  const updateDots = () => {
+    pins.forEach((dot, i) => {
+      dot.classList.toggle('active', i < currentInput.length);
+    });
+  };
 
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-          osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.04);
-
-          gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.04);
-
-          osc.start(audioCtx.currentTime);
-          osc.stop(audioCtx.currentTime + 0.04);
-        } catch (e) { console.warn("Audio not supported"); }
-      };
-
-      const updateDots = () => {
-        pins.forEach((dot, i) => {
-          dot.classList.toggle('active', i < currentInput.length);
-        });
-      };
-
-      numPad.forEach(btn => {
-        btn.addEventListener('pointerdown', playKeySound);
-        btn.onclick = async () => {
-          if (currentInput.length < 6) {
-            currentInput += btn.dataset.num;
+  numPad.forEach(btn => {
+    btn.onclick = async () => {
+      if (currentInput.length < 6) {
+        currentInput += btn.dataset.num;
+        updateDots();
+        if (currentInput.length === 6) {
+          const hashedInput = await hashPIN(currentInput);
+          if (hashedInput === state.pin) {
+            sessionStorage.setItem('unlocked', 'true');
+            sessionStorage.setItem('unlocked_at', Date.now().toString());
+            state.isLocked = false;
+            showToast('🔓 ยินดีต้อนรับกลับมา');
+            render();
+          } else {
+            showToast('❌ รหัส PIN ไม่ถูกต้อง', 'err');
+            currentInput = "";
             updateDots();
-            if (currentInput.length === 6) {
-              const hashedInput = await hashPIN(currentInput);
-              if (hashedInput === state.pin) {
-                sessionStorage.setItem('unlocked', 'true');
-                sessionStorage.setItem('unlocked_at', Date.now().toString());
-                state.isLocked = false;
-                showToast('🔓 ยินดีต้อนรับกลับมา');
-                render();
-              } else {
-                showToast('❌ รหัส PIN ไม่ถูกต้อง', 'err');
-                currentInput = "";
-                updateDots();
-                const lockCard = document.querySelector('.lock-content');
-                if (lockCard) {
-                  lockCard.classList.remove('shake');
-                  void lockCard.offsetWidth; // trigger reflow
-                  lockCard.classList.add('shake');
-                }
-              }
-            }
           }
-        };
-      });
-
-      if (pinClear) {
-        pinClear.addEventListener('pointerdown', playKeySound);
-        pinClear.onclick = () => { currentInput = ""; updateDots(); };
+        }
       }
-      if (pinDel) {
-        pinDel.addEventListener('pointerdown', playKeySound);
-        pinDel.onclick = () => { currentInput = currentInput.slice(0, -1); updateDots(); };
-      }
+    };
+  });
 
-      if (showIdBtn) showIdBtn.onclick = () => {
-        openModal('🪪 Emergency ID Card', `
-          <div style="display:flex; flex-direction:column; align-items:center; gap:20px;">
-            <div class="id-preview-area" style="padding:0; background:none;">
-              ${renderIDCardPreview()}
-            </div>
-            <div class="id-barcode-container" style="height:90px; background:#fff; border:3px solid #000; width:100%; display:flex; justify-content:center; align-items:center;">
-              <svg id="idBarcodePreview"></svg>
-            </div>
-          </div>
-        `);
-        renderIDBarcode();
-      };
+  if (pinClear) pinClear.onclick = () => { currentInput = ""; updateDots(); };
+  if (pinDel) pinDel.onclick = () => { currentInput = currentInput.slice(0, -1); updateDots(); };
 
-      // Add modal close events for lock screen
-      document.getElementById('modalX')?.addEventListener('click', closeModal);
-      document.getElementById('modalBd')?.addEventListener('click', e => { if (e.target.id === 'modalBd') closeModal(); });
-    }
-    function renderTopNav(gpa, pro, curSem) {
-      const proColors = { safe: '#22c55e', 'pro-low': '#eab308', 'pro-high': '#f97316', 'expelled': '#ef4444' };
-      const statusColor = pro ? proColors[pro] : '#94a3b8';
-      return `<nav class="top-nav glass">
+  if (showIdBtn) showIdBtn.onclick = () => {
+    openModal('🪪 บัตรนิสิต (Digital ID)', `
+      <div style="text-align:center; padding:20px;">
+        <div style="font-size:18px; font-weight:800; margin-bottom:10px;">${STUDENT.nameTh}</div>
+        <div style="font-size:14px; opacity:0.7; margin-bottom:20px;">${STUDENT.id}</div>
+        <div style="background:white; padding:15px; border-radius:12px; border:2px solid black;">
+          <img src="https://barcode.tec-it.com/barcode.ashx?data=${STUDENT.id}&code=Code128&translate-esc=true" 
+               style="width:100%; height:auto; max-height:100px;" alt="Barcode">
+        </div>
+        <div style="margin-top:15px; font-size:12px; font-weight:700; color:var(--c-rust);">* ใช้สำหรับสแกนเข้าห้องสมุดหรือติดต่อธุรการ</div>
+      </div>
+    `);
+  };
+}
+function renderTopNav(gpa, pro, curSem) {
+  const proColors = { safe: '#22c55e', 'pro-low': '#eab308', 'pro-high': '#f97316', 'expelled': '#ef4444' };
+  const statusColor = pro ? proColors[pro] : '#94a3b8';
+  return `<nav class="top-nav glass">
     <div class="tn-left">
       <div class="brand-orb sm">⚗</div>
       <div class="tn-brand">NITIPAT</div>
@@ -1890,34 +1854,34 @@
     <div class="fm-header"><button class="icon-btn" id="closeMenuBtn">✕</button></div>
     <div class="fm-grid">
       ${[
-          { id: 'dashboard', icon: '◈', label: 'Dashboard' }, { id: 'semesters', icon: '📅', label: 'เทอมการศึกษา' },
-          { id: 'courses', icon: '📚', label: 'รายวิชา' }, { id: 'schedule', icon: '▦', label: 'ตารางเรียน' },
-          { id: 'assignments', icon: '📋', label: 'การบ้าน' }, { id: 'exams', icon: '📝', label: 'ตารางสอบ' },
-          { id: 'grades', icon: '🎓', label: 'เกรด & GPA' }, { id: 'roadmap', icon: '🗺', label: 'Roadmap 4 ปี' },
-          { id: 'focus', icon: '🍅', label: 'Focus Mode' }, { id: 'club', icon: '🏛', label: 'งานชุมนุม' },
-          { id: 'daily', icon: '🌅', label: 'ชีวิตประจำวัน' }, { id: 'calendar', icon: '🗓', label: 'ปฏิทินการศึกษา' },
-          { id: 'settings', icon: '⚙️', label: 'ตั้งค่า' }
-        ].map(n => `<button class="fm-item ${state.view === n.id ? 'active' : ''}" data-nav="${n.id}">
+      { id: 'dashboard', icon: '◈', label: 'Dashboard' }, { id: 'semesters', icon: '📅', label: 'เทอมการศึกษา' },
+      { id: 'courses', icon: '📚', label: 'รายวิชา' }, { id: 'schedule', icon: '▦', label: 'ตารางเรียน' },
+      { id: 'assignments', icon: '📋', label: 'การบ้าน' }, { id: 'exams', icon: '📝', label: 'ตารางสอบ' },
+      { id: 'grades', icon: '🎓', label: 'เกรด & GPA' }, { id: 'roadmap', icon: '🗺', label: 'Roadmap 4 ปี' },
+      { id: 'focus', icon: '🍅', label: 'Focus Mode' }, { id: 'club', icon: '🏛', label: 'งานชุมนุม' },
+      { id: 'daily', icon: '🌅', label: 'ชีวิตประจำวัน' }, { id: 'calendar', icon: '🗓', label: 'ปฏิทินการศึกษา' },
+      { id: 'settings', icon: '⚙️', label: 'ตั้งค่า' }
+    ].map(n => `<button class="fm-item ${state.view === n.id ? 'active' : ''}" data-nav="${n.id}">
         <span class="fm-ic">${n.icon}</span><span class="fm-lbl">${n.label}</span>
       </button>`).join('')}
     </div>
   </div>`;
-    }
+}
 
-    function renderFloatingNav() {
-      const items = [
-        { id: 'dashboard', icon: '◈' }, { id: 'courses', icon: '📚' },
-        { id: 'assignments', icon: '📋' }, { id: 'focus', icon: '🍅' }, { id: 'daily', icon: '🌅' }
-      ];
-      return `<nav class="floating-dock glass">
+function renderFloatingNav() {
+  const items = [
+    { id: 'dashboard', icon: '◈' }, { id: 'courses', icon: '📚' },
+    { id: 'assignments', icon: '📋' }, { id: 'focus', icon: '🍅' }, { id: 'daily', icon: '🌅' }
+  ];
+  return `<nav class="floating-dock glass">
     ${items.map(n => `<button class="dock-item ${state.view === n.id ? 'active' : ''}" data-nav="${n.id}">
       <span class="dock-icon">${n.icon}</span>
     </button>`).join('')}
   </nav>`;
-    }
+}
 
-    function renderFAB() {
-      return `<div class="fab-wrap">
+function renderFAB() {
+  return `<div class="fab-wrap">
     <button class="fab-main" id="fabBtn">+</button>
     <div class="fab-menu" id="fabMenu">
       <button class="fab-item" data-quick="assignment">📋 การบ้าน</button>
@@ -1926,10 +1890,10 @@
       <button class="fab-item" data-quick="club">🏛 งานชุมนุม</button>
     </div>
   </div>`;
-    }
+}
 
-    function renderModal() {
-      return `<div class="modal-backdrop" id="modalBd">
+function renderModal() {
+  return `<div class="modal-backdrop" id="modalBd">
     <div class="modal glass-heavy">
       <div class="modal-hd">
         <div class="modal-title">${state.modal.title}</div>
@@ -1939,55 +1903,55 @@
       ${state.modal.footer ? `<div class="modal-ft">${state.modal.footer}</div>` : ''}
     </div>
   </div>`;
-    }
+}
 
-    // ══════════════════════════════════════════════════
-    // PAGE RENDERER
-    // ══════════════════════════════════════════════════
-    function renderPage(gpa, pro, curSem) {
-      switch (state.view) {
-        case 'dashboard': return renderDashboard(gpa, pro, curSem);
-        case 'semesters': return renderSemesters();
-        case 'courses': return renderCourses();
-        case 'schedule': return renderSchedule();
-        case 'assignments': return renderAssignments();
-        case 'exams': return renderExams();
-        case 'grades': return renderGrades(gpa, pro);
-        case 'roadmap': return renderRoadmap();
-        case 'focus': return renderFocus();
-        case 'club': return renderClub();
-        case 'daily': return renderDaily();
-        case 'calendar': return renderCalendar();
-        case 'settings': return renderSettings();
-        case 'course-hub': return renderCourseHubPage();
-        default: return renderDashboard(gpa, pro, curSem);
-      }
-    }
+// ══════════════════════════════════════════════════
+// PAGE RENDERER
+// ══════════════════════════════════════════════════
+function renderPage(gpa, pro, curSem) {
+  switch (state.view) {
+    case 'dashboard': return renderDashboard(gpa, pro, curSem);
+    case 'semesters': return renderSemesters();
+    case 'courses': return renderCourses();
+    case 'schedule': return renderSchedule();
+    case 'assignments': return renderAssignments();
+    case 'exams': return renderExams();
+    case 'grades': return renderGrades(gpa, pro);
+    case 'roadmap': return renderRoadmap();
+    case 'focus': return renderFocus();
+    case 'club': return renderClub();
+    case 'daily': return renderDaily();
+    case 'calendar': return renderCalendar();
+    case 'settings': return renderSettings();
+    case 'course-hub': return renderCourseHubPage();
+    default: return renderDashboard(gpa, pro, curSem);
+  }
+}
 
-    function renderCourseHubPage() {
-      const c = findCourseById(state.activeCourseId);
-      if (!c) { state.view = 'courses'; return renderCourses(); }
-      const tab = state.activeHubTab || 'Files';
+function renderCourseHubPage() {
+  const c = findCourseById(state.activeCourseId);
+  if (!c) { state.view = 'courses'; return renderCourses(); }
+  const tab = state.activeHubTab || 'Files';
 
-      const history = state.attendanceHistory[c.id] || {};
-      const dates = Object.keys(history);
-      const totalAtt = dates.length;
-      let attendCount = 0;
-      Object.values(history).forEach(h => {
-        if (!h.status.includes('ขาดเรียน')) attendCount++;
-      });
-      const attRate = totalAtt > 0 ? ((attendCount / totalAtt) * 100).toFixed(0) : 0;
-      const pendingAss = Object.values(state.assignments).flat().filter(a => a.courseId === c.id && a.status !== 'completed' && a.status !== 'done').length;
-      const upcomingExams = Object.values(state.exams).flat().filter(e => e.courseId === c.id && new Date(e.date) >= new Date(new Date().setHours(0, 0, 0, 0)));
-      let nextExamDays = '--';
-      if (upcomingExams.length > 0) {
-        upcomingExams.sort((a, b) => new Date(a.date) - new Date(b.date));
-        const d = Math.ceil((new Date(upcomingExams[0].date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
-        nextExamDays = d <= 0 ? 'วันนี้!' : `${d} วัน`;
-      }
-      const currentGrade = c.grade && c.grade !== '-' && c.grade !== 'I' ? c.grade : (state.scores?.[c.id]?.reduce((a, b) => a + (b.score || 0), 0) || 0) + '%';
+  const history = state.attendanceHistory[c.id] || {};
+  const dates = Object.keys(history);
+  const totalAtt = dates.length;
+  let attendCount = 0;
+  Object.values(history).forEach(h => {
+    if (!h.status.includes('ขาดเรียน')) attendCount++;
+  });
+  const attRate = totalAtt > 0 ? ((attendCount / totalAtt) * 100).toFixed(0) : 0;
+  const pendingAss = Object.values(state.assignments).flat().filter(a => a.courseId === c.id && a.status !== 'completed' && a.status !== 'done').length;
+  const upcomingExams = Object.values(state.exams).flat().filter(e => e.courseId === c.id && new Date(e.date) >= new Date(new Date().setHours(0, 0, 0, 0)));
+  let nextExamDays = '--';
+  if (upcomingExams.length > 0) {
+    upcomingExams.sort((a, b) => new Date(a.date) - new Date(b.date));
+    const d = Math.ceil((new Date(upcomingExams[0].date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+    nextExamDays = d <= 0 ? 'วันนี้!' : `${d} วัน`;
+  }
+  const currentGrade = c.grade && c.grade !== '-' && c.grade !== 'I' ? c.grade : (state.scores?.[c.id]?.reduce((a, b) => a + (b.score || 0), 0) || 0) + '%';
 
-      return `
+  return `
         <div class="course-hub-premium" style="background:transparent; min-height:100vh; font-family:'Kanit', sans-serif;">
           <div class="hub-hero" style="padding: 20px 20px 15px; position:relative; z-index:10;">
             <button class="tool-btn sm" style="position:absolute; top:20px; left:10px; background:transparent; border:none; color:#1e293b; font-size:24px; box-shadow:none; padding:5px; line-height:1;" onclick="state.view='courses'; render();">←</button>
@@ -2005,7 +1969,6 @@
                  <div style="background:#ffe4e6; color:#be123c; padding:8px 14px; border-radius:12px; border:1px solid #fecdd3; white-space:nowrap; display:flex; align-items:center; gap:5px;"><span style="color:#e11d48;">⏰</span> Next Exam: ${nextExamDays}</div>
               </div>
 
-              <!-- FIX 9: Quick Links Bar -->
               <div style="display:flex; gap:10px; margin-top:15px;">
                  ${c.link ? `<a href="${c.link}" target="_blank" class="nb-btn sm" style="flex:1; text-align:center; background:#fff; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:8px; font-size:12px; border:2px solid black;"><span>📹</span> เข้าห้องเรียน (Meet/Zoom)</a>` : ''}
                  <a href="${c.folderUrl || '#'}" target="_blank" class="nb-btn sm" style="flex:1; text-align:center; background:#fff; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:8px; font-size:12px; border:2px solid black;"><span>📁</span> Google Drive</a>
@@ -2034,37 +1997,37 @@
 
           <div class="hub-container">
             ${tab === 'Files' ? renderMiniDrive(c) :
-          tab === 'Grades' ? renderCourseProgress(c) :
-            tab === 'Attendance' ? renderCourseAttendance(c) :
-              renderCourseSettings(c)}
+      tab === 'Grades' ? renderCourseProgress(c) :
+        tab === 'Attendance' ? renderCourseAttendance(c) :
+          renderCourseSettings(c)}
           </div>
         </div>
       `;
+}
+
+function isGAS() {
+  return typeof google !== 'undefined' && google?.script;
+}
+
+function refreshExplorerOnly(courseId) {
+  const exp = document.getElementById('driveExplorer');
+  if (exp) {
+    const c = findCourseById(courseId);
+    if (c) {
+      const key = state.currentFolderId || c.driveId;
+      const data = state.courseFiles?.[key];
+      if (data) exp.innerHTML = renderExplorerUI(courseId);
+      else exp.innerHTML = '<div class="drive-loader" style="text-align:center; padding:40px;"><div class="spinner"></div><p>กำลังโหลดไฟล์...</p></div>';
     }
+  }
+}
 
-    function isGAS() {
-      return typeof google !== 'undefined' && google?.script;
-    }
+function renderMiniDrive(c) {
+  const filesData = state.courseFiles?.[state.currentFolderId || c.driveId];
+  const hasSelection = state.selectedItems.size > 0;
+  const gasDisabled = !isGAS() ? 'disabled style="opacity:0.5; cursor:not-allowed;" title="ต้องใช้ผ่าน Google Apps Script"' : '';
 
-    function refreshExplorerOnly(courseId) {
-      const exp = document.getElementById('driveExplorer');
-      if (exp) {
-        const c = findCourseById(courseId);
-        if (c) {
-          const key = state.currentFolderId || c.driveId;
-          const data = state.courseFiles?.[key];
-          if (data) exp.innerHTML = renderExplorerUI(courseId);
-          else exp.innerHTML = '<div class="drive-loader" style="text-align:center; padding:40px;"><div class="spinner"></div><p>กำลังโหลดไฟล์...</p></div>';
-        }
-      }
-    }
-
-    function renderMiniDrive(c) {
-      const filesData = state.courseFiles?.[state.currentFolderId || c.driveId];
-      const hasSelection = state.selectedItems.size > 0;
-      const gasDisabled = !isGAS() ? 'disabled style="opacity:0.5; cursor:not-allowed;" title="ต้องใช้ผ่าน Google Apps Script"' : '';
-
-      return `
+  return `
         <div class="drive-container" style="padding: 0 20px;">
           <div class="drive-toolbar" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
             <div class="drive-breadcrumbs" style="font-weight:600; font-size:18px; color:#1e293b;">
@@ -2107,10 +2070,10 @@
           </div>
         </div>
       `;
-    }
+}
 
-    function renderCourseProgress(c) {
-      return `
+function renderCourseProgress(c) {
+  return `
         <div class="hub-scroll-area">
           <div class="hub-grid">
             <div class="glass-card nb-card">
@@ -2124,10 +2087,10 @@
           </div>
         </div>
       `;
-    }
+}
 
-    function renderCourseAttendance(c) {
-      return `
+function renderCourseAttendance(c) {
+  return `
         <div class="hub-scroll-area">
           <div class="hub-grid">
             <div class="glass-card nb-card" style="grid-column: 1 / -1;">
@@ -2137,14 +2100,13 @@
           </div>
         </div>
       `;
-    }
+}
 
-    function renderCourseSettings(c) {
-      const links = state.links[c.id] || [];
-      return `
+function renderCourseSettings(c) {
+  const links = state.links[c.id] || [];
+  return `
         <div class="hub-scroll-area" style="padding:0 20px 20px;">
           <div class="hub-grid">
-            <!-- ⚙️ General Settings -->
             <div class="settings-form glass-card nb-card">
               <div class="section-hd">⚙️ ตั้งค่ารายวิชา</div>
               <div class="form-grid">
@@ -2174,7 +2136,6 @@
               </div>
             </div>
 
-            <!-- 🔗 Multi-Link Manager -->
             <div class="glass-card nb-card">
               <div class="section-hd">🔗 ลิงก์ห้องเรียน / แหล่งเรียนรู้</div>
               <div id="linkManagerList" style="display:flex; flex-direction:column; gap:8px;">
@@ -2196,14 +2157,12 @@
               </div>
             </div>
 
-            <!-- 📊 Grade Structure Config -->
             <div class="glass-card nb-card">
               <div class="section-hd">🛠 ตั้งค่าโครงสร้างคะแนน</div>
               <p style="font-size:12px; margin-bottom:15px; opacity:0.7;">ระบุสัดส่วนคะแนนสะสมของรายวิชาเพื่อให้ระบบคำนวณ Progress</p>
               <button class="nb-btn sm full" onclick="setupGradeStructure('${c.id}')">⚙️ จัดการโครงสร้างคะแนน</button>
             </div>
 
-            <!-- 📂 Drive Management -->
             <div class="glass-card nb-card">
               <div class="section-hd">📂 Google Drive Folder</div>
               <div class="fg">
@@ -2218,26 +2177,24 @@
           </div>
         </div>
       `;
-    }
+}
 
-    function renderAttendanceSummary(courseId) {
-      const history = state.attendanceHistory[courseId] || {};
-      const dates = Object.keys(history).sort((a, b) => new Date(b) - new Date(a));
-      const todayStr = new Date().toLocaleDateString('en-CA');
-      const todayRecord = history[todayStr];
-      const isOnline = state.classMode === 'online';
+function renderAttendanceSummary(courseId) {
+  const history = state.attendanceHistory[courseId] || {};
+  const dates = Object.keys(history).sort((a, b) => new Date(b) - new Date(a));
+  const todayStr = new Date().toLocaleDateString('en-CA');
+  const todayRecord = history[todayStr];
+  const isOnline = state.classMode === 'online';
 
-      // Statistics
-      const counts = { 'ปกติ': 0, 'สาย': 0, 'ขาด': 0 };
-      Object.values(history).forEach(h => {
-        if (h.status.includes('ปกติ')) counts['ปกติ']++;
-        else if (h.status.includes('สาย')) counts['สาย']++;
-        else counts['ขาด']++;
-      });
+  const counts = { 'ปกติ': 0, 'สาย': 0, 'ขาด': 0 };
+  Object.values(history).forEach(h => {
+    if (h.status.includes('ปกติ')) counts['ปกติ']++;
+    else if (h.status.includes('สาย')) counts['สาย']++;
+    else counts['ขาด']++;
+  });
 
-      let html = `
+  let html = `
         <div class="att-controls" style="margin-bottom:20px; display:flex; flex-direction:column; gap:12px;">
-          <!-- Onsite/Online Mode Toggle -->
           <div class="glass-card nb-card" style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:10px 15px;">
              <div style="font-weight:800; font-size:13px;">📡 โหมดการเรียน</div>
              <div style="display:flex; background:#e2e8f0; padding:3px; border-radius:10px; border:2px solid black;">
@@ -2246,7 +2203,6 @@
              </div>
           </div>
 
-          <!-- Quick Check-in -->
           <div class="att-status-card glass-card nb-card" style="background:#fff;">
             <div style="font-weight:800; font-size:14px; margin-bottom:10px;">📍 เช็คอินวันนี้ (${new Date().toLocaleDateString('th-TH')})</div>
             ${todayRecord ? `
@@ -2265,7 +2221,6 @@
             `}
           </div>
 
-          <!-- Reflection Input -->
           <div class="reflection-card glass-card nb-card" style="background:#fff;">
             <div style="font-weight:800; font-size:14px; margin-bottom:8px;">📝 Reflection หลังเลิกคลาส</div>
             <textarea id="reflInput_adv" class="nb-input" style="width:100%; min-height:80px; padding:10px; font-family:var(--font-body); font-size:13px;" placeholder="วันนี้เรียนรู้อะไรบ้าง?">${state.reflections[courseId] || ''}</textarea>
@@ -2276,10 +2231,10 @@
         <div class="att-history-list" style="display:flex; flex-direction:column; gap:8px;">
           <div style="font-weight:800; font-size:13px; opacity:0.5; margin-bottom:4px;">ประวัติย้อนหลัง (${counts['ปกติ']} มา, ${counts['สาย']} สาย, ${counts['ขาด']} ขาด)</div>
           ${dates.map(d => {
-        const r = history[d];
-        const isPresent = r.status.includes('ปกติ');
-        const isLate = r.status.includes('สาย');
-        return `
+    const r = history[d];
+    const isPresent = r.status.includes('ปกติ');
+    const isLate = r.status.includes('สาย');
+    return `
               <div class="glass-card" style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border:1px solid var(--glass-border);">
                 <div>
                   <div style="font-weight:700; font-size:12px;">${new Date(d).toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' })}</div>
@@ -2288,68 +2243,53 @@
                 <div class="nb-chip" style="background:${isPresent ? 'var(--c-lime)22' : isLate ? 'var(--c-rust)22' : 'var(--c-red)22'}; color:${isPresent ? 'var(--c-lime)' : isLate ? 'var(--c-rust)' : 'var(--c-red)'}; border-color:${isPresent ? 'var(--c-lime)' : isLate ? 'var(--c-rust)' : 'var(--c-red)'}">${r.status}</div>
               </div>
             `;
-      }).join('') || '<div class="empty-sm">ยังไม่มีประวัติ</div>'}
+  }).join('') || '<div class="empty-sm">ยังไม่มีประวัติ</div>'}
         </div>
       `;
-      return html;
-    }
+  return html;
+}
 
-    async function navigateToFolder(courseId, folderId, folderName, pathIdx = -1) {
-      if (folderName === 'Root') {
-        state.folderPath = [];
-        state.currentFolderId = folderId;
-      } else if (pathIdx !== -1) {
-        state.folderPath = state.folderPath.slice(0, pathIdx + 1);
-        state.currentFolderId = folderId;
-      } else {
-        state.folderPath.push({ name: folderName, id: folderId });
-        state.currentFolderId = folderId;
-      }
-      state.selectedItems.clear();
+async function navigateToFolder(courseId, folderId, folderName, pathIdx = -1) {
+  if (folderName === 'Root') {
+    state.folderPath = [];
+    state.currentFolderId = folderId;
+  } else if (pathIdx !== -1) {
+    state.folderPath = state.folderPath.slice(0, pathIdx + 1);
+    state.currentFolderId = folderId;
+  } else {
+    state.folderPath.push({ name: folderName, id: folderId });
+    state.currentFolderId = folderId;
+  }
+  state.selectedItems.clear();
 
-      const exp = document.getElementById('driveExplorer');
-      if (exp) exp.innerHTML = '<div class="drive-loader" style="text-align:center; padding:40px;"><div class="spinner"></div><p>กำลังเปิดโฟลเดอร์...</p></div>';
+  const exp = document.getElementById('driveExplorer');
+  if (exp) exp.innerHTML = '<div class="drive-loader" style="text-align:center; padding:40px;"><div class="spinner"></div><p>กำลังเปิดโฟลเดอร์...</p></div>';
 
-      const breadContainer = document.getElementById('driveBreadcrumbs');
-      if (breadContainer) {
-        let html = `<span class="breadcrumb-item" onclick="navigateToFolder('${courseId}', '${findCourseById(courseId).driveId}', 'Root')" style="cursor:pointer; display:inline-flex; align-items:center;">Home</span>`;
-        let paths = state.folderPath;
-        if (paths.length > 3) {
-          html += `<span class="breadcrumb-sep" style="margin:0 5px; opacity:0.5;">/</span><span class="breadcrumb-item">...</span>`;
-          paths = paths.slice(paths.length - 2);
-        }
-        paths.forEach((p) => {
-          html += `<span class="breadcrumb-sep" style="margin:0 5px; opacity:0.5;">/</span>
-                    <span class="breadcrumb-item" style="cursor:pointer;" onclick="navigateToFolder('${courseId}', '${p.id}', '${p.name}', ${state.folderPath.indexOf(p)})">${p.name}</span>`;
-        });
-        breadContainer.innerHTML = html;
-      }
+  refreshDriveFiles(courseId, folderId, false);
+}
 
-      refreshDriveFiles(courseId, folderId, false);
-    }
+function renderExplorerUI(courseId) {
+  state.courseFiles = state.courseFiles || {};
+  const c = findCourseById(courseId);
+  if (!c) return '<div class="empty-sm">ไม่พบวิชา</div>';
+  const key = state.currentFolderId || c.driveId;
+  if (!key) return '<div class="empty-sm">ยังไม่ได้เชื่อมต่อ Google Drive</div>';
+  const data = state.courseFiles[key];
+  if (!data) return '<div class="drive-loader">กำลังโหลด...</div>';
 
-    function renderExplorerUI(courseId) {
-      state.courseFiles = state.courseFiles || {};
-      const c = findCourseById(courseId);
-      if (!c) return '<div class="empty-sm">ไม่พบวิชา</div>';
-      const key = state.currentFolderId || c.driveId;
-      if (!key) return '<div class="empty-sm">ยังไม่ได้เชื่อมต่อ Google Drive</div>';
-      const data = state.courseFiles[key];
-      if (!data) return '<div class="drive-loader">กำลังโหลด...</div>';
+  const allItems = [
+    ...data.folders.map(f => ({ ...f, isFolder: true })),
+    ...data.files.map(f => ({ ...f, isFolder: false }))
+  ];
 
-      const allItems = [
-        ...data.folders.map(f => ({ ...f, isFolder: true })),
-        ...data.files.map(f => ({ ...f, isFolder: false }))
-      ];
+  if (allItems.length === 0) return '<div class="empty-hero" style="min-height:200px;"><div class="empty-icon">📂</div><h3>ยังไม่มีไฟล์</h3></div>';
 
-      if (allItems.length === 0) return '<div class="empty-hero" style="min-height:200px;"><div class="empty-icon">📂</div><h3>ยังไม่มีไฟล์</h3></div>';
-
-      return `
+  return `
         <div class="explorer-${state.driveViewMode || 'grid'}" style="display:${state.driveViewMode === 'list' ? 'block' : 'grid'}; gap:15px;">
           ${allItems.map(item => {
-        const isSel = state.selectedItems.has(item.id);
-        const icon = item.isFolder ? '📁' : getFileIcon(item.mimeType);
-        return `
+    const isSel = state.selectedItems.has(item.id);
+    const icon = item.isFolder ? '📁' : getFileIcon(item.mimeType);
+    return `
               <div class="file-item ${isSel ? 'selected' : ''}" style="${state.driveViewMode === 'list' ? 'display:flex; align-items:center; justify-content:flex-start; margin-bottom:5px; padding:10px;' : 'position:relative;'}" onclick="${item.isFolder ? `navigateToFolder('${courseId}', '${item.id}', '${item.name}')` : `previewFile('${item.id}', '${item.name}', '${item.url}', '${item.mimeType}')`}">
                 <div class="file-icon" style="${state.driveViewMode === 'list' ? 'margin-bottom:0; margin-right:15px;' : ''}">${icon}</div>
                 <div class="file-name" style="${state.driveViewMode === 'list' ? 'flex:1; text-align:left; margin-bottom:0;' : ''}" title="${item.name}">${item.name}</div>
@@ -2357,122 +2297,116 @@
                 <button class="icon-btn-sm" style="position:absolute; right:5px; top:50%; transform:translateY(-50%);" onclick="event.stopPropagation(); toggleItemSelection('${item.id}', event);">⋮</button>
               </div>
             `;
-      }).join('')}
+  }).join('')}
         </div>
       `;
-    }
+}
 
-    function getFileIcon(mime) {
-      if (mime.includes('pdf')) return '📕';
-      if (mime.includes('image')) return '🖼️';
-      if (mime.includes('word')) return '📘';
-      if (mime.includes('sheet')) return '📗';
-      if (mime.includes('presentation')) return '📙';
-      if (mime.includes('video')) return '🎬';
-      if (mime.includes('audio')) return '🎵';
-      return '📄';
-    }
+function getFileIcon(mime) {
+  if (mime.includes('pdf')) return '📕';
+  if (mime.includes('image')) return '🖼️';
+  if (mime.includes('word')) return '📘';
+  if (mime.includes('sheet')) return '📗';
+  if (mime.includes('presentation')) return '📙';
+  if (mime.includes('video')) return '🎬';
+  if (mime.includes('audio')) return '🎵';
+  return '📄';
+}
 
-    function formatSize(bytes) {
-      if (!bytes) return '';
-      const s = ['B', 'KB', 'MB', 'GB'];
-      const e = Math.floor(Math.log(bytes) / Math.log(1024));
-      return (bytes / Math.pow(1024, e)).toFixed(1) + ' ' + s[e];
-    }
+function formatSize(bytes) {
+  if (!bytes) return '';
+  const s = ['B', 'KB', 'MB', 'GB'];
+  const e = Math.floor(Math.log(bytes) / Math.log(1024));
+  return (bytes / Math.pow(1024, e)).toFixed(1) + ' ' + s[e];
+}
 
-    function toggleItemSelection(id, event) {
-      const el = event.currentTarget.closest('.file-item');
-      if (state.selectedItems.has(id)) {
-        state.selectedItems.delete(id);
-        if (el) el.classList.remove('selected');
-      } else {
-        state.selectedItems.add(id);
-        if (el) el.classList.add('selected');
-      }
+function toggleItemSelection(id, event) {
+  const el = event.currentTarget.closest('.file-item');
+  if (state.selectedItems.has(id)) {
+    state.selectedItems.delete(id);
+    if (el) el.classList.remove('selected');
+  } else {
+    state.selectedItems.add(id);
+    if (el) el.classList.add('selected');
+  }
+}
 
-      const hasSelection = state.selectedItems.size > 0;
-      const toolsContainer = document.getElementById('driveToolbarSelection');
-      if (toolsContainer) {
-        toolsContainer.style.display = hasSelection ? 'flex' : 'none';
-      }
-    }
+async function handleCreateFolder(courseId, parentId) {
+  if (!isGAS()) { alert("ฟีเจอร์นี้ต้องใช้ผ่าน Google Apps Script URL"); return; }
+  const name = prompt('ชื่อโฟลเดอร์ใหม่:');
+  if (!name) return;
+  showToast('📂 กำลังสร้าง...');
+  google.script.run
+    .withSuccessHandler(() => {
+      showToast('✅ สร้างโฟลเดอร์แล้ว');
+      if (state.courseFilesCache) delete state.courseFilesCache[parentId];
+      refreshDriveFiles(courseId, parentId, true);
+    })
+    .withFailureHandler(err => showToast(`❌ สร้างไม่สำเร็จ: ${err.message}`, 'err'))
+    .createFolder(parentId, name);
+}
 
-    async function handleCreateFolder(courseId, parentId) {
-      if (!isGAS()) { alert("ฟีเจอร์นี้ต้องใช้ผ่าน Google Apps Script URL"); return; }
-      const name = prompt('ชื่อโฟลเดอร์ใหม่:');
-      if (!name) return;
-      showToast('📂 กำลังสร้าง...');
-      google.script.run
-        .withSuccessHandler(() => {
-          showToast('✅ สร้างโฟลเดอร์แล้ว');
-          if (state.courseFilesCache) delete state.courseFilesCache[parentId];
-          refreshDriveFiles(courseId, parentId, true);
-        })
-        .withFailureHandler(err => showToast(`❌ สร้างไม่สำเร็จ: ${err.message}`, 'err'))
-        .createFolder(parentId, name);
-    }
+async function renameSelectedItem() {
+  if (!isGAS()) { alert("ฟีเจอร์นี้ต้องใช้ผ่าน Google Apps Script URL"); return; }
+  const id = Array.from(state.selectedItems)[0];
+  const newName = prompt('ชื่อใหม่:');
+  if (!newName || !id) return;
+  showToast('✏️ กำลังเปลี่ยนชื่อ...');
+  google.script.run
+    .withSuccessHandler(() => {
+      showToast('✅ เปลี่ยนชื่อแล้ว');
+      state.selectedItems.clear();
+      if (state.courseFilesCache) delete state.courseFilesCache[state.currentFolderId];
+      refreshDriveFiles(state.activeCourseId, state.currentFolderId, true);
+    })
+    .withFailureHandler(err => showToast(`❌ เปลี่ยนชื่อไม่สำเร็จ: ${err.message}`, 'err'))
+    .renameItem(id, newName);
+}
 
-    async function renameSelectedItem() {
-      if (!isGAS()) { alert("ฟีเจอร์นี้ต้องใช้ผ่าน Google Apps Script URL"); return; }
-      const id = Array.from(state.selectedItems)[0];
-      const newName = prompt('ชื่อใหม่:');
-      if (!newName || !id) return;
-      showToast('✏️ กำลังเปลี่ยนชื่อ...');
-      google.script.run
-        .withSuccessHandler(() => {
-          showToast('✅ เปลี่ยนชื่อแล้ว');
-          state.selectedItems.clear();
-          if (state.courseFilesCache) delete state.courseFilesCache[state.currentFolderId];
-          refreshDriveFiles(state.activeCourseId, state.currentFolderId, true);
-        })
-        .withFailureHandler(err => showToast(`❌ เปลี่ยนชื่อไม่สำเร็จ: ${err.message}`, 'err'))
-        .renameItem(id, newName);
-    }
+async function deleteSelectedItems() {
+  if (!isGAS()) { alert("ฟีเจอร์นี้ต้องใช้ผ่าน Google Apps Script URL"); return; }
+  if (!confirm(`ยืนยันการลบ ${state.selectedItems.size} รายการ?`)) return;
+  showToast('🗑 กำลังลบ...');
+  google.script.run
+    .withSuccessHandler(() => {
+      showToast('✅ ลบเรียบร้อย');
+      state.selectedItems.clear();
+      if (state.courseFilesCache) delete state.courseFilesCache[state.currentFolderId];
+      refreshDriveFiles(state.activeCourseId, state.currentFolderId, true);
+    })
+    .withFailureHandler(err => showToast(`❌ ลบไม่สำเร็จ: ${err.message}`, 'err'))
+    .deleteItems(Array.from(state.selectedItems));
+}
 
-    async function deleteSelectedItems() {
-      if (!isGAS()) { alert("ฟีเจอร์นี้ต้องใช้ผ่าน Google Apps Script URL"); return; }
-      if (!confirm(`ยืนยันการลบ ${state.selectedItems.size} รายการ?`)) return;
-      showToast('🗑 กำลังลบ...');
-      google.script.run
-        .withSuccessHandler(() => {
-          showToast('✅ ลบเรียบร้อย');
-          state.selectedItems.clear();
-          if (state.courseFilesCache) delete state.courseFilesCache[state.currentFolderId];
-          refreshDriveFiles(state.activeCourseId, state.currentFolderId, true);
-        })
-        .withFailureHandler(err => showToast(`❌ ลบไม่สำเร็จ: ${err.message}`, 'err'))
-        .deleteItems(Array.from(state.selectedItems));
-    }
+function shareSelectedItems() {
+  const ids = Array.from(state.selectedItems);
+  const links = ids.map(id => `https://drive.google.com/open?id=${id}`).join('\n');
+  copyToClipboard(links);
+  showToast('📋 คัดลอกลิงก์แชร์แล้ว');
+}
 
-    function shareSelectedItems() {
-      const ids = Array.from(state.selectedItems);
-      const links = ids.map(id => `https://drive.google.com/open?id=${id}`).join('\n');
-      copyToClipboard(links);
-      showToast('📋 คัดลอกลิงก์แชร์แล้ว');
-    }
+function printSelectedItems() {
+  const ids = Array.from(state.selectedItems);
+  showToast('🖨 กำลังเปิดหน้าต่างพิมพ์...');
+  ids.forEach(id => {
+    window.open(`https://drive.google.com/file/d/${id}/view`, '_blank');
+  });
+}
 
-    function printSelectedItems() {
-      const ids = Array.from(state.selectedItems);
-      showToast('🖨 กำลังเปิดหน้าต่างพิมพ์...');
-      ids.forEach(id => {
-        window.open(`https://drive.google.com/file/d/${id}/view`, '_blank');
-      });
-    }
+function previewFile(id, name, url, mimeType = '') {
+  const isImage = /\.(jpg|jpeg|png|gif)$/i.test(name) || mimeType.includes('image');
+  const isPDF = name.toLowerCase().endsWith('.pdf') || mimeType.includes('pdf');
+  const isOffice = /\.(doc|docx|xls|xlsx|ppt|pptx)$/i.test(name) || mimeType.includes('word') || mimeType.includes('sheet') || mimeType.includes('presentation');
 
-    function previewFile(id, name, url, mimeType = '') {
-      const isImage = /\.(jpg|jpeg|png|gif)$/i.test(name) || mimeType.includes('image');
-      const isPDF = name.toLowerCase().endsWith('.pdf') || mimeType.includes('pdf');
-      const isOffice = /\.(doc|docx|xls|xlsx|ppt|pptx)$/i.test(name) || mimeType.includes('word') || mimeType.includes('sheet') || mimeType.includes('presentation');
+  let body = '';
+  if (isImage) {
+    body = `<img src="https://drive.google.com/uc?id=${id}" style="width:100%; border-radius:12px;">`;
+  } else if (isPDF || isOffice) {
+    const iframeSrc = isPDF
+      ? `https://drive.google.com/file/d/${id}/preview`
+      : `https://docs.google.com/viewer?srcid=${id}&pid=explorer&efh=false&a=v&chrome=false&embedded=true`;
 
-      let body = '';
-      if (isImage) {
-        body = `<img src="https://drive.google.com/uc?id=${id}" style="width:100%; border-radius:12px;">`;
-      } else if (isPDF || isOffice) {
-        const iframeSrc = isPDF
-          ? `https://drive.google.com/file/d/${id}/preview`
-          : `https://docs.google.com/viewer?srcid=${id}&pid=explorer&efh=false&a=v&chrome=false&embedded=true`;
-
-        body = `
+    body = `
           <div style="position:relative; width:100%; height:60vh;">
             <div id="iframeLoader-${id}" style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(255,255,255,0.8); border-radius:12px; z-index:10;">
               <div class="spinner"></div>
@@ -2481,69 +2415,56 @@
             <iframe src="${iframeSrc}" class="preview-frame" style="width:100%; height:100%; border:none; border-radius:12px; position:relative; z-index:5;" onload="document.getElementById('iframeLoader-${id}').style.display='none';"></iframe>
           </div>
         `;
+  } else {
+    body = `<div class="empty-hero"><h3>ไฟล์นี้ไม่รองรับการพรีวิว</h3><p>กรุณาเปิดผ่าน Google Drive</p><a href="${url || `https://drive.google.com/open?id=${id}`}" target="_blank" class="nb-btn-primary">เปิดไฟล์</a></div>`;
+  }
 
-        setTimeout(() => {
-          const loader = document.getElementById(`iframeLoader-${id}`);
-          if (loader && loader.style.display !== 'none') {
-            loader.innerHTML = `
-              <p style="margin-bottom:10px;">⚠️ ใช้เวลาโหลดนานผิดปกติ อาจถูกบล็อคโดยเบราว์เซอร์</p>
-              <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
-                <a href="${url || `https://drive.google.com/open?id=${id}`}" target="_blank" class="nb-btn-primary sm">↗️ เปิดในหน้าใหม่</a>
-                <a href="https://drive.google.com/uc?export=download&id=${id}" class="nb-btn sm">⬇ Download</a>
-              </div>
-            `;
-          }
-        }, 10000);
-      } else {
-        body = `<div class="empty-hero"><h3>ไฟล์นี้ไม่รองรับการพรีวิว</h3><p>กรุณาเปิดผ่าน Google Drive</p><a href="${url || `https://drive.google.com/open?id=${id}`}" target="_blank" class="nb-btn-primary">เปิดไฟล์</a></div>`;
-      }
-
-      openModal(name, body, `
+  openModal(name, body, `
         <div style="display:flex; gap:10px; width:100%;">
           <a href="https://drive.google.com/uc?export=download&id=${id}" class="nb-btn sm" style="flex:1; display:flex; align-items:center; justify-content:center;">⬇ Download</a>
           <button class="nb-btn sm" style="flex:1;" onclick="window.open('https://drive.google.com/file/d/${id}/view', '_blank')">🖨 Print / Open</button>
         </div>
       `);
-    }
+}
 
-    async function automateDriveFolder(courseId) {
-      if (!isGAS()) { alert("ฟีเจอร์นี้ต้องใช้ผ่าน Google Apps Script URL"); return; }
-      const c = findCourseById(courseId);
-      const sem = state.semesters.find(s => state.courses[s.id]?.find(x => x.id === courseId));
-      showToast('🤖 กำลังจัดการโฟลเดอร์อัตโนมัติ...');
-      google.script.run
-        .withSuccessHandler(async (res) => {
-          if (res.success) {
-            await fsUpd('courses', courseId, { driveId: res.id });
-            c.driveId = res.id;
-            showToast('✅ เชื่อมต่อ Drive แล้ว');
-            render();
-          } else {
-            showToast(`❌ เกิดข้อผิดพลาด: ${res.error}`, 'err');
-          }
-        })
-        .withFailureHandler(err => showToast(`❌ ล้มเหลว: ${err.message}`, 'err'))
-        .getOrCreateCourseFolder(sem.name, c.code, c.nameTh);
-    }
+async function automateDriveFolder(courseId) {
+  if (!isGAS()) { alert("ฟีเจอร์นี้ต้องใช้ผ่าน Google Apps Script URL"); return; }
+  const c = findCourseById(courseId);
+  const sem = state.semesters.find(s => state.courses[s.id]?.find(x => x.id === courseId));
+  showToast('🤖 กำลังจัดการโฟลเดอร์อัตโนมัติ...');
+  google.script.run
+    .withSuccessHandler(async (res) => {
+      if (res.success) {
+        await fsUpd('courses', courseId, { driveId: res.id });
+        c.driveId = res.id;
+        showToast('✅ เชื่อมต่อ Drive แล้ว');
+        render();
+      } else {
+        showToast(`❌ เกิดข้อผิดพลาด: ${res.error}`, 'err');
+      }
+    })
+    .withFailureHandler(err => showToast(`❌ ล้มเหลว: ${err.message}`, 'err'))
+    .getOrCreateCourseFolder(sem.name, c.code, c.nameTh);
+}
 
-    function addCourseLink(courseId) {
-      const name = document.getElementById('new-link-name').value;
-      const url = document.getElementById('new-link-url').value;
-      if (!name || !url) return;
-      if (!state.links[courseId]) state.links[courseId] = [];
-      state.links[courseId].push({ name, url });
-      localStorage.setItem('course_links', JSON.stringify(state.links));
-      render();
-    }
+function addCourseLink(courseId) {
+  const name = document.getElementById('new-link-name').value;
+  const url = document.getElementById('new-link-url').value;
+  if (!name || !url) return;
+  if (!state.links[courseId]) state.links[courseId] = [];
+  state.links[courseId].push({ name, url });
+  localStorage.setItem('course_links', JSON.stringify(state.links));
+  render();
+}
 
-    function removeCourseLink(courseId, idx) {
-      state.links[courseId].splice(idx, 1);
-      localStorage.setItem('course_links', JSON.stringify(state.links));
-      render();
-    }
+function removeCourseLink(courseId, idx) {
+  state.links[courseId].splice(idx, 1);
+  localStorage.setItem('course_links', JSON.stringify(state.links));
+  render();
+}
 
-    function addTopic(courseId, parentId) {
-      openModal('เพิ่มหัวข้อย่อย', `
+function addTopic(courseId, parentId) {
+  openModal('เพิ่มหัวข้อย่อย', `
         <div class="form-grid">
           <div class="fg full">
             <label>ชื่อหัวข้อ</label>
@@ -2561,132 +2482,119 @@
       `, `
         <button class="nb-btn-primary full" onclick="saveNewTopic('${courseId}', '${parentId || ''}')">บันทึก</button>
       `);
-    }
+}
 
-    window.saveNewTopic = (courseId, parentIdStr) => {
-      const parentId = parentIdStr === '' ? null : parentIdStr;
-      const name = document.getElementById('newTopicName').value;
-      const level = document.getElementById('newTopicLevel').value;
-      if (!name) return;
-      const id = 't_' + Math.random().toString(36).substring(2, 9);
-      if (!state.topicMastery[courseId]) state.topicMastery[courseId] = [];
-      state.topicMastery[courseId].push({ id, name, parentId, level });
-      localStorage.setItem('topic_mastery', JSON.stringify(state.topicMastery));
-      closeModal();
-      render();
-    };
+window.saveNewTopic = async (courseId, parentIdStr) => {
+  const parentId = parentIdStr === '' ? null : parentIdStr;
+  const name = document.getElementById('newTopicName').value;
+  const level = document.getElementById('newTopicLevel').value;
+  if (!name) return;
+  const id = 't_' + Math.random().toString(36).substring(2, 9);
+  if (!state.topicMastery[courseId]) state.topicMastery[courseId] = [];
+  state.topicMastery[courseId].push({ id, name, parentId, level });
+  localStorage.setItem('topic_mastery', JSON.stringify(state.topicMastery));
+  closeModal();
+  render();
+  await fsSet('topic_mastery', courseId, { topics: state.topicMastery[courseId] });
+};
 
-    function setTopicLevel(courseId, topicId, level) {
-      const t = state.topicMastery[courseId].find(x => x.id === topicId);
-      if (t) t.level = level;
-      localStorage.setItem('topic_mastery', JSON.stringify(state.topicMastery));
-      render();
-    }
+async function setTopicLevel(courseId, topicId, level) {
+  const t = state.topicMastery[courseId].find(x => x.id === topicId);
+  if (t) t.level = level;
+  localStorage.setItem('topic_mastery', JSON.stringify(state.topicMastery));
+  render();
+  await fsSet('topic_mastery', courseId, { topics: state.topicMastery[courseId] });
+}
 
-    function deleteTopic(courseId, topicId) {
-      if (!confirm('ยืนยันการลบหัวข้อนี้และหัวข้อย่อย?')) return;
-      const removeRecursive = (id) => {
-        const subs = state.topicMastery[courseId].filter(x => x.parentId === id);
-        subs.forEach(s => removeRecursive(s.id));
-        state.topicMastery[courseId] = state.topicMastery[courseId].filter(x => x.id !== id);
-      };
-      removeRecursive(topicId);
-      localStorage.setItem('topic_mastery', JSON.stringify(state.topicMastery));
-      render();
-    }
+async function deleteTopic(courseId, topicId) {
+  if (!confirm('ยืนยันการลบหัวข้อนี้และหัวข้อย่อย?')) return;
+  const removeRecursive = (id) => {
+    const subs = state.topicMastery[courseId].filter(x => x.parentId === id);
+    subs.forEach(s => removeRecursive(s.id));
+    state.topicMastery[courseId] = state.topicMastery[courseId].filter(x => x.id !== id);
+  };
+  removeRecursive(topicId);
+  localStorage.setItem('topic_mastery', JSON.stringify(state.topicMastery));
+  render();
+  await fsSet('topic_mastery', courseId, { topics: state.topicMastery[courseId] });
+}
 
-    async function saveCourseSettings(courseId) {
-      const updated = {
-        nameTh: document.getElementById('set-name-th')?.value || '',
-        nameEn: document.getElementById('set-name-en')?.value || '',
-        code: document.getElementById('set-code')?.value || '',
-        credits: parseInt(document.getElementById('set-credits')?.value) || 0,
-        instructor: document.getElementById('set-instructor')?.value || '',
-        link: document.getElementById('set-link')?.value || '',
-        driveId: document.getElementById('set-drive-id')?.value || '',
-        color: document.getElementById('set-color')?.value || ''
-      };
+async function saveCourseSettings(courseId) {
+  const updated = {
+    nameTh: document.getElementById('set-name-th')?.value || '',
+    nameEn: document.getElementById('set-name-en')?.value || '',
+    code: document.getElementById('set-code')?.value || '',
+    credits: parseInt(document.getElementById('set-credits')?.value) || 0,
+    instructor: document.getElementById('set-instructor')?.value || '',
+    link: document.getElementById('set-link')?.value || '',
+    driveId: document.getElementById('set-drive-id')?.value || '',
+    color: document.getElementById('set-color')?.value || ''
+  };
 
-      showToast('⏳ กำลังบันทึก...');
-      await fsUpd('courses', courseId, updated);
-
-      // Update local state
-      const semId = findSemIdByCourseId(courseId);
+  showToast('⏳ กำลังบันทึก...');
+  await fsUpd('courses', courseId, updated);
+  const semId = findSemIdByCourseId(courseId);
+  if (semId) {
       const cIdx = state.courses[semId].findIndex(x => x.id === courseId);
       state.courses[semId][cIdx] = { ...state.courses[semId][cIdx], ...updated };
+  }
+  showToast('✅ บันทึกเรียบร้อย');
+  render();
+}
 
-      showToast('✅ บันทึกเรียบร้อย');
-      render();
-    }
+function findSemIdByCourseId(courseId) {
+  for (const semId in state.courses) {
+    if (state.courses[semId].find(c => c.id === courseId)) return semId;
+  }
+  return null;
+}
 
-    function findSemIdByCourseId(courseId) {
-      for (const semId in state.courses) {
-        if (state.courses[semId].find(c => c.id === courseId)) return semId;
-      }
-      return null;
-    }
+function updateSetColor(color, el) {
+  document.getElementById('set-color').value = color;
+  document.querySelectorAll('.cpick').forEach(p => p.classList.remove('sel'));
+  el.classList.add('sel');
+}
 
-    function updateSetColor(color, el) {
-      document.getElementById('set-color').value = color;
-      document.querySelectorAll('.cpick').forEach(p => p.classList.remove('sel'));
-      el.classList.add('sel');
-    }
+async function deleteCourse(courseId) {
+  if (!confirm('ยืนยันการลบวิชานี้? ข้อมูลทั้งหมดรวมถึงคะแนนจะหายไป')) return;
+  showToast('🗑 กำลังลบ...');
+  await fsDel('courses', courseId);
+  state.view = 'courses';
+  await loadAll();
+}
 
-    async function deleteCourse(courseId) {
-      if (!confirm('ยืนยันการลบวิชานี้? ข้อมูลทั้งหมดรวมถึงคะแนนจะหายไป')) return;
-      showToast('🗑 กำลังลบ...');
-      await fsDel('courses', courseId);
-      state.view = 'courses';
-      await loadAll();
-    }
+// ══════════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════════
+function renderDashboard(gpaVal, proVal, curSemVal) {
+  const gpa = gpaVal || getCumGPA();
+  const pro = proVal || getProStatus(gpa);
+  const curSem = curSemVal || getCurrentSemester();
+  const cr = getTotalPassedCredits();
+  const pct = Math.min(100, (cr / 137 * 100)).toFixed(1);
+  const missingReflections = getMissingReflections();
+  const proAlerts = {
+    'pro-low': `<div class="alert glass-warn" style="border-left:8px solid var(--c-rust);">⚠️ <strong>ติดโปรต่ำ</strong> GPAX ${gpa} (1.75–1.99)</div>`,
+    'pro-high': `<div class="alert glass-danger" style="border-left:8px solid var(--c-rust); background:rgba(225,29,72,0.1);">🚨 <strong>ติดโปรสูง</strong> GPAX ${gpa} (1.50–1.74)</div>`,
+  };
 
-    // ══════════════════════════════════════════════════
-    // DASHBOARD
-    // ══════════════════════════════════════════════════
-    function renderDashboard(gpaVal, proVal, curSemVal) {
-      const gpa = gpaVal || getCumGPA();
-      const pro = proVal || getProStatus(gpa);
-      const curSem = curSemVal || getCurrentSemester();
-      const cr = getTotalPassedCredits();
-      const pct = Math.min(100, (cr / 137 * 100)).toFixed(1);
+  const now = new Date();
+  const adjustedDay = getTodayDayIndex();
+  let todayClasses = [];
+  if (curSem) {
+    todayClasses = (state.courses[curSem.id] || []).flatMap(c => {
+      const sch = c.schedules || c.schedule || [];
+      return sch.filter(s => s.day === adjustedDay).map(s => ({ ...c, slot: s }));
+    }).sort((a, b) => a.slot.startHour - b.slot.startHour);
+  }
+  const currentTimeVal = now.getHours() + (now.getMinutes() / 60);
+  const activeClass = todayClasses.find(c => currentTimeVal >= c.slot.startHour && currentTimeVal < c.slot.endHour);
 
-      const missingReflections = getMissingReflections();
-
-      const proAlerts = {
-        'pro-low': `<div class="alert glass-warn" style="border-left:8px solid var(--c-rust);">⚠️ <strong>ติดโปรต่ำ</strong> GPAX ${gpa} (1.75–1.99) — ต้องให้อาจารย์ที่ปรึกษาปลดล็อค</div>`,
-        'pro-high': `<div class="alert glass-danger" style="border-left:8px solid var(--c-rust); background:rgba(225,29,72,0.1);">🚨 <strong>ติดโปรสูง</strong> GPAX ${gpa} (1.50–1.74) — ระวังพ้นสภาพ!</div>`,
-        'expelled': `<div class="alert glass-danger" style="border:3px solid var(--c-rust); background:var(--c-rust)22;">❌ <strong>GPAX ต่ำกว่า 1.50</strong> — กรุณาติดต่อฝ่ายวิชาการด่วน</div>`,
-      };
-
-      const allA = Object.values(state.assignments).flat().filter(a => !a.submitted).sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-      const nextAssign = allA[0];
-
-      const now = new Date();
-      const dayIdx = now.getDay(); // 0=Sun, 1=Mon...
-      const currentTimeVal = now.getHours() + (now.getMinutes() / 60);
-
-      const adjustedDay = getTodayDayIndex();
-      let todayClasses = [];
-      if (curSem) {
-        todayClasses = (state.courses[curSem.id] || []).flatMap(c => {
-          const sch = c.schedules || c.schedule || [];
-          return sch.filter(s => s.day === adjustedDay).map(s => ({ ...c, slot: s }));
-        }).sort((a, b) => a.slot.startHour - b.slot.startHour);
-      }
-      const activeClass = todayClasses.find(c => currentTimeVal >= c.slot.startHour && currentTimeVal < c.slot.endHour);
-
-      const hour = now.getHours();
-      let greeting = "สวัสดีตอนเช้า";
-      if (hour >= 12) greeting = "สวัสดีตอนบ่าย";
-      if (hour >= 17) greeting = "สวัสดีตอนเย็น";
-      if (hour >= 21) greeting = "ราตรีสวัสดิ์";
-
-      return `<div class="page-wrap dashboard-v2">
-    <!-- Hero Section -->
+  return `<div class="page-wrap dashboard-v2">
     <div class="dash-hero">
       <div class="hero-main">
-        <div class="hero-greet">${greeting}, ${STUDENT.nameTh.split(' ')[0]} 👋</div>
-        <div class="hero-status">วันนี้คุณมีเรียน ${todayClasses.length} คลาส | ${activeClass ? 'กำลังเรียนอยู่ 1 วิชา' : 'พร้อมสำหรับการเรียนรู้!'}</div>
+        <div class="hero-greet">สวัสดี, ${STUDENT.nameTh.split(' ')[0]} 👋</div>
+        <div class="hero-status">วันนี้เรียน ${todayClasses.length} คลาส</div>
       </div>
       <div class="hero-stats">
         <div class="hero-stat-item">
@@ -2700,253 +2608,90 @@
       </div>
     </div>
 
-    ${missingReflections.length > 0 ? `
-      <div class="glass-card reflection-banner-v2">
-        <div class="rb-icon">🚨</div>
-        <div class="rb-body">
-          <div class="rb-title">มี Reflection ที่ยังไม่ได้สรุป! (${missingReflections.length} วิชา)</div>
-          <div class="rb-list">${missingReflections.map(c => c.code).join(', ')}</div>
-        </div>
-        <button class="nb-btn sm" onclick="window.renderCourseHubUI_Original('${missingReflections[0].id}')">เขียนเลย ✍️</button>
-      </div>
-    ` : ''}
-
     <div class="widget-grid">
-      <!-- Widget: Today's Timeline -->
       <div class="glass-card widget-card nb-card">
         <div class="widget-header">
           <div class="widget-title"><span>📅</span> ตารางเรียนวันนี้</div>
-          <div class="widget-action">${now.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
         </div>
         <div class="today-timeline">
-          ${todayClasses.length > 0 ? todayClasses.map(c => {
-        const isLive = activeClass && activeClass.id === c.id && activeClass.slot.startHour === c.slot.startHour;
-        const isPast = currentTimeVal > c.slot.endHour;
-        return `
-              <div class="timeline-item ${isLive ? 'live' : ''} ${isPast ? 'past' : ''}">
-                <div class="t-time">${c.slot.startHour}:00 - ${c.slot.endHour}:00</div>
-                <div class="t-indicator"><div class="t-dot"></div><div class="t-line"></div></div>
+          ${todayClasses.length > 0 ? todayClasses.map(c => `
+              <div class="timeline-item">
+                <div class="t-time">${c.slot.startHour}:00</div>
                 <div class="t-info" onclick="renderCourseHub('${c.id}')">
-                  <div class="t-code" style="color:${c.color || 'var(--c-accent)'}">${c.code}</div>
+                  <div class="t-code">${c.code}</div>
                   <div class="t-name">${c.nameTh}</div>
-                  <div class="t-meta">📍 ${c.room || 'N/A'} | ${c.mode || 'Onsite'}</div>
-                  ${isLive ? '<div class="live-badge">กำลังเรียน</div>' : ''}
                 </div>
               </div>
-            `;
-      }).join('') : `
-            <div class="empty-state-v2">
-              <div class="es-icon">🎉</div>
-              <div class="es-text">วันนี้ไม่มีคลาสเรียน! พักผ่อนให้เต็มที่</div>
-            </div>
-          `}
+          `).join('') : '<div class="empty-state-v2">วันนี้ไม่มีเรียน</div>'}
         </div>
       </div>
-
-      <!-- Widget: Progress & Stats -->
       <div class="glass-card widget-card nb-card">
-        <div class="widget-header"><div class="widget-title"><span>📈</span> ความก้าวหน้า</div></div>
-        <div class="stats-v2-grid">
-           <div class="s2-item">
-              <div class="s2-val">${pct}%</div>
-              <div class="s2-lbl">สำเร็จแล้ว (137 นก.)</div>
-              <div class="progress-bar-v2"><div class="pb-fill" style="width:${pct}%"></div></div>
-           </div>
-           <div class="s2-item">
-              <div class="s2-val">${state.totalFocusHours.toFixed(1)}h</div>
-              <div class="s2-lbl">เวลา Focus รวม</div>
-           </div>
-           <div class="s2-item">
-              <div class="s2-val">${Object.values(state.assignments).flat().filter(a => !a.submitted).length}</div>
-              <div class="s2-lbl">งานที่ค้างอยู่</div>
-           </div>
-        </div>
-        
-        <div class="widget-header" style="margin-top:20px;"><div class="widget-title"><span>📝</span> สอบที่ใกล้ที่สุด</div></div>
-        ${Object.values(state.exams).flat().filter(e => getDaysUntil(e.date) >= 0).sort((a, b) => getDaysUntil(a.date) - getDaysUntil(b.date)).slice(0, 1).map(e => `
-           <div class="exam-widget-item" style="padding:15px; background:rgba(0,0,0,0.03); border-radius:16px; display:flex; justify-content:space-between; align-items:center;">
-              <div>
-                <div class="e-name" style="font-weight:800; font-size:14px;">${e.title}</div>
-                <div class="e-meta" style="font-size:11px; opacity:0.6;">${e.courseCode} | ${e.date}</div>
-              </div>
-              <div style="background:var(--c-rust); color:#fff; padding:4px 10px; border-radius:8px; font-weight:800; font-size:12px;">ใน ${getDaysUntil(e.date)} วัน</div>
-           </div>
-        `).join('') || '<div class="empty-sm">ไม่มีการสอบเร็วๆ นี้</div>'}
-      </div>
-
-      <!-- Widget: Radio DJ Brain -->
-      <div class="glass-card widget-card nb-card" style="background: rgba(79, 70, 229, 0.05);">
-        <div class="widget-header"><div class="widget-title"><span>📻</span> MGR Radio</div></div>
-        <div class="radio-widget-body">
-            <div class="radio-disc ${Radio.isPlaying ? 'spinning' : ''}">💿</div>
-            <div class="radio-info">
-               <div class="r-status">${Radio.isPlaying ? 'NOW PLAYING' : 'OFFLINE'}</div>
-               <div class="r-mode">${Radio.mode.toUpperCase()} MIX</div>
-            </div>
-            <button class="radio-toggle-btn ${Radio.isPlaying ? 'playing' : ''}" id="radioToggleBtn">
-               ${Radio.isPlaying ? '⏹ STOP' : '▶ START'}
-            </button>
-         </div>
-         <div style="margin-top:10px; font-size:11px; font-weight:700; color:var(--c-accent); text-align:center; opacity:0.7;">
-            ${Radio.isPlaying ? 'กำลังเปิดคลื่นสำหรับนักเรียนกฎหมาย...' : 'กดเพื่อเริ่มรับฟัง Radio สำหรับการอ่านหนังสือ'}
-         </div>
+        <div class="widget-header"><div class="widget-title"><span>📝</span> สอบที่ใกล้ที่สุด</div></div>
+        ${Object.values(state.exams).flat().filter(e => new Date(e.date) >= new Date()).sort((a,b) => new Date(a.date) - new Date(b.date)).slice(0, 2).map(e => `
+          <div class="exam-widget-item" style="padding:10px; margin-bottom:5px; background:rgba(0,0,0,0.03); border-radius:10px;">
+            <div style="font-weight:700;">${e.title}</div>
+            <div style="font-size:12px;">${e.date}</div>
+          </div>
+        `).join('') || '<div class="empty-sm">ไม่มีการสอบ</div>'}
       </div>
     </div>
-    
-    <!-- Pro alerts if any -->
-    ${pro ? proAlerts[pro] || '' : ''}
-
-    <div class="quote-card glass nb-card" style="margin-top:20px; font-style:italic; text-align:center; padding:20px;">"${getTodayQuote()}"</div>
   </div>`;
-    }
+}
 
-    // ══════════════════════════════════════════════════
-    // SEMESTERS
-    // ══════════════════════════════════════════════════
-    function renderSemesters() {
-      return `<div class="page-wrap">
+function renderSemesters() {
+  return `<div class="page-wrap">
     <div class="page-header-row">
       <h1 class="page-title">📅 เทอมการศึกษา</h1>
-      <div class="hdr-acts">
-        <button class="btn-glass-primary" id="importCalBtn">📥 นำเข้าปฏิทิน</button>
-        <button class="btn-glass-primary" id="addSemBtn">+ เพิ่มเทอม</button>
-      </div>
+      <div class="hdr-acts"><button class="btn-glass-primary" id="addSemBtn">+ เพิ่มเทอม</button></div>
     </div>
     <div class="card-list">
-      ${state.semesters.length === 0 ? `<div class="empty-hero"><div class="empty-icon">📅</div><h3>ยังไม่มีเทอมการศึกษา</h3><p>กด "+ เพิ่มเทอม" หรือ "นำเข้าปฏิทิน" เพื่อเริ่มต้น</p></div>` :
-          state.semesters.map(sem => {
-            const courses = state.courses[sem.id] || [];
-            const semGPA = calcGPAFromList(courses);
-            const isActive = getCurrentSemester()?.id === sem.id;
-            const cr = courses.reduce((s, c) => s + (parseInt(c.credits) || 0), 0);
-            return `<div class="glass-card sem-card ${isActive ? 'sem-active' : ''}">
-            <div class="sem-top">
-              <div>
-                <div class="sem-name">${sem.name} ${isActive ? '<span class="badge-live">● ปัจจุบัน</span>' : ''}</div>
-                <div class="sem-dates">📅 ${sem.startDate ? new Date(sem.startDate).toLocaleDateString('th-TH') : ''} — ${sem.endDate ? new Date(sem.endDate).toLocaleDateString('th-TH') : ''}</div>
-              </div>
-              <div class="sem-stats">
-                <div class="sem-gpa-big" style="color:${GRADE_COLORS[semGPA] || 'var(--c-accent)'}">${semGPA}</div>
-                <div class="sem-cr-lbl">${cr} หน่วยกิต</div>
-              </div>
-            </div>
-            <div class="course-tags">
-              ${courses.map(c => `<span class="ctag" style="border-color:${c.color || 'var(--c-accent)'}44;background:${c.color || 'var(--c-accent)'}11">
-                ${c.code}${c.grade ? ` <span class="ctag-grade" style="background:${GRADE_COLORS[c.grade] || '#94a3b8'}33;color:${GRADE_COLORS[c.grade] || '#94a3b8'}">${c.grade}</span>` : ''}
-              </span>`).join('') || '<span class="empty-tags">ยังไม่มีวิชา</span>'}
-            </div>
+      ${state.semesters.map(sem => {
+        const courses = state.courses[sem.id] || [];
+        return `<div class="glass-card sem-card">
+            <div class="sem-name">${sem.name}</div>
             <div class="card-actions">
               <button class="btn-text-sm" data-edit-sem="${sem.id}">✏️ แก้ไข</button>
-              <button class="btn-text-sm" data-view-sem="${sem.id}">📋 รายวิชา</button>
               <button class="btn-text-danger" data-del-sem="${sem.id}">🗑 ลบ</button>
             </div>
           </div>`;
-          }).join('')}
+      }).join('')}
     </div>
   </div>`;
-    }
+}
 
-    // ══════════════════════════════════════════════════
-    // COURSES
-    // ══════════════════════════════════════════════════
-    function renderCourses() {
-      const isArchiveView = state.courseView === 'archive';
-      const filteredSemesters = state.semesters.filter(s => !state.selectedSemester || s.id === state.selectedSemester);
-
-      const pastelMap = {
-        '#4f46e5': '#dbeafe', '#0891b2': '#ecfeff', '#059669': '#f0fdf4',
-        '#d97706': '#fefce8', '#dc2626': '#fee2e2', '#7c3aed': '#f5f3ff',
-        '#db2777': '#fdf2f8', '#ea580c': '#fff7ed'
-      };
-
-      return `<div class="page-wrap">
-    <div class="page-header-row">
-      <h1 class="page-title" style="font-family: 'Playfair Display', serif; font-size: 36px; color: #000; -webkit-text-fill-color: initial;">Courses</h1>
-      <div class="hdr-acts">
-        <button class="btn-glass ${!isArchiveView ? 'active' : ''}" id="viewCurrentCourseBtn">Active</button>
-        <button class="btn-glass ${isArchiveView ? 'active' : ''}" id="viewArchiveCourseBtn">Archive</button>
-        <select class="glass-select" id="semFilterCourse">
-          <option value="">— All Terms —</option>
-          ${state.semesters.map(s => `<option value="${s.id}" ${state.selectedSemester === s.id ? 'selected' : ''}>${s.name}</option>`).join('')}
-        </select>
-      </div>
-    </div>
-
-    <div class="search-bar-modern" style="margin-bottom: 25px; display:flex; gap:10px;">
-      <div style="position:relative; flex:1;">
-        <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); opacity:0.5;">🔍</span>
-        <input type="text" class="nb-input" id="courseLocalSearch" placeholder="Search a course" style="padding-left:40px; border-radius:10px; background:#fff;" value="${state.courseSearch || ''}" oninput="state.courseSearch = this.value; render();">
-      </div>
-      <select class="glass-select" onchange="state.courseStatusFilter = this.value; render();">
-        <option value="all" ${state.courseStatusFilter === 'all' ? 'selected' : ''}>— All Status —</option>
-        <option value="active" ${state.courseStatusFilter === 'active' ? 'selected' : ''}>📖 กำลังเรียน</option>
-        <option value="done" ${state.courseStatusFilter === 'done' ? 'selected' : ''}>✅ เสร็จสิ้น</option>
-      </select>
-    </div>
-
+function renderCourses() {
+  const filteredSemesters = state.semesters.filter(s => !state.selectedSemester || s.id === state.selectedSemester);
+  return `<div class="page-wrap">
+    <h1 class="page-title">Courses</h1>
     ${filteredSemesters.map(sem => {
-        let courses = state.courses[sem.id] || [];
-        courses = courses.filter(c => isArchiveView ? c.isArchived : !c.isArchived);
-
-        if (state.courseStatusFilter === 'active') courses = courses.filter(c => !c.grade || c.grade === '-' || c.grade === 'I');
-        if (state.courseStatusFilter === 'done') courses = courses.filter(c => c.grade && c.grade !== '-' && c.grade !== 'I');
-
-        if (state.courseSearch) {
-          const q = state.courseSearch.toLowerCase();
-          courses = courses.filter(c => c.code.toLowerCase().includes(q) || c.nameTh.toLowerCase().includes(q) || (c.nameEn && c.nameEn.toLowerCase().includes(q)));
-        }
-
-        if (courses.length === 0) return '';
-
-        return `
+    let courses = state.courses[sem.id] || [];
+    return `
         <div class="sem-group-block">
-          <div class="sem-group-hd" style="margin-top:20px;">${sem.name}</div>
+          <div class="sem-group-hd">${sem.name}</div>
           <div class="course-grid">
-            ${courses.map(c => {
-          const history = state.attendanceHistory[c.id] || {};
-          const totalAtt = Object.keys(history).length;
-          let attendCount = 0;
-          let todayCheckedIn = false;
-          const todayStr = new Date().toLocaleDateString('en-CA');
-          Object.entries(history).forEach(([d, h]) => {
-            if (!h.status.includes('ขาดเรียน')) attendCount++;
-            if (d === todayStr) todayCheckedIn = true;
-          });
-          const attRate = totalAtt > 0 ? ((attendCount / totalAtt) * 100).toFixed(0) : '-';
-          const attColor = attRate >= 80 || attRate === '-' ? 'var(--c-lime)' : 'var(--c-rust)';
-
-          return `
-              <div class="folder-card" style="--folder-bg: ${pastelMap[c.color] || c.color + '22'}; position:relative;" onclick="renderCourseHub('${c.id}')">
-                <div style="position:absolute; top:10px; right:10px; display:flex; gap:5px; align-items:center;">
-                   ${todayCheckedIn ? '<div style="background:var(--c-lime); color:white; font-size:10px; padding:2px 6px; border-radius:4px; font-weight:bold;">✅ วันนี้เช็คแล้ว</div>' : ''}
-                   ${attRate !== '-' ? `<div style="background:${attColor}; color:white; font-size:10px; padding:2px 6px; border-radius:4px; font-weight:bold;">📍 ${attRate}%</div>` : ''}
-                   <button class="icon-btn-sm" onclick="event.stopPropagation(); openAddCourseForm(${JSON.stringify(c).replace(/"/g, '&quot;')})">✏️</button>
-                </div>
-                <div class="folder-content" style="margin-top:15px;">
-                  <div style="font-weight:900; font-size:16px; margin-bottom:8px; line-height:1.1;">${c.code}</div>
-                  <div class="folder-label">${c.nameTh.substring(0, 15)}${c.nameTh.length > 15 ? '...' : ''}</div>
+            ${courses.map(c => `
+              <div class="folder-card" onclick="renderCourseHub('${c.id}')">
+                <div class="folder-content">
+                  <div style="font-weight:900;">${c.code}</div>
+                  <div class="folder-label">${c.nameTh}</div>
                 </div>
               </div>
-            `;
-        }).join('')}
-            <div class="folder-card add-folder" style="--folder-bg: #f1f5f9; border-style: dashed; justify-content:center; align-items:center;" onclick="openAddCourseForm()">
-               <span style="font-size:30px; opacity:0.3;">+</span>
-            </div>
+            `).join('')}
           </div>
         </div>`;
-      }).join('') || `<div class="empty-hero"><div class="empty-icon">${isArchiveView ? '🗄' : '📚'}</div><h3>Empty</h3></div>`}
+  }).join('') || `<div class="empty-hero"><div class="empty-icon">${isArchiveView ? '🗄' : '📚'}</div><h3>Empty</h3></div>`}
   </div>`;
-    }
+}
 
-    // ══════════════════════════════════════════════════
-    // SCHEDULE
-    // ══════════════════════════════════════════════════
-    function renderSchedule() {
-      const daysShort = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
-      const curSem = state.selectedSemester ? state.semesters.find(s => s.id === state.selectedSemester) : (getCurrentSemester() || state.semesters[state.semesters.length - 1]);
-      const courses = curSem ? (state.courses[curSem.id] || []) : [];
+// ══════════════════════════════════════════════════
+// SCHEDULE
+// ══════════════════════════════════════════════════
+function renderSchedule() {
+  const daysShort = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+  const curSem = state.selectedSemester ? state.semesters.find(s => s.id === state.selectedSemester) : (getCurrentSemester() || state.semesters[state.semesters.length - 1]);
+  const courses = curSem ? (state.courses[curSem.id] || []) : [];
 
-      return `<div class="page-wrap">
+  return `<div class="page-wrap">
     <div class="page-header-row">
       <h1 class="page-title">Precision Timetable</h1>
       <div class="hdr-acts">
@@ -2962,282 +2707,154 @@
       <div class="tt-grid">
         <div class="tt-corner"></div>
         ${(() => {
-          const now = new Date();
-          const currentDay = now.getDay() === 0 ? 6 : now.getDay() - 1;
-          const currentHour = now.getHours() + (now.getMinutes() / 60);
+      const now = new Date();
+      const currentDay = now.getDay() === 0 ? 6 : now.getDay() - 1;
+      const currentHour = now.getHours() + (now.getMinutes() / 60);
 
-          let html = daysShort.map((d, i) => `<div class="tt-header ${i === currentDay ? 'current-day' : ''}">${d}</div>`).join('');
+      let html = daysShort.map((d, i) => `<div class="tt-header ${i === currentDay ? 'current-day' : ''}">${d}</div>`).join('');
 
-          html += Array.from({ length: 13 }, (_, i) => 8 + i).map(h => `
+      html += Array.from({ length: 13 }, (_, i) => 8 + i).map(h => `
             <div class="tt-time-label" style="grid-row: ${((h - 8) * 2) + 2}">${h}:00</div>
           `).join('');
 
-          html += courses.flatMap(c => (c.schedules || c.schedule || []).map(s => {
-            const rowStart = Math.floor((s.startHour - 8) * 2) + 2;
-            const rowEnd = Math.ceil((s.endHour - 8) * 2) + 2;
-            const isActive = s.day === currentDay && currentHour >= s.startHour && currentHour < s.endHour;
-            const boxStyle = isActive ? `border-color: var(--c-lime); background: rgba(132,204,22,0.2); box-shadow: 0 0 10px rgba(132,204,22,0.4);` : `border-color: ${c.color}; background: ${c.color}22;`;
+      html += courses.flatMap(c => (c.schedules || c.schedule || []).map(s => {
+        const rowStart = Math.floor((s.startHour - 8) * 2) + 2;
+        const rowEnd = Math.ceil((s.endHour - 8) * 2) + 2;
+        const isActive = s.day === currentDay && currentHour >= s.startHour && currentHour < s.endHour;
+        const boxStyle = isActive ? `border-color: var(--c-lime); background: rgba(132,204,22,0.2); box-shadow: 0 0 10px rgba(132,204,22,0.4);` : `border-color: ${c.color}; background: ${c.color}22;`;
 
-            return `<div class="tt-entry" data-course-id="${c.id}" onclick="renderCourseHub('${c.id}')" style="grid-column: ${s.day + 2}; grid-row: ${rowStart} / ${rowEnd}; ${boxStyle} cursor:pointer; position:relative;" title="ผู้สอน: ${c.instructor || '-'}\nห้อง: ${c.room || 'ไม่ระบุ'}">
+        return `<div class="tt-entry" data-course-id="${c.id}" onclick="renderCourseHub('${c.id}')" style="grid-column: ${s.day + 2}; grid-row: ${rowStart} / ${rowEnd}; ${boxStyle} cursor:pointer; position:relative;" title="ผู้สอน: ${c.instructor || '-'}\nห้อง: ${c.room || 'ไม่ระบุ'}">
                 <div class="tt-code" style="color: ${isActive ? 'var(--c-lime)' : c.color}">${c.code}</div>
                 <div class="tt-name">${c.nameTh}</div>
                 <div style="font-size: 9px; opacity: 0.8; margin-top: 4px;">📍 ${c.room || 'Online'}</div>
                 ${isActive ? `<div style="position:absolute; top:4px; right:4px; width:8px; height:8px; background:var(--c-lime); border-radius:50%; animation: pulse 1.5s infinite;"></div>` : ''}
               </div>`;
-          })).join('');
+      })).join('');
 
-          return html;
-        })()}
+      return html;
+    })()}
       </div>
     </div>
   </div>`;
-    }
+}
 
-    function renderIDCardPreview() {
-      const config = state.idCard;
-      // Use stable, CORS-friendly URLs
-      const logoMap = {
-        'KU': 'https://upload.wikimedia.org/wikipedia/th/a/a2/KU_Logo.png',
-        'SSC': 'https://upload.wikimedia.org/wikipedia/th/a/a2/KU_Logo.png',
-        'CU': 'https://upload.wikimedia.org/wikipedia/commons/1/1a/Chulalongkorn_University_Logo.png'
-      };
-      // Fallback for html2canvas CORS issues: Use proxy or base64
-      const logoUrl = logoMap[config.logoType] || '';
-      const photoSrc = config.photoBase64 || config.photoUrl || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png';
-
-      return `
-      <div class="real-id-card" style="--id-bg: ${config.color || '#006400'}">
-        <div class="id-hologram-strip"></div>
-        <div class="id-header">
-          <div class="id-logo-box">
-            ${logoUrl ? `<img src="${logoUrl}" class="id-logo-img">` : `<div class="id-logo-main">${config.logoType}</div>`}
-            <div class="id-header-text">
-              <div class="id-header-main">KASETSART UNIVERSITY</div>
-              <div class="id-header-sub">Student Identification</div>
-            </div>
-          </div>
-          <div class="id-status-badge">ACTIVE</div>
+function renderIDCardPreview() {
+  return `
+      <div class="glass-card nb-card" style="padding:30px; text-align:center; background:white; border:2px solid black;">
+        <div style="font-weight:900; font-size:18px; margin-bottom:20px; letter-spacing:1px; color:#1e293b;">STUDENT IDENTITY</div>
+        <div style="margin: 0 auto 20px; width:fit-content; background:white; padding:10px; border:1.5px solid #eee; border-radius:8px;">
+           <svg id="idBarcodePreview"></svg>
         </div>
-        
-        <div class="id-body">
-          <div class="id-smart-chip">
-            <div></div><div></div><div></div><div></div><div></div><div></div>
-          </div>
-          <div class="id-photo-col">
-            <div class="id-photo-frame">
-              <img src="${photoSrc}" id="idPreviewImg" crossorigin="anonymous">
-            </div>
-          </div>
-          <div class="id-info-col">
-            <div class="id-field">
-              <div class="id-f-label">Name (TH/EN)</div>
-              <div class="id-f-value">${config.name || 'Student Name'}</div>
-            </div>
-            <div class="id-field">
-              <div class="id-f-label">Student ID</div>
-              <div class="id-f-value">${config.studentId || '6XXXXXXX-X'}</div>
-            </div>
-            <div class="id-field">
-              <div class="id-f-label">Faculty / Major</div>
-              <div class="id-f-value">${config.major || 'Faculty of Law'}</div>
-            </div>
-            <div class="id-field">
-              <div class="id-f-label">Birthdate</div>
-              <div class="id-f-value">${config.birthday || 'DD/MM/YYYY'}</div>
-            </div>
-          </div>
+        <div style="font-family:'JetBrains Mono', monospace; font-size:24px; font-weight:800; letter-spacing:4px; color:#1e293b;">
+          ${STUDENT.id}
         </div>
-        
-        <div class="id-footer">
-          <div class="id-barcode-box">
-             <svg id="idBarcodePreview"></svg>
-          </div>
-          <div style="font-size:8px; font-weight:800; opacity:0.4; text-align:right;">
-            KU SMART CARD<br>SUPER APP CONNECTED
-          </div>
+        <div style="margin-top:15px; font-size:12px; font-weight:700; opacity:0.5; text-transform:uppercase;">
+          Kasetsart University | Materials Engineering
         </div>
       </div>`;
-    }
+}
 
-    function showIDCardModal() {
-      const colors = ['#e0f2fe', '#fee2e2', '#fef9c3', '#f0fdf4', '#faf5ff', '#fff7ed', '#f1f5f9'];
-      const logos = ['SSC', 'ID', 'KMITL', 'KU', 'CU'];
-
-      openModal('🪪 Smart ID Card Designer', `
-        <div class="id-editor-grid">
-          <div class="id-preview-area" id="idCardPreviewWrap">
-            ${renderIDCardPreview()}
-          </div>
-          <div class="form-grid">
-            <div class="fg full">
-              <label>🎨 Card Theme Color</label>
-              <div class="color-swatches">
-                ${colors.map(c => `<div class="swatch ${state.idCard.color === c ? 'active' : ''}" style="background:${c}" onclick="updateIDCard('color', '${c}')"></div>`).join('')}
-              </div>
-            </div>
-
-            <div class="fg full">
-              <label>📸 Profile Photo</label>
-              <input type="file" id="idPicInput" style="display:none" accept="image/*">
-              <button class="nb-btn-primary sm full" onclick="document.getElementById('idPicInput').click()">📤 Upload Student Photo</button>
-            </div>
-
-            <div class="fg">
-              <label>Full Name</label>
-              <input type="text" class="nb-input" value="${state.idCard.name}" oninput="updateIDCard('name', this.value)">
-            </div>
-            <div class="fg">
-              <label>Birthday</label>
-              <input type="text" class="nb-input" value="${state.idCard.birthday}" oninput="updateIDCard('birthday', this.value)">
-            </div>
-            <div class="fg">
-              <label>Student ID / Faculty</label>
-              <input type="text" class="nb-input" value="${state.idCard.studentId}" oninput="updateIDCard('studentId', this.value)">
-            </div>
-            <div class="fg">
-              <label>Major / Year Level</label>
-              <input type="text" class="nb-input" value="${state.idCard.major}" oninput="updateIDCard('major', this.value)">
-            </div>
-
-            <div class="fg full">
-              <label>🏷️ Badge Logo</label>
-              <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                ${logos.map(l => `<button class="nb-btn sm ${state.idCard.logoType === l ? 'active' : ''}" onclick="updateIDCard('logoType', '${l}')">${l}</button>`).join('')}
-              </div>
-            </div>
-          </div>
+function showIDCardModal() {
+  openModal('🪪 My Student ID', `
+        <div style="padding:10px;">
+          ${renderIDCardPreview()}
+          <p style="margin-top:20px; font-size:13px; text-align:center; opacity:0.6;">ใช้สำหรับสแกนเข้าห้องสมุดหรือติดต่อเจ้าหน้าที่</p>
         </div>
       `, `
-        <div style="display:flex; gap:10px; width:100%;">
-          <button class="nb-btn-primary" style="flex:1;" onclick="saveIDCardConfig()">💾 Save Config</button>
-          <button class="nb-btn" style="flex:1; background:var(--c-indigo); color:white;" onclick="window.exportIDCard()">📸 Download Card</button>
-        </div>
+        <button class="nb-btn-primary full" onclick="closeModal()">ปิดหน้าต่าง</button>
       `);
+  renderIDBarcode();
+}
 
-      renderIDBarcode();
-
-      document.getElementById('idPicInput').onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        showToast('⏳ กำลังอัปโหลดรูปภาพไปยัง Google Drive...');
-        const reader = new FileReader();
-        reader.onload = async (re) => {
-          const base64 = re.target.result;
-          // Upload to Drive via Backend
-          google.script.run
-            .withSuccessHandler(async (res) => {
-              if (res.success) {
-                state.idCard.photoUrl = res.fileUrl;
-                state.idCard.fileId = res.fileId; // Store fileId for proxy fetch
-                state.idCard.photoBase64 = base64; // Store base64 for image export
-                const previewImg = document.getElementById('idPreviewImg');
-                if (previewImg) previewImg.src = base64;
-                showToast('✅ อัปโหลดรูปภาพสำเร็จ!');
-                updateIDCard('photoUrl', res.fileUrl);
-              } else {
-                showToast('❌ อัปโหลดไม่สำเร็จ: ' + res.error, 'err');
-              }
-            })
-            .withFailureHandler(err => {
-              showToast('❌ ระบบขัดข้อง: ' + err, 'err');
-              console.error(err);
-            })
-            .uploadIDPhotoToDrive(base64);
-        };
-        reader.readAsDataURL(file);
-      };
+function renderIDBarcode() {
+  setTimeout(() => {
+    const el = document.getElementById('idBarcodePreview');
+    if (el) {
+      JsBarcode("#idBarcodePreview", state.idCard.studentId || "20067105527480", {
+        format: "CODE128",
+        lineColor: "#000",
+        width: 2,
+        height: 40,
+        displayValue: false,
+        margin: 0
+      });
     }
+  }, 50);
+}
 
-    function renderIDBarcode() {
-      setTimeout(() => {
-        const el = document.getElementById('idBarcodePreview');
-        if (el) {
-          JsBarcode("#idBarcodePreview", state.idCard.studentId || "20067105527480", {
-            format: "CODE128",
-            lineColor: "#000",
-            width: 2,
-            height: 40,
-            displayValue: false,
-            margin: 0
-          });
+window.updateIDCard = (key, val) => {
+  state.idCard[key] = val;
+  document.getElementById('idCardPreviewWrap').innerHTML = renderIDCardPreview();
+  renderIDBarcode();
+};
+
+window.saveIDCardConfig = async () => {
+  localStorage.setItem('id_card_config', JSON.stringify(state.idCard));
+  await fsSet('app_settings', 'id_card', state.idCard);
+  showToast('✅ บันทึกข้อมูลบัตรและซิงก์สำเร็จ!');
+  closeModal();
+};
+
+window.exportIDCard = async () => {
+  const el = document.getElementById('idCardPreviewWrap');
+  if (!el || typeof html2canvas === 'undefined') {
+    showToast('❌ ไม่สามารถสร้างรูปได้ (html2canvas not loaded)', 'err');
+    return;
+  }
+
+  showToast('⏳ กำลังเตรียมไฟล์รูปภาพ...');
+
+  // FIX: If photoBase64 is missing (e.g. after reload), fetch it via server proxy
+  if (state.idCard.fileId && !state.idCard.photoBase64) {
+    showToast('⏳ กำลังดึงข้อมูลรูปภาพจาก Drive...');
+    await new Promise((resolve) => {
+      google.script.run.withSuccessHandler(res => {
+        if (res.success) {
+          state.idCard.photoBase64 = res.base64;
+          updateIDCard('photoBase64', res.base64); // Update UI
+          resolve();
+        } else {
+          showToast('⚠️ ไม่สามารถดึงรูปภาพแบบ CORS-safe ได้', 'warn');
+          resolve();
         }
-      }, 50);
-    }
+      }).getFileDataBase64(state.idCard.fileId);
+    });
+  }
 
-    window.updateIDCard = (key, val) => {
-      state.idCard[key] = val;
-      document.getElementById('idCardPreviewWrap').innerHTML = renderIDCardPreview();
-      renderIDBarcode();
-    };
+  // Wait a bit for images/barcode to settle
+  await new Promise(r => setTimeout(r, 600));
 
-    window.saveIDCardConfig = async () => {
-      localStorage.setItem('id_card_config', JSON.stringify(state.idCard));
-      await fsSet('app_settings', 'id_card', state.idCard);
-      showToast('✅ บันทึกข้อมูลบัตรและซิงก์สำเร็จ!');
-      closeModal();
-    };
+  try {
+    const canvas = await html2canvas(el, {
+      backgroundColor: null,
+      scale: 3,
+      useCORS: true,
+      logging: false,
+      allowTaint: true
+    });
+    const link = document.createElement('a');
+    link.download = `Student_ID_${state.idCard.studentId || 'card'}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    showToast('✅ บันทึกบัตรนิสิตสำเร็จ');
+  } catch (e) {
+    showToast('❌ เกิดข้อผิดพลาดในการสร้างรูป: ' + e.message, 'err');
+    console.error(e);
+  }
+};
 
-    window.exportIDCard = async () => {
-      const el = document.getElementById('idCardPreviewWrap');
-      if (!el || typeof html2canvas === 'undefined') {
-        showToast('❌ ไม่สามารถสร้างรูปได้ (html2canvas not loaded)', 'err');
-        return;
-      }
-
-      showToast('⏳ กำลังเตรียมไฟล์รูปภาพ...');
-
-      // FIX: If photoBase64 is missing (e.g. after reload), fetch it via server proxy
-      if (state.idCard.fileId && !state.idCard.photoBase64) {
-        showToast('⏳ กำลังดึงข้อมูลรูปภาพจาก Drive...');
-        await new Promise((resolve) => {
-          google.script.run.withSuccessHandler(res => {
-            if (res.success) {
-              state.idCard.photoBase64 = res.base64;
-              updateIDCard('photoBase64', res.base64); // Update UI
-              resolve();
-            } else {
-              showToast('⚠️ ไม่สามารถดึงรูปภาพแบบ CORS-safe ได้', 'warn');
-              resolve();
-            }
-          }).getFileDataBase64(state.idCard.fileId);
-        });
-      }
-
-      // Wait a bit for images/barcode to settle
-      await new Promise(r => setTimeout(r, 600));
-
-      try {
-        const canvas = await html2canvas(el, {
-          backgroundColor: null,
-          scale: 3,
-          useCORS: true,
-          logging: false,
-          allowTaint: true
-        });
-        const link = document.createElement('a');
-        link.download = `Student_ID_${state.idCard.studentId || 'card'}.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-        showToast('✅ บันทึกบัตรนิสิตสำเร็จ');
-      } catch (e) {
-        showToast('❌ เกิดข้อผิดพลาดในการสร้างรูป: ' + e.message, 'err');
-        console.error(e);
-      }
-    };
-
-    // ══════════════════════════════════════════════════
-    // ASSIGNMENTS
-    // ══════════════════════════════════════════════════
-    function renderAssignments() {
-      const allCourses = Object.values(state.courses).flat();
-      const allA = Object.entries(state.assignments).flatMap(([cid, arr]) => {
-        const c = allCourses.find(x => x.id === cid);
-        return arr.map(a => ({ ...a, courseName: c?.code || cid, courseColor: c?.color }));
-      }).sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-      const pending = allA.filter(a => !a.submitted);
-      const done = allA.filter(a => a.submitted);
-      return `<div class="page-wrap">
+// ══════════════════════════════════════════════════
+// ASSIGNMENTS
+// ══════════════════════════════════════════════════
+function renderAssignments() {
+  const allCourses = Object.values(state.courses).flat();
+  const allA = Object.entries(state.assignments).flatMap(([cid, arr]) => {
+    const c = allCourses.find(x => x.id === cid);
+    return arr.map(a => ({ ...a, courseName: c?.code || cid, courseColor: c?.color }));
+  }).sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  const pending = allA.filter(a => !a.submitted);
+  const done = allA.filter(a => a.submitted);
+  return `<div class="page-wrap">
     <div class="page-header-row">
       <h1 class="page-title">📋 การบ้าน / งาน</h1>
       <div class="hdr-acts">
@@ -3249,39 +2866,39 @@
     </div>
     ${state.assignView === 'kanban' ? renderKanban(allA) : state.assignView === 'cal' ? renderAssignCal(allA) : renderAssignList(pending, done)}
   </div>`;
-    }
+}
 
-    function renderAssignCal(allA) {
-      return `<div class="glass-card" style="padding:20px;">
+function renderAssignCal(allA) {
+  return `<div class="glass-card" style="padding:20px;">
         <div style="display:grid; grid-template-columns: repeat(7, 1fr); gap:5px; text-align:center;">
           ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => `<strong>${d}</strong>`).join('')}
           ${Array.from({ length: 35 }, (_, i) => {
-        const d = new Date(); d.setDate(i - 2);
-        const dateStr = d.toISOString().split('T')[0];
-        const tasks = allA.filter(a => a.dueDate === dateStr);
-        return `<div style="min-height:80px; border:1px solid #eee; padding:5px; font-size:10px;">
+    const d = new Date(); d.setDate(i - 2);
+    const dateStr = d.toISOString().split('T')[0];
+    const tasks = allA.filter(a => a.dueDate === dateStr);
+    return `<div style="min-height:80px; border:1px solid #eee; padding:5px; font-size:10px;">
               ${d.getDate()}<br>${tasks.map(t => `<div style="background:${t.courseColor}; color:#fff; border-radius:3px; margin-top:2px;">${t.title}</div>`).join('')}
             </div>`;
-      }).join('')}
+  }).join('')}
         </div>
       </div>`;
-    }
+}
 
-    function renderAssignList(pending, done) {
-      return `
+function renderAssignList(pending, done) {
+  return `
     <div class="section-hd">📋 รอส่ง (${pending.length})</div>
     ${pending.length === 0 ? '<div class="empty-sm">✨ ส่งหมดแล้ว! ยอดเยี่ยมมาก</div>' :
-          pending.map(a => renderAssignCard(a)).join('')}
+      pending.map(a => renderAssignCard(a)).join('')}
     <div class="section-hd mt-4">✅ ส่งแล้ว (${done.length})</div>
     ${done.map(a => renderAssignCard(a, true)).join('') || '<div class="empty-sm muted">ยังไม่มีงานที่ส่งแล้ว</div>'}`;
-    }
+}
 
-    function renderAssignCard(a, done = false) {
-      const d = getDaysUntil(a.dueDate);
-      const urgColor = !done && (d <= 0 ? 'var(--c-red)' : d <= 1 ? 'var(--c-orange)' : d <= 3 ? 'var(--c-yellow)' : 'var(--c-muted)');
-      const remaining = d * 86400;
-      const hours = Math.abs(d) * 24;
-      return `<div class="assign-card glass-card ${done ? 'done' : ''}">
+function renderAssignCard(a, done = false) {
+  const d = getDaysUntil(a.dueDate);
+  const urgColor = !done && (d <= 0 ? 'var(--c-red)' : d <= 1 ? 'var(--c-orange)' : d <= 3 ? 'var(--c-yellow)' : 'var(--c-muted)');
+  const remaining = d * 86400;
+  const hours = Math.abs(d) * 24;
+  return `<div class="assign-card glass-card ${done ? 'done' : ''}">
     <div class="ac-left">
       <button class="check-circle ${done ? 'checked' : ''}" data-toggle-assign="${a.id}">${done ? '✓' : ''}</button>
       <div class="ac-body">
@@ -3313,37 +2930,37 @@
       <button class="icon-btn danger" data-del-assign="${a.id}">🗑</button>
     </div>
   </div>`;
-    }
+}
 
-    function renderKanban(all) {
-      const statuses = ['ยังไม่เริ่ม', 'กำลังทำ', 'รอตรวจทาน', 'ส่งแล้ว'];
-      const statusIcons = ['🔴', '🟡', '🔵', '✅'];
-      return `<div class="kanban-board">
+function renderKanban(all) {
+  const statuses = ['ยังไม่เริ่ม', 'กำลังทำ', 'รอตรวจทาน', 'ส่งแล้ว'];
+  const statusIcons = ['🔴', '🟡', '🔵', '✅'];
+  return `<div class="kanban-board">
     ${statuses.map((s, si) => {
-        const items = all.filter(a => (a.status || 'ยังไม่เริ่ม') === s);
-        return `<div class="kanban-col glass-card">
+    const items = all.filter(a => (a.status || 'ยังไม่เริ่ม') === s);
+    return `<div class="kanban-col glass-card">
         <div class="kanban-hd">${statusIcons[si]} ${s} <span class="kanbadge">${items.length}</span></div>
         ${items.map(a => `<div class="kanban-item" draggable="true">
           <div class="ki-title">${a.title}</div>
           <div class="ki-meta">${a.courseName} • ${getDaysUntil(a.dueDate)} วัน</div>
         </div>`).join('')}
       </div>`;
-      }).join('')}
+  }).join('')}
   </div>`;
-    }
+}
 
-    // ══════════════════════════════════════════════════
-    // EXAMS
-    // ══════════════════════════════════════════════════
-    function renderExams() {
-      const allCourses = Object.values(state.courses).flat();
-      const allE = Object.entries(state.exams).flatMap(([cid, arr]) => {
-        const c = allCourses.find(x => x.id === cid);
-        return arr.map(e => ({ ...e, courseName: c?.code || e.courseName || cid, courseColor: c?.color }));
-      }).sort((a, b) => new Date(a.date) - new Date(b.date));
-      const upcoming = allE.filter(e => getDaysUntil(e.date) >= 0);
-      const past = allE.filter(e => getDaysUntil(e.date) < 0);
-      return `<div class="page-wrap">
+// ══════════════════════════════════════════════════
+// EXAMS
+// ══════════════════════════════════════════════════
+function renderExams() {
+  const allCourses = Object.values(state.courses).flat();
+  const allE = Object.entries(state.exams).flatMap(([cid, arr]) => {
+    const c = allCourses.find(x => x.id === cid);
+    return arr.map(e => ({ ...e, courseName: c?.code || e.courseName || cid, courseColor: c?.color }));
+  }).sort((a, b) => new Date(a.date) - new Date(b.date));
+  const upcoming = allE.filter(e => getDaysUntil(e.date) >= 0);
+  const past = allE.filter(e => getDaysUntil(e.date) < 0);
+  return `<div class="page-wrap">
     <div class="page-header-row">
       <h1 class="page-title">📝 ตารางสอบ</h1>
       <button class="btn-glass-primary" id="addExamBtn">+ เพิ่มการสอบ</button>
@@ -3354,7 +2971,7 @@
     </div>`: ''}
     <div class="section-hd">📝 กำลังจะมาถึง (${upcoming.length})</div>
     ${upcoming.length === 0 ? '<div class="empty-sm">✨ ไม่มีการสอบที่กำลังจะมาถึง</div>' :
-          upcoming.map(e => `<div class="exam-card glass-card">
+      upcoming.map(e => `<div class="exam-card glass-card">
         <div class="exam-countdown-box ${getDaysUntil(e.date) <= 3 ? 'urgent' : ''}">
           <div class="ex-days">${getDaysUntil(e.date)}</div>
           <div class="ex-days-lbl">วัน</div>
@@ -3380,18 +2997,18 @@
       <div class="exam-meta"><span class="badge-course">${e.courseName}</span></div></div>
     </div>`).join('')}
   </div>`;
-    }
+}
 
-    // ══════════════════════════════════════════════════
-    // GRADES
-    // ══════════════════════════════════════════════════
-    function renderGrades(gpa, pro) {
-      const proColors = { safe: '#22c55e', 'pro-low': '#eab308', 'pro-high': '#f97316', 'expelled': '#ef4444' };
-      const proLabels = { safe: 'ปลอดภัย ✅', 'pro-low': 'ติดโปรต่ำ ⚠️', 'pro-high': 'ติดโปรสูง 🚨', 'expelled': 'พ้นสภาพ ❌' };
-      const proMsgs = { safe: 'GPAX อยู่ในเกณฑ์ดี ต่อไปให้ได้ 2.00+', 'pro-low': 'GPAX 1.75–1.99 ต้องให้อาจารย์ที่ปรึกษาปลดล็อคก่อนลงทะเบียน', 'pro-high': 'GPAX 1.50–1.74 ระวัง! ติดต่อกัน 2 เทอม = ถูกไล่ออก', 'expelled': 'GPAX < 1.50 ติดต่อฝ่ายวิชาการทันที' };
-      const statusColor = pro ? proColors[pro] : '#94a3b8';
-      const lowGrades = Object.values(state.courses).flat().filter(c => c.grade && (c.grade === 'D' || c.grade === 'D+' || c.grade === 'F'));
-      return `<div class="page-wrap">
+// ══════════════════════════════════════════════════
+// GRADES
+// ══════════════════════════════════════════════════
+function renderGrades(gpa, pro) {
+  const proColors = { safe: '#22c55e', 'pro-low': '#eab308', 'pro-high': '#f97316', 'expelled': '#ef4444' };
+  const proLabels = { safe: 'ปลอดภัย ✅', 'pro-low': 'ติดโปรต่ำ ⚠️', 'pro-high': 'ติดโปรสูง 🚨', 'expelled': 'พ้นสภาพ ❌' };
+  const proMsgs = { safe: 'GPAX อยู่ในเกณฑ์ดี ต่อไปให้ได้ 2.00+', 'pro-low': 'GPAX 1.75–1.99 ต้องให้อาจารย์ที่ปรึกษาปลดล็อคก่อนลงทะเบียน', 'pro-high': 'GPAX 1.50–1.74 ระวัง! ติดต่อกัน 2 เทอม = ถูกไล่ออก', 'expelled': 'GPAX < 1.50 ติดต่อฝ่ายวิชาการทันที' };
+  const statusColor = pro ? proColors[pro] : '#94a3b8';
+  const lowGrades = Object.values(state.courses).flat().filter(c => c.grade && (c.grade === 'D' || c.grade === 'D+' || c.grade === 'F'));
+  return `<div class="page-wrap">
     <div class="page-header-row">
       <h1 class="page-title">🎓 เกรด & GPA</h1>
       <div class="hdr-acts">
@@ -3442,9 +3059,9 @@
     </div>`: ''}
 
     ${state.semesters.map(sem => {
-        const courses = state.courses[sem.id] || [];
-        const semGPA = calcGPAFromList(courses);
-        return `<div class="glass-card grades-table-block">
+    const courses = state.courses[sem.id] || [];
+    const semGPA = calcGPAFromList(courses);
+    return `<div class="glass-card grades-table-block">
         <div class="gt-header"><span>${sem.name}</span><span class="gt-gpa">GPA: ${semGPA}</span></div>
         <table class="grade-table">
           <thead><tr><th>รหัสวิชา</th><th>ชื่อวิชา</th><th>หน่วยกิต</th><th>เกรด</th><th>เปลี่ยน</th></tr></thead>
@@ -3466,31 +3083,31 @@
           </tbody>
         </table>
       </div>`;
-      }).join('')}
+  }).join('')}
   </div>`;
-    }
+}
 
-    // ══════════════════════════════════════════════════
-    // ROADMAP
-    // ══════════════════════════════════════════════════
-    function renderRoadmap() {
-      const passedCodes = new Set();
-      state.semesters.forEach(s => (state.courses[s.id] || []).forEach(c => { if (c.grade && c.grade !== 'F' && c.grade !== 'W' && c.grade !== 'N') passedCodes.add(c.code); }));
-      const sections = [
-        { label: '📖 หมวดวิชาศึกษาทั่วไป (30 cr)', courses: COURSE_DB.general, target: 30 },
-        { label: '🔬 พื้นฐานทางวิทยาศาสตร์ (21 cr)', courses: COURSE_DB.science, target: 21 },
-        { label: '⚙️ พื้นฐานทางวิศวกรรม (27 cr)', courses: COURSE_DB.engineering_basic, target: 27 },
-        { label: '🏗 วิชาบังคับทางวิศวกรรม (37 cr)', courses: COURSE_DB.core, target: 37 },
-        { label: '🔧 วิชาเลือกทางวิศวกรรม (16 cr)', courses: COURSE_DB.elective, target: 16 },
-      ];
-      return `<div class="page-wrap">
+// ══════════════════════════════════════════════════
+// ROADMAP
+// ══════════════════════════════════════════════════
+function renderRoadmap() {
+  const passedCodes = new Set();
+  state.semesters.forEach(s => (state.courses[s.id] || []).forEach(c => { if (c.grade && c.grade !== 'F' && c.grade !== 'W' && c.grade !== 'N') passedCodes.add(c.code); }));
+  const sections = [
+    { label: '📖 หมวดวิชาศึกษาทั่วไป (30 cr)', courses: COURSE_DB.general, target: 30 },
+    { label: '🔬 พื้นฐานทางวิทยาศาสตร์ (21 cr)', courses: COURSE_DB.science, target: 21 },
+    { label: '⚙️ พื้นฐานทางวิศวกรรม (27 cr)', courses: COURSE_DB.engineering_basic, target: 27 },
+    { label: '🏗 วิชาบังคับทางวิศวกรรม (37 cr)', courses: COURSE_DB.core, target: 37 },
+    { label: '🔧 วิชาเลือกทางวิศวกรรม (16 cr)', courses: COURSE_DB.elective, target: 16 },
+  ];
+  return `<div class="page-wrap">
     <div class="page-header"><h1 class="page-title">🗺 Roadmap 4 ปี</h1></div>
     <div class="roadmap-wrap">
       ${sections.map(sec => {
-        const passed = sec.courses.filter(c => passedCodes.has(c.code));
-        const passedCr = passed.reduce((s, c) => s + c.credits, 0);
-        const pct = Math.min(100, (passedCr / sec.target * 100)).toFixed(0);
-        return `<div class="glass-card roadmap-section">
+    const passed = sec.courses.filter(c => passedCodes.has(c.code));
+    const passedCr = passed.reduce((s, c) => s + c.credits, 0);
+    const pct = Math.min(100, (passedCr / sec.target * 100)).toFixed(0);
+    return `<div class="glass-card roadmap-section">
           <div class="rm-sec-hd">
             <span>${sec.label}</span>
             <span class="rm-pct">${pct}%</span>
@@ -3498,28 +3115,28 @@
           <div class="prog-bar-bg sm"><div class="prog-bar-fill" style="width:${pct}%"></div></div>
           <div class="rm-courses">
             ${sec.courses.map(c => {
-          const isPassed = passedCodes.has(c.code);
-          const inProgress = Object.values(state.courses).flat().find(x => x.code === c.code && !x.grade);
-          const prereqOk = checkPrereqs(c.code);
-          return `<div class="rm-course-item ${isPassed ? 'passed' : inProgress ? 'in-progress' : !prereqOk.ok ? 'locked' : ''}">
+      const isPassed = passedCodes.has(c.code);
+      const inProgress = Object.values(state.courses).flat().find(x => x.code === c.code && !x.grade);
+      const prereqOk = checkPrereqs(c.code);
+      return `<div class="rm-course-item ${isPassed ? 'passed' : inProgress ? 'in-progress' : !prereqOk.ok ? 'locked' : ''}">
                 <div class="rm-course-code">${c.code}</div>
                 <div class="rm-course-name">${c.name}</div>
                 <div class="rm-course-cr">${c.credits} cr</div>
                 ${isPassed ? '<span class="rm-badge passed">✓ ผ่าน</span>' : inProgress ? '<span class="rm-badge inprog">📖 กำลังเรียน</span>' : !prereqOk.ok ? `<span class="rm-badge locked">🔒 ยังขาด: ${prereqOk.missing.join(', ')}</span>` : '<span class="rm-badge pending">รอเรียน</span>'}
               </div>`;
-        }).join('')}
+    }).join('')}
           </div>
         </div>`;
-      }).join('')}
+  }).join('')}
   </div>`;
-    }
+}
 
-    // ══════════════════════════════════════════════════
-    // CALENDAR SETTINGS
-    // ══════════════════════════════════════════════════
-    function renderCalendar() {
-      const settings = state.calendarSettings || {};
-      return `<div class="page-wrap">
+// ══════════════════════════════════════════════════
+// CALENDAR SETTINGS
+// ══════════════════════════════════════════════════
+function renderCalendar() {
+  const settings = state.calendarSettings || {};
+  return `<div class="page-wrap">
     <div class="page-header"><h1 class="page-title">🗓 ตั้งค่าปฏิทินการศึกษา</h1></div>
     
     <div class="glass-card">
@@ -3546,20 +3163,20 @@
       </div>
     </div>
   </div>`;
-    }
+}
 
-    // ══════════════════════════════════════════════════
-    // FOCUS MODE
-    // ══════════════════════════════════════════════════
-    function renderFocus() {
-      if (state.isImmersiveFocus) {
-        return renderImmersiveFocus();
-      }
+// ══════════════════════════════════════════════════
+// FOCUS MODE
+// ══════════════════════════════════════════════════
+function renderFocus() {
+  if (state.isImmersiveFocus) {
+    return renderImmersiveFocus();
+  }
 
-      const curSem = getCurrentSemester();
-      const courses = curSem ? (state.courses[curSem.id] || []) : [];
+  const curSem = getCurrentSemester();
+  const courses = curSem ? (state.courses[curSem.id] || []) : [];
 
-      return `<div class="page-wrap">
+  return `<div class="page-wrap">
     <div class="page-header"><h1 class="page-title">🍅 Focus Mode</h1></div>
 
     <div class="pomodoro-setup-card glass-card">
@@ -3619,17 +3236,17 @@
       </div>
     </div>
   </div>`;
-    }
+}
 
-    function renderImmersiveFocus() {
-      const rem = getPomodoroRemaining();
-      const total = (state.pomodoroPhase === 'work' ? state.pomodoroWork : state.pomodoroBreak) * 60;
-      const progress = (1 - rem / total) * 100;
-      const dash = 377;
-      const dashOffset = dash - (progress / 100) * dash;
-      const treeSVG = getTreeSVG();
+function renderImmersiveFocus() {
+  const rem = getPomodoroRemaining();
+  const total = (state.pomodoroPhase === 'work' ? state.pomodoroWork : state.pomodoroBreak) * 60;
+  const progress = (1 - rem / total) * 100;
+  const dash = 377;
+  const dashOffset = dash - (progress / 100) * dash;
+  const treeSVG = getTreeSVG();
 
-      return `<div class="focus-immersive-overlay">
+  return `<div class="focus-immersive-overlay">
     <div class="focus-score-badge">Focus Score: ${state.focusScore}</div>
     
     <div style="transform:scale(0.8); opacity:0.6; margin-bottom:-40px;">${treeSVG}</div>
@@ -3653,74 +3270,55 @@
       <button class="btn-glass danger sm" id="stopPomBtn">⏹ End Session</button>
     </div>
   </div>`;
-    }
+}
 
-    // ══════════════════════════════════════════════════
-    // CLUB
-    // ══════════════════════════════════════════════════
-    function renderClub() {
-      const tasks = state.clubTasks;
-      const cats = ['เอกสาร', 'ประสานงาน', 'กิจกรรม', 'ประชุม', 'อื่นๆ'];
-      const catIcons = { 'เอกสาร': '📄', 'ประสานงาน': '📞', 'กิจกรรม': '🎉', 'ประชุม': '👥', 'อื่นๆ': '📌' };
-      return `<div class="page-wrap">
+// ══════════════════════════════════════════════════
+// CLUB
+// ══════════════════════════════════════════════════
+function renderClub() {
+  const tasks = state.clubTasks || [];
+  return `<div class="page-wrap">
     <div class="page-header-row">
       <div>
         <h1 class="page-title">🏛 งานประธานชุมนุม</h1>
-        <div class="page-sub">ชุมนุมภาควิชาวิศวกรรมวัสดุ มก.</div>
+        <div class="page-sub">บันทึกรายการงานที่ต้องจัดการ</div>
       </div>
       <button class="btn-glass-primary" id="addClubTaskBtn">+ เพิ่มงาน</button>
     </div>
-    <div class="club-event-banner glass-card">
-      <div class="ev-title">🎉 งานวิศวกรยุคใหม่</div>
-      <div class="ev-countdown" id="evCountdown">นับถอยหลัง...</div>
-      <button class="btn-glass sm" id="setEventDateBtn">📅 ตั้งวันกิจกรรม</button>
-    </div>
-    <div class="budget-block glass-card">
-      <div class="bgt-title">💰 สรุปงบประมาณชุมนุม</div>
-      <div class="bgt-row"><span>รายรับ</span><span class="bgt-in">฿${(JSON.parse(localStorage.getItem('clubBudget') || '{"in":0,"out":0}').in).toLocaleString()}</span></div>
-      <div class="bgt-row"><span>รายจ่าย</span><span class="bgt-out">฿${(JSON.parse(localStorage.getItem('clubBudget') || '{"in":0,"out":0}').out).toLocaleString()}</span></div>
-      <div class="bgt-row total"><span>คงเหลือ</span><span class="bgt-bal">฿${((JSON.parse(localStorage.getItem('clubBudget') || '{"in":0,"out":0}')).in - (JSON.parse(localStorage.getItem('clubBudget') || '{"in":0,"out":0}')).out).toLocaleString()}</span></div>
-      <button class="btn-glass sm" id="editBudgetBtn">✏️ แก้ไขงบ</button>
-    </div>
-    ${cats.map(cat => {
-        const catTasks = tasks.filter(t => t.cat === cat);
-        if (catTasks.length === 0 && cat !== 'อื่นๆ') return '';
-        return `<div class="glass-card club-cat-block">
-        <div class="cc-hd">${catIcons[cat]} ${cat} (${catTasks.length})</div>
-        ${catTasks.map((t, i) => `<div class="club-task-row ${t.done ? 'done' : ''}">
-          <button class="check-circle sm ${t.done ? 'checked' : ''}" data-toggle-club="${tasks.indexOf(t)}">✓</button>
-          <div class="ct-body">
-            <div class="ct-title">${t.title}</div>
-            ${t.note ? `<div class="ct-note">${t.note}</div>` : ''}
-            ${t.due ? `<div class="ct-due">📅 ${t.due}</div>` : ''}
-            ${t.assignTo ? `<div class="ct-assign">👤 มอบหมาย: ${t.assignTo}</div>` : ''}
+
+    <div class="glass-card nb-card" style="padding:20px;">
+      <div style="font-weight:800; font-size:16px; margin-bottom:15px; border-bottom:2px solid black; padding-bottom:10px;">📋 รายการงาน (Checklist)</div>
+      <div class="club-task-list" style="display:flex; flex-direction:column; gap:10px;">
+        ${tasks.map((t, i) => `
+          <div class="club-task-row ${t.done ? 'done' : ''}" style="display:flex; align-items:center; gap:12px; padding:12px; background:white; border:1.5px solid black; border-radius:12px;">
+            <button class="check-circle sm ${t.done ? 'checked' : ''}" data-toggle-club="${i}" style="width:28px; height:28px; border-radius:50%; border:2px solid black; background:${t.done ? 'var(--c-indigo)' : 'white'}; color:white; display:flex; align-items:center; justify-content:center; font-weight:800;">${t.done ? '✓' : ''}</button>
+            <div style="flex:1;">
+              <div style="font-weight:700; font-size:14px; text-decoration:${t.done ? 'line-through' : 'none'}; opacity:${t.done ? 0.5 : 1};">${t.title}</div>
+              ${t.note ? `<div style="font-size:11px; opacity:0.6;">${t.note}</div>` : ''}
+              ${t.due ? `<div style="font-size:11px; color:var(--c-rust); font-weight:700; margin-top:2px;">📅 กำหนด: ${t.due}</div>` : ''}
+            </div>
+            <button class="icon-btn danger sm" data-del-club="${i}" style="background:transparent; border:none; color:var(--c-red); font-size:16px;">🗑</button>
           </div>
-          <div class="ct-right">
-            <span class="priority-dot ${t.priority || 'normal'}"></span>
-            <button class="icon-btn danger" data-del-club="${tasks.indexOf(t)}">🗑</button>
-          </div>
-        </div>`).join('')}
-      </div>`;
-      }).join('')}
-    <div class="glass-card rest-btn-block">
-      <button class="rest-mode-btn" id="restModeBtn">😴 พักร่างประธาน — ซ่อนโหมดชุมนุม</button>
+        `).join('')}
+        ${tasks.length === 0 ? '<div class="empty-sm" style="padding:40px;">ยังไม่มีงานที่จดไว้</div>' : ''}
+      </div>
     </div>
   </div>`;
-    }
+}
 
-    // ══════════════════════════════════════════════════
-    // DAILY LIFE
-    // ══════════════════════════════════════════════════
-    function renderDaily() {
-      const today = new Date().toISOString().split('T')[0];
-      const todayHabits = JSON.parse(localStorage.getItem('habits_' + today) || '{}');
-      const habitList = ['💧 ดื่มน้ำ', '🏃 ออกกำลังกาย', '📖 อ่านหนังสือ', '😴 นอนก่อนเที่ยงคืน', '🍎 กินผักผลไม้', '🧘 ทำสมาธิ'];
-      const moods = ['😊', '😐', '😟', '😴', '🤯', '💪'];
-      const todayMood = localStorage.getItem('mood_' + today) || '';
-      const expenses = JSON.parse(localStorage.getItem('expenses_' + today) || '[]');
-      const totalExp = expenses.reduce((s, e) => s + parseFloat(e.amount || 0), 0);
-      const budget = parseFloat(localStorage.getItem('daily_budget') || '200');
-      return `<div class="page-wrap">
+// ══════════════════════════════════════════════════
+// DAILY LIFE
+// ══════════════════════════════════════════════════
+function renderDaily() {
+  const today = new Date().toISOString().split('T')[0];
+  const todayHabits = JSON.parse(localStorage.getItem('habits_' + today) || '{}');
+  const habitList = ['💧 ดื่มน้ำ', '🏃 ออกกำลังกาย', '📖 อ่านหนังสือ', '😴 นอนก่อนเที่ยงคืน', '🍎 กินผักผลไม้', '🧘 ทำสมาธิ'];
+  const moods = ['😊', '😐', '😟', '😴', '🤯', '💪'];
+  const todayMood = localStorage.getItem('mood_' + today) || '';
+  const expenses = JSON.parse(localStorage.getItem('expenses_' + today) || '[]');
+  const totalExp = expenses.reduce((s, e) => s + parseFloat(e.amount || 0), 0);
+  const budget = parseFloat(localStorage.getItem('daily_budget') || '200');
+  return `<div class="page-wrap">
     <div class="page-header"><h1 class="page-title">🌅 ชีวิตประจำวัน</h1></div>
 
     <div class="widget-grid">
@@ -3779,13 +3377,13 @@
       <button class="btn-glass sm" id="saveVisionBtn">💾 บันทึก</button>
     </div>
   </div>`;
-    }
+}
 
-    // ══════════════════════════════════════════════════
-    // SETTINGS
-    // ══════════════════════════════════════════════════
-    function renderSettings() {
-      return `<div class="page-wrap">
+// ══════════════════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════════════════
+function renderSettings() {
+  return `<div class="page-wrap">
     <div class="page-header"><h1 class="page-title">⚙️ ตั้งค่า</h1></div>
     
 <div class="settings-card" style="margin-bottom:15px;">
@@ -3831,12 +3429,12 @@
       <div class="setting-row"><span>NITIPAT MANAGER</span><span>v2.0 — Firebase Edition</span></div>
     </div>
   </div>`;
-    }
+}
 
-    // ══════════════════════════════════════════════════
-    // CSS OVERRIDES & HELPERS
-    // ══════════════════════════════════════════════════
-    const styleBlock = `
+// ══════════════════════════════════════════════════
+// CSS OVERRIDES & HELPERS
+// ══════════════════════════════════════════════════
+const styleBlock = `
     <style>
     .widget-grid {
       display: grid;
@@ -3851,14 +3449,14 @@
       }
     }
     </style>`;
-    document.head.insertAdjacentHTML('beforeend', styleBlock);
+document.head.insertAdjacentHTML('beforeend', styleBlock);
 
-    // ══════════════════════════════════════════════════
-    // FORMS
-    // ══════════════════════════════════════════════════
-    function openAddSemesterForm(existing = null) {
-      const calOptions = Object.entries(ACADEMIC_CALENDAR).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
-      openModal(existing ? 'แก้ไขเทอม' : 'เพิ่มเทอมการศึกษา', `
+// ══════════════════════════════════════════════════
+// FORMS
+// ══════════════════════════════════════════════════
+function openAddSemesterForm(existing = null) {
+  const calOptions = Object.entries(ACADEMIC_CALENDAR).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
+  openModal(existing ? 'แก้ไขเทอม' : 'เพิ่มเทอมการศึกษา', `
     <div class="form-grid">
       <div class="fg">
         <label>นำเข้าจากปฏิทิน 2568-2569</label>
@@ -3873,37 +3471,37 @@
       <div class="fg"><label>ลำดับ</label>
         <input type="number" class="glass-input" id="f-sOrd" value="${existing?.order || state.semesters.length + 1}"></div>
     </div>`,
-        `<button class="btn-glass-primary" id="saveSemBtn">${existing ? 'บันทึก' : 'เพิ่มเทอม'}</button>`
-      );
-      document.getElementById('calImport')?.addEventListener('change', e => {
-        const cal = ACADEMIC_CALENDAR[e.target.value];
-        if (cal) {
-          document.getElementById('f-sName').value = cal.name;
-          document.getElementById('f-sStart').value = cal.start || '';
-          document.getElementById('f-sEnd').value = cal.end || '';
-        }
-      });
-      document.getElementById('saveSemBtn').onclick = async () => {
-        const data = {
-          id: existing?.id || `sem_${Date.now()}`, name: document.getElementById('f-sName').value,
-          startDate: document.getElementById('f-sStart').value, endDate: document.getElementById('f-sEnd').value,
-          order: parseInt(document.getElementById('f-sOrd').value) || 0
-        };
-        if (!data.name) { showToast('⚠️ กรอกชื่อเทอม', 'err'); return; }
-        await fsSet('semesters', data.id, data);
-        closeModal(); await loadAll(); showToast('✅ บันทึกเทอมสำเร็จ');
-      };
+    `<button class="btn-glass-primary" id="saveSemBtn">${existing ? 'บันทึก' : 'เพิ่มเทอม'}</button>`
+  );
+  document.getElementById('calImport')?.addEventListener('change', e => {
+    const cal = ACADEMIC_CALENDAR[e.target.value];
+    if (cal) {
+      document.getElementById('f-sName').value = cal.name;
+      document.getElementById('f-sStart').value = cal.start || '';
+      document.getElementById('f-sEnd').value = cal.end || '';
     }
+  });
+  document.getElementById('saveSemBtn').onclick = async () => {
+    const data = {
+      id: existing?.id || `sem_${Date.now()}`, name: document.getElementById('f-sName').value,
+      startDate: document.getElementById('f-sStart').value, endDate: document.getElementById('f-sEnd').value,
+      order: parseInt(document.getElementById('f-sOrd').value) || 0
+    };
+    if (!data.name) { showToast('⚠️ กรอกชื่อเทอม', 'err'); return; }
+    await fsSet('semesters', data.id, data);
+    closeModal(); await loadAll(); showToast('✅ บันทึกเทอมสำเร็จ');
+  };
+}
 
-    const COURSE_COLORS_LIST = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#dc2626', '#7c3aed', '#db2777', '#ea580c'];
+const COURSE_COLORS_LIST = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#dc2626', '#7c3aed', '#db2777', '#ea580c'];
 
-    function openAddCourseForm(existing = null) {
-      const curSem = getCurrentSemester() || state.semesters[state.semesters.length - 1];
-      const semOptions = state.semesters.map(s => `<option value="${s.id}" ${(existing ? existing.semId === s.id : curSem?.id === s.id) ? 'selected' : ''}>${s.name}</option>`).join('');
+function openAddCourseForm(existing = null) {
+  const curSem = getCurrentSemester() || state.semesters[state.semesters.length - 1];
+  const semOptions = state.semesters.map(s => `<option value="${s.id}" ${(existing ? existing.semId === s.id : curSem?.id === s.id) ? 'selected' : ''}>${s.name}</option>`).join('');
 
-      let slots = existing?.schedules || [{ day: 0, start: "09:00", end: "12:00" }];
+  let slots = existing?.schedules || [{ day: 0, start: "09:00", end: "12:00" }];
 
-      const renderSlots = () => slots.map((s, i) => `
+  const renderSlots = () => slots.map((s, i) => `
     <div class="slot-row glass-card-sm" style="display:flex; gap:8px; align-items:center; margin-bottom:8px; padding:8px;">
       <select class="glass-select sm f-slot-day" data-idx="${i}">
         ${['จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์', 'อาทิตย์'].map((d, v) => `<option value="${v}" ${s.day == v ? 'selected' : ''}>${d}</option>`).join('')}
@@ -3915,7 +3513,7 @@
     </div>
   `).join('');
 
-      openModal(existing ? 'แก้ไขรายวิชา' : 'เพิ่มรายวิชา', `
+  openModal(existing ? 'แก้ไขรายวิชา' : 'เพิ่มรายวิชา', `
     <div class="form-grid">
       <div class="fg full"><label>เทอม <span class="req">*</span></label><select class="glass-select" id="f-cSem">${semOptions}</select></div>
       <div class="fg full">
@@ -3964,132 +3562,132 @@
         </div>
       </div>
     </div>`,
-        `<button class="btn-glass-primary" id="saveCourseBtn">${existing ? 'บันทึก' : 'เพิ่มวิชา'}</button>`
-      );
+    `<button class="btn-glass-primary" id="saveCourseBtn">${existing ? 'บันทึก' : 'เพิ่มวิชา'}</button>`
+  );
 
-      const updateSlotsUI = () => { document.getElementById('slotsContainer').innerHTML = renderSlots(); attachSlotEvents(); };
-      const attachSlotEvents = () => {
-        document.querySelectorAll('.btn-slot-del').forEach(b => b.onclick = () => { slots.splice(b.dataset.idx, 1); updateSlotsUI(); });
-        document.querySelectorAll('.f-slot-day').forEach(s => s.onchange = () => { slots[s.dataset.idx].day = parseInt(s.value); });
-        document.querySelectorAll('.f-slot-start').forEach(s => s.onchange = () => { slots[s.dataset.idx].start = s.value; });
-        document.querySelectorAll('.f-slot-end').forEach(s => s.onchange = () => { slots[s.dataset.idx].end = s.value; });
-      };
-      document.getElementById('addSlotBtn').onclick = () => { slots.push({ day: 0, start: "09:00", end: "12:00" }); updateSlotsUI(); };
-      attachSlotEvents();
-      let selColor = existing?.color || COURSE_COLORS_LIST[0];
-      document.querySelectorAll('.cpick').forEach(d => { d.onclick = () => { document.querySelectorAll('.cpick').forEach(x => x.classList.remove('sel')); d.classList.add('sel'); selColor = d.dataset.color; }; });
+  const updateSlotsUI = () => { document.getElementById('slotsContainer').innerHTML = renderSlots(); attachSlotEvents(); };
+  const attachSlotEvents = () => {
+    document.querySelectorAll('.btn-slot-del').forEach(b => b.onclick = () => { slots.splice(b.dataset.idx, 1); updateSlotsUI(); });
+    document.querySelectorAll('.f-slot-day').forEach(s => s.onchange = () => { slots[s.dataset.idx].day = parseInt(s.value); });
+    document.querySelectorAll('.f-slot-start').forEach(s => s.onchange = () => { slots[s.dataset.idx].start = s.value; });
+    document.querySelectorAll('.f-slot-end').forEach(s => s.onchange = () => { slots[s.dataset.idx].end = s.value; });
+  };
+  document.getElementById('addSlotBtn').onclick = () => { slots.push({ day: 0, start: "09:00", end: "12:00" }); updateSlotsUI(); };
+  attachSlotEvents();
+  let selColor = existing?.color || COURSE_COLORS_LIST[0];
+  document.querySelectorAll('.cpick').forEach(d => { d.onclick = () => { document.querySelectorAll('.cpick').forEach(x => x.classList.remove('sel')); d.classList.add('sel'); selColor = d.dataset.color; }; });
 
-      document.getElementById('f-cSearch')?.addEventListener('input', e => {
-        const res = searchCourseDB(e.target.value);
-        const container = document.getElementById('courseSearchResults');
-        if (container) {
-          container.innerHTML = res.map(c => `<div class="csr-item" data-code="${c.code}" data-name="${c.name}" data-nameen="${c.nameEn || ''}" data-cr="${c.credits}">${c.code} — ${c.name} (${c.credits} cr)</div>`).join('');
-          container.querySelectorAll('.csr-item').forEach(item => {
-            item.onclick = () => {
-              document.getElementById('f-cCode').value = item.dataset.code;
-              document.getElementById('f-cNameTh').value = item.dataset.name;
-              document.getElementById('f-cNameEn').value = item.dataset.nameen;
-              document.getElementById('f-cCr').value = item.dataset.cr;
-              container.innerHTML = '';
-              const p = checkPrereqs(item.dataset.code);
-              if (!p.ok) showToast(`⚠️ ยังขาด Prerequisite: ${p.missing.join(', ')}`, 'err');
-            };
-          });
-        }
+  document.getElementById('f-cSearch')?.addEventListener('input', e => {
+    const res = searchCourseDB(e.target.value);
+    const container = document.getElementById('courseSearchResults');
+    if (container) {
+      container.innerHTML = res.map(c => `<div class="csr-item" data-code="${c.code}" data-name="${c.name}" data-nameen="${c.nameEn || ''}" data-cr="${c.credits}">${c.code} — ${c.name} (${c.credits} cr)</div>`).join('');
+      container.querySelectorAll('.csr-item').forEach(item => {
+        item.onclick = () => {
+          document.getElementById('f-cCode').value = item.dataset.code;
+          document.getElementById('f-cNameTh').value = item.dataset.name;
+          document.getElementById('f-cNameEn').value = item.dataset.nameen;
+          document.getElementById('f-cCr').value = item.dataset.cr;
+          container.innerHTML = '';
+          const p = checkPrereqs(item.dataset.code);
+          if (!p.ok) showToast(`⚠️ ยังขาด Prerequisite: ${p.missing.join(', ')}`, 'err');
+        };
       });
+    }
+  });
 
-      setTimeout(() => {
-        const defaultCoords = [13.8476, 100.5696];
-        const map = L.map('map').setView(defaultCoords, 15);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+  setTimeout(() => {
+    const defaultCoords = [13.8476, 100.5696];
+    const map = L.map('map').setView(defaultCoords, 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        let marker = null;
-        if (existing?.coords) {
-          const [lat, lon] = existing.coords.split(',').map(Number);
-          marker = L.marker([lat, lon]).addTo(map);
-          map.setView([lat, lon], 17);
-        }
-
-        map.on('click', (e) => {
-          const { lat, lng } = e.latlng;
-          if (marker) map.removeLayer(marker);
-          marker = L.marker([lat, lng]).addTo(map);
-          document.getElementById('f-cCoords').value = `${lat.toFixed(6)},${lng.toFixed(6)}`;
-        });
-
-        document.getElementById('mapLocateBtn').onclick = () => {
-          map.locate({ setView: true, maxZoom: 17 });
-        };
-
-        map.on('locationfound', (e) => {
-          const { lat, lng } = e.latlng;
-          if (marker) map.removeLayer(marker);
-          marker = L.marker([lat, lng]).addTo(map);
-          document.getElementById('f-cCoords').value = `${lat.toFixed(6)},${lng.toFixed(6)}`;
-        });
-      }, 500);
-
-      document.getElementById('saveCourseBtn').onclick = async () => {
-        const semId = document.getElementById('f-cSem').value;
-        const sem = state.semesters.find(s => s.id === semId);
-
-        const processedSlots = slots.map(s => {
-          const [sh, sm] = s.start.split(':').map(Number);
-          const [eh, em] = s.end.split(':').map(Number);
-          return {
-            day: s.day,
-            start: s.start,
-            end: s.end,
-            startHour: sh + (sm / 60),
-            endHour: eh + (em / 60)
-          };
-        });
-
-        const data = {
-          id: existing?.id || `c_${Date.now()}`, semId,
-          code: document.getElementById('f-cCode').value,
-          nameTh: document.getElementById('f-cNameTh').value,
-          nameEn: document.getElementById('f-cNameEn').value,
-          credits: parseInt(document.getElementById('f-cCr').value) || 3,
-          mode: document.getElementById('f-cMode').value,
-          instructor: document.getElementById('f-cInstr').value,
-          schedules: processedSlots,
-          room: document.getElementById('f-cRoom').value,
-          targetCoords: document.getElementById('f-cCoords').value,
-          link: document.getElementById('f-cLink').value,
-          grading: document.getElementById('f-cGrading').value,
-          color: selColor,
-          grade: document.getElementById('f-cGrade').value || null,
-          attendance: existing?.attendance || 0,
-          maxAttendance: existing?.maxAttendance || 15,
-          isArchived: existing?.isArchived || false,
-          driveUrl: existing?.driveUrl || null
-        };
-        if (!data.code || !data.nameTh) { showToast('⚠️ กรอกรหัสและชื่อวิชา', 'err'); return; }
-
-        await fsSet('courses', data.id, data);
-
-        const isPastSem = sem && new Date(sem.endDate) < new Date();
-        if (!isPastSem && !data.isArchived && typeof google !== 'undefined' && google.script && google.script.run) {
-          showToast('📂 กำลังสร้างโครงสร้างโฟลเดอร์ใน Google Drive...');
-          google.script.run.withSuccessHandler(res => {
-            if (res && res.success) {
-              showToast('✅ สร้างโฟลเดอร์ Drive สำเร็จ');
-              fsUpd('courses', data.id, { driveUrl: res.folderUrl });
-            } else {
-              showToast('❌ สร้างโฟลเดอร์ล้มเหลว: ' + (res?.error || 'Unknown error'), 'err');
-            }
-          }).createDriveHierarchy(sem ? sem.name : 'Unknown_Semester', `${data.code}_${data.nameEn || data.nameTh}`);
-        }
-        closeModal(); await loadAll(); showToast('✅ บันทึกวิชาสำเร็จ');
-      };
+    let marker = null;
+    if (existing?.coords) {
+      const [lat, lon] = existing.coords.split(',').map(Number);
+      marker = L.marker([lat, lon]).addTo(map);
+      map.setView([lat, lon], 17);
     }
 
-    function openAddAssignmentForm() {
-      const allCourses = Object.values(state.courses).flat();
-      const curSem = getCurrentSemester() || state.semesters[state.semesters.length - 1];
-      const activeCourses = curSem ? (state.courses[curSem.id] || []) : allCourses;
-      openModal('เพิ่มการบ้าน / งาน', `
+    map.on('click', (e) => {
+      const { lat, lng } = e.latlng;
+      if (marker) map.removeLayer(marker);
+      marker = L.marker([lat, lng]).addTo(map);
+      document.getElementById('f-cCoords').value = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+    });
+
+    document.getElementById('mapLocateBtn').onclick = () => {
+      map.locate({ setView: true, maxZoom: 17 });
+    };
+
+    map.on('locationfound', (e) => {
+      const { lat, lng } = e.latlng;
+      if (marker) map.removeLayer(marker);
+      marker = L.marker([lat, lng]).addTo(map);
+      document.getElementById('f-cCoords').value = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+    });
+  }, 500);
+
+  document.getElementById('saveCourseBtn').onclick = async () => {
+    const semId = document.getElementById('f-cSem').value;
+    const sem = state.semesters.find(s => s.id === semId);
+
+    const processedSlots = slots.map(s => {
+      const [sh, sm] = s.start.split(':').map(Number);
+      const [eh, em] = s.end.split(':').map(Number);
+      return {
+        day: s.day,
+        start: s.start,
+        end: s.end,
+        startHour: sh + (sm / 60),
+        endHour: eh + (em / 60)
+      };
+    });
+
+    const data = {
+      id: existing?.id || `c_${Date.now()}`, semId,
+      code: document.getElementById('f-cCode').value,
+      nameTh: document.getElementById('f-cNameTh').value,
+      nameEn: document.getElementById('f-cNameEn').value,
+      credits: parseInt(document.getElementById('f-cCr').value) || 3,
+      mode: document.getElementById('f-cMode').value,
+      instructor: document.getElementById('f-cInstr').value,
+      schedules: processedSlots,
+      room: document.getElementById('f-cRoom').value,
+      targetCoords: document.getElementById('f-cCoords').value,
+      link: document.getElementById('f-cLink').value,
+      grading: document.getElementById('f-cGrading').value,
+      color: selColor,
+      grade: document.getElementById('f-cGrade').value || null,
+      attendance: existing?.attendance || 0,
+      maxAttendance: existing?.maxAttendance || 15,
+      isArchived: existing?.isArchived || false,
+      driveUrl: existing?.driveUrl || null
+    };
+    if (!data.code || !data.nameTh) { showToast('⚠️ กรอกรหัสและชื่อวิชา', 'err'); return; }
+
+    await fsSet('courses', data.id, data);
+
+    const isPastSem = sem && new Date(sem.endDate) < new Date();
+    if (!isPastSem && !data.isArchived && typeof google !== 'undefined' && google.script && google.script.run) {
+      showToast('📂 กำลังสร้างโครงสร้างโฟลเดอร์ใน Google Drive...');
+      google.script.run.withSuccessHandler(res => {
+        if (res && res.success) {
+          showToast('✅ สร้างโฟลเดอร์ Drive สำเร็จ');
+          fsUpd('courses', data.id, { driveUrl: res.folderUrl });
+        } else {
+          showToast('❌ สร้างโฟลเดอร์ล้มเหลว: ' + (res?.error || 'Unknown error'), 'err');
+        }
+      }).createDriveHierarchy(sem ? sem.name : 'Unknown_Semester', `${data.code}_${data.nameEn || data.nameTh}`);
+    }
+    closeModal(); await loadAll(); showToast('✅ บันทึกวิชาสำเร็จ');
+  };
+}
+
+function openAddAssignmentForm() {
+  const allCourses = Object.values(state.courses).flat();
+  const curSem = getCurrentSemester() || state.semesters[state.semesters.length - 1];
+  const activeCourses = curSem ? (state.courses[curSem.id] || []) : allCourses;
+  openModal('เพิ่มการบ้าน / งาน', `
     <div class="form-grid">
       <div class="fg full"><label>วิชา <span class="req">*</span></label>
         <select class="glass-select" id="f-aCourse">${activeCourses.map(c => `<option value="${c.id}">${c.code} — ${c.nameTh}</option>`).join('')}</select></div>
@@ -4104,42 +3702,42 @@
       <div class="fg full"><label>บันทึกช่วยจำ (ที่อาจารย์สั่งปากเปล่า)</label>
         <textarea class="glass-textarea" id="f-aNote" rows="2" placeholder="รายละเอียด..."></textarea></div>
     </div>`,
-        `<button class="btn-glass-primary" id="saveAssignBtn">เพิ่มการบ้าน</button>`
-      );
-      document.getElementById('saveAssignBtn').onclick = async () => {
-        const cid = document.getElementById('f-aCourse').value;
-        const course = allCourses.find(c => c.id === cid);
-        const data = {
-          id: `a_${Date.now()}`, courseId: cid, courseName: course?.code || '',
-          title: document.getElementById('f-aTitle').value,
-          type: document.getElementById('f-aType').value,
-          dueDate: document.getElementById('f-aDue').value,
-          dueTime: document.getElementById('f-aTime').value,
-          maxScore: document.getElementById('f-aScore').value,
-          note: document.getElementById('f-aNote').value,
-          status: 'ยังไม่เริ่ม', submitted: false, subtasks: []
-        };
-        if (!data.title || !data.dueDate) { showToast('⚠️ กรอกชื่องานและกำหนดส่ง', 'err'); return; }
-        await fsSet('assignments', data.id, data);
+    `<button class="btn-glass-primary" id="saveAssignBtn">เพิ่มการบ้าน</button>`
+  );
+  document.getElementById('saveAssignBtn').onclick = async () => {
+    const cid = document.getElementById('f-aCourse').value;
+    const course = allCourses.find(c => c.id === cid);
+    const data = {
+      id: `a_${Date.now()}`, courseId: cid, courseName: course?.code || '',
+      title: document.getElementById('f-aTitle').value,
+      type: document.getElementById('f-aType').value,
+      dueDate: document.getElementById('f-aDue').value,
+      dueTime: document.getElementById('f-aTime').value,
+      maxScore: document.getElementById('f-aScore').value,
+      note: document.getElementById('f-aNote').value,
+      status: 'ยังไม่เริ่ม', submitted: false, subtasks: []
+    };
+    if (!data.title || !data.dueDate) { showToast('⚠️ กรอกชื่องานและกำหนดส่ง', 'err'); return; }
+    await fsSet('assignments', data.id, data);
 
-        if (course?.driveId && typeof google !== 'undefined' && google.script) {
-          showToast(`📂 กำลังเตรียมพื้นที่${data.type === 'Lab' ? ' Lab' : 'เก็บงาน'}...`);
-          google.script.run.withSuccessHandler(res => {
-            if (res && res.success) {
-              showToast(`✅ สร้างโฟลเดอร์ ${data.type} สำเร็จ`);
-            }
-          }).createAssignmentFolder(course.driveId, data.title, data.type);
+    if (course?.driveId && typeof google !== 'undefined' && google.script) {
+      showToast(`📂 กำลังเตรียมพื้นที่${data.type === 'Lab' ? ' Lab' : 'เก็บงาน'}...`);
+      google.script.run.withSuccessHandler(res => {
+        if (res && res.success) {
+          showToast(`✅ สร้างโฟลเดอร์ ${data.type} สำเร็จ`);
         }
-
-        closeModal(); await loadAll(); showToast('✅ เพิ่มการบ้านสำเร็จ');
-      };
+      }).createAssignmentFolder(course.driveId, data.title, data.type);
     }
 
-    function openAddExamForm() {
-      const allCourses = Object.values(state.courses).flat();
-      const curSem = getCurrentSemester() || state.semesters[state.semesters.length - 1];
-      const activeCourses = curSem ? (state.courses[curSem.id] || []) : allCourses;
-      openModal('เพิ่มการสอบ', `
+    closeModal(); await loadAll(); showToast('✅ เพิ่มการบ้านสำเร็จ');
+  };
+}
+
+function openAddExamForm() {
+  const allCourses = Object.values(state.courses).flat();
+  const curSem = getCurrentSemester() || state.semesters[state.semesters.length - 1];
+  const activeCourses = curSem ? (state.courses[curSem.id] || []) : allCourses;
+  openModal('เพิ่มการสอบ', `
     <div class="form-grid">
       <div class="fg full"><label>วิชา <span class="req">*</span></label>
         <select class="glass-select" id="f-eCourse">${activeCourses.map(c => `<option value="${c.id}">${c.code} — ${c.nameTh}</option>`).join('')}</select></div>
@@ -4157,44 +3755,44 @@
       <div class="fg full"><label>บันทึก / Tips สำหรับสอบ</label>
         <textarea class="glass-textarea" id="f-eNotes" rows="2"></textarea></div>
     </div>`,
-        `<button class="btn-glass-primary" id="saveExamBtn">เพิ่มการสอบ</button>`
-      );
-      document.getElementById('saveExamBtn').onclick = async () => {
-        const cid = document.getElementById('f-eCourse').value;
-        const course = allCourses.find(c => c.id === cid);
-        const data = {
-          id: `e_${Date.now()}`, courseId: cid, courseName: course?.code || '',
-          title: document.getElementById('f-eTitle').value,
-          type: document.getElementById('f-eType').value,
-          date: document.getElementById('f-eDate').value,
-          time: document.getElementById('f-eTime').value,
-          room: document.getElementById('f-eRoom').value,
-          maxScore: document.getElementById('f-eScore').value,
-          scope: document.getElementById('f-eScope').value,
-          notes: document.getElementById('f-eNotes').value
-        };
-        if (!data.title || !data.date) { showToast('⚠️ กรอกชื่อสอบและวันสอบ', 'err'); return; }
+    `<button class="btn-glass-primary" id="saveExamBtn">เพิ่มการสอบ</button>`
+  );
+  document.getElementById('saveExamBtn').onclick = async () => {
+    const cid = document.getElementById('f-eCourse').value;
+    const course = allCourses.find(c => c.id === cid);
+    const data = {
+      id: `e_${Date.now()}`, courseId: cid, courseName: course?.code || '',
+      title: document.getElementById('f-eTitle').value,
+      type: document.getElementById('f-eType').value,
+      date: document.getElementById('f-eDate').value,
+      time: document.getElementById('f-eTime').value,
+      room: document.getElementById('f-eRoom').value,
+      maxScore: document.getElementById('f-eScore').value,
+      scope: document.getElementById('f-eScope').value,
+      notes: document.getElementById('f-eNotes').value
+    };
+    if (!data.title || !data.date) { showToast('⚠️ กรอกชื่อสอบและวันสอบ', 'err'); return; }
 
-        const conflictExam = Object.values(state.exams).flat().find(e => e.date === data.date && e.id !== data.id && e.time === data.time);
-        if (conflictExam) {
-          if (!confirm(`⚠️ วันและเวลาสอบนี้ซ้อนกับวิชา ${conflictExam.courseName} (${conflictExam.title}) ยืนยันที่จะบันทึกหรือไม่?`)) return;
-        }
-
-        if (state.calendarSettings) {
-          if (state.calendarSettings.midtermStart && data.date === state.calendarSettings.midtermStart) {
-            showToast('ℹ️ ข้อสังเกต: จัดสอบวันเดียวกับวันเริ่มสอบกลางภาค', 'info');
-          }
-        }
-
-        await fsSet('exams', data.id, data);
-        closeModal(); await loadAll(); showToast('✅ เพิ่มการสอบสำเร็จ');
-        closeModal(); await loadAll(); showToast('✅ เพิ่มการสอบสำเร็จ');
-        startHyperNotifications();
-      };
+    const conflictExam = Object.values(state.exams).flat().find(e => e.date === data.date && e.id !== data.id && e.time === data.time);
+    if (conflictExam) {
+      if (!confirm(`⚠️ วันและเวลาสอบนี้ซ้อนกับวิชา ${conflictExam.courseName} (${conflictExam.title}) ยืนยันที่จะบันทึกหรือไม่?`)) return;
     }
 
-    function openAddClubTaskForm() {
-      openModal('เพิ่มงานชุมนุม', `
+    if (state.calendarSettings) {
+      if (state.calendarSettings.midtermStart && data.date === state.calendarSettings.midtermStart) {
+        showToast('ℹ️ ข้อสังเกต: จัดสอบวันเดียวกับวันเริ่มสอบกลางภาค', 'info');
+      }
+    }
+
+    await fsSet('exams', data.id, data);
+    closeModal(); await loadAll(); showToast('✅ เพิ่มการสอบสำเร็จ');
+    closeModal(); await loadAll(); showToast('✅ เพิ่มการสอบสำเร็จ');
+    startHyperNotifications();
+  };
+}
+
+function openAddClubTaskForm() {
+  openModal('เพิ่มงานชุมนุม', `
     <div class="form-grid">
       <div class="fg full"><label>ชื่องาน <span class="req">*</span></label><input class="glass-input" id="f-ctTitle" placeholder="สิ่งที่ต้องทำ..."></div>
       <div class="fg"><label>หมวดหมู่</label>
@@ -4209,108 +3807,108 @@
       <div class="fg full"><label>มอบหมายให้</label><input class="glass-input" id="f-ctAssign" placeholder="ชื่อคนรับผิดชอบ"></div>
       <div class="fg full"><label>หมายเหตุ</label><textarea class="glass-textarea" id="f-ctNote" rows="2"></textarea></div>
     </div>`,
-        `<button class="btn-glass-primary" id="saveClubTaskBtn">เพิ่มงาน</button>`
-      );
-      document.getElementById('saveClubTaskBtn').onclick = () => {
-        const t = {
-          title: document.getElementById('f-ctTitle').value, cat: document.getElementById('f-ctCat').value,
-          priority: document.getElementById('f-ctPri').value, due: document.getElementById('f-ctDue').value,
-          assignTo: document.getElementById('f-ctAssign').value, note: document.getElementById('f-ctNote').value, done: false
-        };
-        if (!t.title) { showToast('⚠️ กรอกชื่องาน', 'err'); return; }
-        state.clubTasks.push(t);
-        localStorage.setItem('clubTasks', JSON.stringify(state.clubTasks));
-        closeModal(); render(); showToast('✅ เพิ่มงานชุมนุมแล้ว');
-      };
-    }
+    `<button class="btn-glass-primary" id="saveClubTaskBtn">เพิ่มงาน</button>`
+  );
+  document.getElementById('saveClubTaskBtn').onclick = () => {
+    const t = {
+      title: document.getElementById('f-ctTitle').value, cat: document.getElementById('f-ctCat').value,
+      priority: document.getElementById('f-ctPri').value, due: document.getElementById('f-ctDue').value,
+      assignTo: document.getElementById('f-ctAssign').value, note: document.getElementById('f-ctNote').value, done: false
+    };
+    if (!t.title) { showToast('⚠️ กรอกชื่องาน', 'err'); return; }
+    state.clubTasks.push(t);
+    localStorage.setItem('clubTasks', JSON.stringify(state.clubTasks));
+    closeModal(); render(); showToast('✅ เพิ่มงานชุมนุมแล้ว');
+  };
+}
 
-    function updatePomodoroDisplay() {
-      const rem = getPomodoroRemaining();
-      const timeEl = document.querySelector('.pom-ring text:first-of-type');
-      if (timeEl) timeEl.textContent = fmtTime(rem);
-    }
+function updatePomodoroDisplay() {
+  const rem = getPomodoroRemaining();
+  const timeEl = document.querySelector('.pom-ring text:first-of-type');
+  if (timeEl) timeEl.textContent = fmtTime(rem);
+}
 
-    let audioCtx = null, noiseNodes = [];
-    function playWhiteNoise(type) {
-      stopWhiteNoise();
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (type === 'rain') {
-        const bufferSize = 2 * audioCtx.sampleRate, noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate), output = noiseBuffer.getChannelData(0);
-        let lastOut = 0;
-        for (let i = 0; i < bufferSize; i++) { const white = Math.random() * 2 - 1; output[i] = (lastOut + (0.02 * white)) / 1.02; lastOut = output[i]; output[i] *= 3.5; }
-        const node = audioCtx.createBufferSource(); node.buffer = noiseBuffer; node.loop = true;
-        const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 400;
-        const gain = audioCtx.createGain(); gain.gain.value = 0.5;
-        node.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
-        node.start(); noiseNodes.push(node);
-        showToast('🌧 เสียงฝนตก เริ่มแล้ว');
-      } else if (type === 'cafe') {
-        const bufferSize = 2 * audioCtx.sampleRate, noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate), output = noiseBuffer.getChannelData(0);
-        let lastOut = 0;
-        for (let i = 0; i < bufferSize; i++) { const white = Math.random() * 2 - 1; output[i] = (lastOut + (0.02 * white)) / 1.02; lastOut = output[i]; output[i] *= 3.5; }
-        const node = audioCtx.createBufferSource(); node.buffer = noiseBuffer; node.loop = true;
-        const filter1 = audioCtx.createBiquadFilter(); filter1.type = 'lowpass'; filter1.frequency.value = 200;
-        const gain1 = audioCtx.createGain(); gain1.gain.value = 0.3;
-        node.connect(filter1); filter1.connect(gain1); gain1.connect(audioCtx.destination);
-        const filter2 = audioCtx.createBiquadFilter(); filter2.type = 'bandpass'; filter2.frequency.value = 1000; filter2.Q.value = 0.5;
-        const gain2 = audioCtx.createGain(); gain2.gain.value = 0.15;
-        node.connect(filter2); filter2.connect(gain2); gain2.connect(audioCtx.destination);
-        node.start(); noiseNodes.push(node);
-        showToast('☕ เสียงคาเฟ่ เริ่มแล้ว');
-      } else if (type === 'lofi') {
-        [261.63, 329.63, 392.00, 493.88].forEach(freq => {
-          const osc = audioCtx.createOscillator(); osc.type = 'sine'; osc.frequency.value = freq;
-          const gain = audioCtx.createGain(); gain.gain.value = 0.05;
-          const lfo = audioCtx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.1;
-          const lfoGain = audioCtx.createGain(); lfoGain.gain.value = 0.02;
-          lfo.connect(lfoGain); lfoGain.connect(gain.gain);
-          osc.connect(gain); gain.connect(audioCtx.destination);
-          osc.start(); lfo.start(); noiseNodes.push(osc, lfo);
-        });
-        const bufferSize = 2 * audioCtx.sampleRate, noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate), output = noiseBuffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) { output[i] = Math.random() > 0.99 ? Math.random() * 0.5 : 0; }
-        const crackle = audioCtx.createBufferSource(); crackle.buffer = noiseBuffer; crackle.loop = true;
-        const crackleGain = audioCtx.createGain(); crackleGain.gain.value = 0.08;
-        crackle.connect(crackleGain); crackleGain.connect(audioCtx.destination);
-        crackle.start(); noiseNodes.push(crackle);
-        showToast('🎵 เสียงดนตรี Lo-fi เริ่มแล้ว');
-      }
-    }
-    function stopWhiteNoise() {
-      noiseNodes.forEach(n => { try { n.stop(); } catch (e) { } }); noiseNodes = [];
-      if (audioCtx) try { audioCtx.close(); audioCtx = null; } catch (e) { }
-    }
+let audioCtx = null, noiseNodes = [];
+function playWhiteNoise(type) {
+  stopWhiteNoise();
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (type === 'rain') {
+    const bufferSize = 2 * audioCtx.sampleRate, noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate), output = noiseBuffer.getChannelData(0);
+    let lastOut = 0;
+    for (let i = 0; i < bufferSize; i++) { const white = Math.random() * 2 - 1; output[i] = (lastOut + (0.02 * white)) / 1.02; lastOut = output[i]; output[i] *= 3.5; }
+    const node = audioCtx.createBufferSource(); node.buffer = noiseBuffer; node.loop = true;
+    const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 400;
+    const gain = audioCtx.createGain(); gain.gain.value = 0.5;
+    node.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+    node.start(); noiseNodes.push(node);
+    showToast('🌧 เสียงฝนตก เริ่มแล้ว');
+  } else if (type === 'cafe') {
+    const bufferSize = 2 * audioCtx.sampleRate, noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate), output = noiseBuffer.getChannelData(0);
+    let lastOut = 0;
+    for (let i = 0; i < bufferSize; i++) { const white = Math.random() * 2 - 1; output[i] = (lastOut + (0.02 * white)) / 1.02; lastOut = output[i]; output[i] *= 3.5; }
+    const node = audioCtx.createBufferSource(); node.buffer = noiseBuffer; node.loop = true;
+    const filter1 = audioCtx.createBiquadFilter(); filter1.type = 'lowpass'; filter1.frequency.value = 200;
+    const gain1 = audioCtx.createGain(); gain1.gain.value = 0.3;
+    node.connect(filter1); filter1.connect(gain1); gain1.connect(audioCtx.destination);
+    const filter2 = audioCtx.createBiquadFilter(); filter2.type = 'bandpass'; filter2.frequency.value = 1000; filter2.Q.value = 0.5;
+    const gain2 = audioCtx.createGain(); gain2.gain.value = 0.15;
+    node.connect(filter2); filter2.connect(gain2); gain2.connect(audioCtx.destination);
+    node.start(); noiseNodes.push(node);
+    showToast('☕ เสียงคาเฟ่ เริ่มแล้ว');
+  } else if (type === 'lofi') {
+    [261.63, 329.63, 392.00, 493.88].forEach(freq => {
+      const osc = audioCtx.createOscillator(); osc.type = 'sine'; osc.frequency.value = freq;
+      const gain = audioCtx.createGain(); gain.gain.value = 0.05;
+      const lfo = audioCtx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.1;
+      const lfoGain = audioCtx.createGain(); lfoGain.gain.value = 0.02;
+      lfo.connect(lfoGain); lfoGain.connect(gain.gain);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(); lfo.start(); noiseNodes.push(osc, lfo);
+    });
+    const bufferSize = 2 * audioCtx.sampleRate, noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate), output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) { output[i] = Math.random() > 0.99 ? Math.random() * 0.5 : 0; }
+    const crackle = audioCtx.createBufferSource(); crackle.buffer = noiseBuffer; crackle.loop = true;
+    const crackleGain = audioCtx.createGain(); crackleGain.gain.value = 0.08;
+    crackle.connect(crackleGain); crackleGain.connect(audioCtx.destination);
+    crackle.start(); noiseNodes.push(crackle);
+    showToast('🎵 เสียงดนตรี Lo-fi เริ่มแล้ว');
+  }
+}
+function stopWhiteNoise() {
+  noiseNodes.forEach(n => { try { n.stop(); } catch (e) { } }); noiseNodes = [];
+  if (audioCtx) try { audioCtx.close(); audioCtx = null; } catch (e) { }
+}
 
 
 
-    window.renderCourseHubUI_Original = (courseId) => {
-      const allCourses = Object.values(state.courses).flat();
-      const c = allCourses.find(x => x.id === courseId);
-      if (!c) return;
+window.renderCourseHubUI_Original = (courseId) => {
+  const allCourses = Object.values(state.courses).flat();
+  const c = allCourses.find(x => x.id === courseId);
+  if (!c) return;
 
-      const now = new Date();
-      const dayIdx = now.getDay();
-      const h = now.getHours();
-      const m = now.getMinutes();
-      const currentTimeVal = h + (m / 60);
-      const activeSlot = (c.schedules || []).find(s => s.day === dayIdx && currentTimeVal >= s.startHour && currentTimeVal < s.endHour);
-      const timeSinceStartMins = activeSlot ? (currentTimeVal - activeSlot.startHour) * 60 : -1;
-      const attToday = state.attendanceHistory[courseId]?.[now.toISOString().split('T')[0]];
-      const sos = analyzeSOS(courseId);
-      const reflection = state.reflections[courseId] || '';
+  const now = new Date();
+  const dayIdx = now.getDay();
+  const h = now.getHours();
+  const m = now.getMinutes();
+  const currentTimeVal = h + (m / 60);
+  const activeSlot = (c.schedules || []).find(s => s.day === dayIdx && currentTimeVal >= s.startHour && currentTimeVal < s.endHour);
+  const timeSinceStartMins = activeSlot ? (currentTimeVal - activeSlot.startHour) * 60 : -1;
+  const attToday = state.attendanceHistory[courseId]?.[now.toISOString().split('T')[0]];
+  const sos = analyzeSOS(courseId);
+  const reflection = state.reflections[courseId] || '';
 
-      let attUI = '';
-      if (!activeSlot) {
-        attUI = `<div class="glass-warn nb-card" style="text-align:center; padding:20px;">⌛ ยังไม่ถึงเวลาคลาสเรียน</div>`;
-      } else if (attToday) {
-        attUI = `<div class="nb-card" style="background:var(--c-lime); color:white; text-align:center; padding:20px;">✅ เช็คชื่อเรียบร้อย! (${attToday.status})</div>`;
-      } else if (timeSinceStartMins <= 15) {
-        attUI = `<button class="nb-btn-primary full" style="padding:15px;" id="finalCheckinBtn">🚀 ยืนยันการเข้าเรียน (Smart Check-in)</button>`;
-      } else {
-        attUI = `<div class="nb-card" style="padding:15px; border-color:var(--c-rust); text-align:center;">🚨 เลยเวลา 15 นาทีแล้ว! (สาย)</div>`;
-      }
+  let attUI = '';
+  if (!activeSlot) {
+    attUI = `<div class="glass-warn nb-card" style="text-align:center; padding:20px;">⌛ ยังไม่ถึงเวลาคลาสเรียน</div>`;
+  } else if (attToday) {
+    attUI = `<div class="nb-card" style="background:var(--c-lime); color:white; text-align:center; padding:20px;">✅ เช็คชื่อเรียบร้อย! (${attToday.status})</div>`;
+  } else if (timeSinceStartMins <= 15) {
+    attUI = `<button class="nb-btn-primary full" style="padding:15px;" id="finalCheckinBtn">🚀 ยืนยันการเข้าเรียน (Smart Check-in)</button>`;
+  } else {
+    attUI = `<div class="nb-card" style="padding:15px; border-color:var(--c-rust); text-align:center;">🚨 เลยเวลา 15 นาทีแล้ว! (สาย)</div>`;
+  }
 
-      openModal(`Advanced: ${c.code}`, `
+  openModal(`Advanced: ${c.code}`, `
         <div class="form-grid">
           <div class="section-hd">📍 Attendance Control</div>
           ${attUI}
@@ -4326,365 +3924,365 @@
         </div>
       `, `<button class="nb-btn-primary full" id="saveAdvHubBtn">บันทึก & กลับ</button>`);
 
-      const finalBtn = document.getElementById('finalCheckinBtn');
-      if (finalBtn) {
-        finalBtn.onclick = async () => {
-          await setAttendanceStatus(courseId, c.mode === 'onsite' ? 'มาเรียน' : 'มาเรียน (Online)');
-          showToast('✅ เช็คชื่อสำเร็จ!');
-          renderCourseHub(courseId);
-        };
-      }
+  const finalBtn = document.getElementById('finalCheckinBtn');
+  if (finalBtn) {
+    finalBtn.onclick = async () => {
+      await setAttendanceStatus(courseId, c.mode === 'onsite' ? 'มาเรียน' : 'มาเรียน (Online)');
+      showToast('✅ เช็คชื่อสำเร็จ!');
+      renderCourseHub(courseId);
+    };
+  }
 
-      document.getElementById('saveAdvHubBtn').onclick = () => {
-        const val = document.getElementById('reflInput_adv').value;
-        state.reflections[courseId] = val;
-        localStorage.setItem('reflections', JSON.stringify(state.reflections));
-        renderCourseHub(courseId);
-      };
-    }
+  document.getElementById('saveAdvHubBtn').onclick = () => {
+    const val = document.getElementById('reflInput_adv').value;
+    state.reflections[courseId] = val;
+    localStorage.setItem('reflections', JSON.stringify(state.reflections));
+    renderCourseHub(courseId);
+  };
+}
 
-    function startHyperNotifications() {
-      // Sync ทันทีตอนเริ่ม
+function startHyperNotifications() {
+  // Sync ทันทีตอนเริ่ม
+  syncDataToBackend();
+
+  // Sync ทุก 5 นาที เพื่อให้ GAS trigger มีข้อมูลล่าสุด
+  setInterval(function () {
+    if (typeof firebase !== 'undefined' && state.active) {
       syncDataToBackend();
-      
-      // Sync ทุก 5 นาที เพื่อให้ GAS trigger มีข้อมูลล่าสุด
-      setInterval(function() {
-        if (typeof firebase !== 'undefined' && state.active) {
-            syncDataToBackend();
-        }
-      }, 5 * 60 * 1000);
     }
+  }, 5 * 60 * 1000);
+}
 
-    function syncDataToBackend() {
-      // คำนวณ projected GPA
-      let projectedGPA = 0;
-      let totalCredits = 0;
-      let totalPoints = 0;
-      const GRADE_MAP = { 'A':4,'B+':3.5,'B':3,'C+':2.5,'C':2,'D+':1.5,'D':1,'F':0 };
-      
-      Object.values(state.courses || {}).flat().forEach(function(c) {
-        if (c.grade && GRADE_MAP[c.grade] !== undefined) {
-          const cr = parseInt(c.credits) || 3;
-          totalPoints += GRADE_MAP[c.grade] * cr;
-          totalCredits += cr;
-        }
-      });
-      if (totalCredits > 0) projectedGPA = totalPoints / totalCredits;
+function syncDataToBackend() {
+  // คำนวณ projected GPA
+  let projectedGPA = 0;
+  let totalCredits = 0;
+  let totalPoints = 0;
+  const GRADE_MAP = { 'A': 4, 'B+': 3.5, 'B': 3, 'C+': 2.5, 'C': 2, 'D+': 1.5, 'D': 1, 'F': 0 };
 
-      // คำนวณค่าใช้จ่ายวันนี้
-      const todayStr = new Date().toDateString();
-      const todayExp = (state.expenses || [])
-        .filter(function(e) { return new Date(e.date).toDateString() === todayStr; })
-        .reduce(function(sum, e) { return sum + (e.amount || 0); }, 0);
-
-      const payload = {
-        courses: state.courses || {},
-        assignments: state.assignments || {},
-        exams: state.exams || {},
-        projectedGPA: projectedGPA,
-        gpaGoal: parseFloat(state.gpaGoal) || 3.5,
-        dailyExp: todayExp,
-        budget: parseFloat(state.dailyBudget) || 200
-      };
-
-      google.script.run
-        .withFailureHandler(function(e) { console.warn('sync failed:', e); })
-        .syncAcademicData(payload);
+  Object.values(state.courses || {}).flat().forEach(function (c) {
+    if (c.grade && GRADE_MAP[c.grade] !== undefined) {
+      const cr = parseInt(c.credits) || 3;
+      totalPoints += GRADE_MAP[c.grade] * cr;
+      totalCredits += cr;
     }
+  });
+  if (totalCredits > 0) projectedGPA = totalPoints / totalCredits;
 
-    function attachAllEvents() {
-      document.getElementById('saveCalendarBtn')?.addEventListener('click', async () => {
-        const settings = {
-          semesterStart: document.getElementById('cal-start')?.value,
-          withdrawDeadline: document.getElementById('cal-withdraw')?.value,
-          midtermStart: document.getElementById('cal-midterm')?.value,
-          finalStart: document.getElementById('cal-final')?.value
-        };
-        await fsSet('app_settings', 'calendar', settings);
-        state.calendarSettings = settings;
-        showToast('✅ บันทึกปฏิทินแล้ว');
-      });
+  // คำนวณค่าใช้จ่ายวันนี้
+  const todayStr = new Date().toDateString();
+  const todayExp = (state.expenses || [])
+    .filter(function (e) { return new Date(e.date).toDateString() === todayStr; })
+    .reduce(function (sum, e) { return sum + (e.amount || 0); }, 0);
 
-      document.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => {
-        state.view = b.dataset.nav;
-        document.getElementById('fullMenu')?.classList.remove('show');
-        render();
-      });
+  const payload = {
+    courses: state.courses || {},
+    assignments: state.assignments || {},
+    exams: state.exams || {},
+    projectedGPA: projectedGPA,
+    gpaGoal: parseFloat(state.gpaGoal) || 3.5,
+    dailyExp: todayExp,
+    budget: parseFloat(state.dailyBudget) || 200
+  };
 
-      document.getElementById('navMenuBtn')?.addEventListener('click', () => document.getElementById('fullMenu')?.classList.add('show'));
-      document.getElementById('closeMenuBtn')?.addEventListener('click', () => document.getElementById('fullMenu')?.classList.remove('show'));
+  google.script.run
+    .withFailureHandler(function (e) { console.warn('sync failed:', e); })
+    .syncAcademicData(payload);
+}
 
-      document.getElementById('modalX')?.addEventListener('click', closeModal);
-      document.getElementById('modalBd')?.addEventListener('click', e => { if (e.target.id === 'modalBd') closeModal(); });
+function attachAllEvents() {
+  document.getElementById('saveCalendarBtn')?.addEventListener('click', async () => {
+    const settings = {
+      semesterStart: document.getElementById('cal-start')?.value,
+      withdrawDeadline: document.getElementById('cal-withdraw')?.value,
+      midtermStart: document.getElementById('cal-midterm')?.value,
+      finalStart: document.getElementById('cal-final')?.value
+    };
+    await fsSet('app_settings', 'calendar', settings);
+    state.calendarSettings = settings;
+    showToast('✅ บันทึกปฏิทินแล้ว');
+  });
 
-      document.getElementById('darkToggle')?.addEventListener('click', () => {
-        state.darkMode = !state.darkMode; localStorage.setItem('darkMode', state.darkMode);
-        document.documentElement.setAttribute('data-theme', state.darkMode ? 'dark' : 'light'); render();
-      });
+  document.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => {
+    state.view = b.dataset.nav;
+    document.getElementById('fullMenu')?.classList.remove('show');
+    render();
+  });
 
-      let fabOpen = false;
-      document.getElementById('fabBtn')?.addEventListener('click', () => {
-        fabOpen = !fabOpen;
-        document.getElementById('fabMenu')?.classList.toggle('open', fabOpen);
-      });
-      document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => {
-        fabOpen = false; document.getElementById('fabMenu')?.classList.remove('open');
-        if (b.dataset.quick === 'assignment') openAddAssignmentForm();
-        else if (b.dataset.quick === 'exam') openAddExamForm();
-        else if (b.dataset.quick === 'course') { if (state.semesters.length === 0) { showToast('⚠️ เพิ่มเทอมก่อนนะ', 'err'); return; } openAddCourseForm(); }
-        else if (b.dataset.quick === 'club') openAddClubTaskForm();
-      });
+  document.getElementById('navMenuBtn')?.addEventListener('click', () => document.getElementById('fullMenu')?.classList.add('show'));
+  document.getElementById('closeMenuBtn')?.addEventListener('click', () => document.getElementById('fullMenu')?.classList.remove('show'));
 
-      document.getElementById('globalSearch')?.addEventListener('input', e => { state.searchQuery = e.target.value; render(); });
-      document.getElementById('clearSearch')?.addEventListener('click', () => { state.searchQuery = ''; render(); });
+  document.getElementById('modalX')?.addEventListener('click', closeModal);
+  document.getElementById('modalBd')?.addEventListener('click', e => { if (e.target.id === 'modalBd') closeModal(); });
 
-      document.getElementById('addSemBtn')?.addEventListener('click', () => openAddSemesterForm());
-      document.getElementById('importCalBtn')?.addEventListener('click', () => openAddSemesterForm());
-      document.querySelectorAll('[data-edit-sem]').forEach(b => b.onclick = () => { const s = state.semesters.find(x => x.id === b.dataset.editSem); openAddSemesterForm(s); });
-      document.querySelectorAll('[data-del-sem]').forEach(b => b.onclick = async () => { if (confirm('ลบเทอมนี้?')) { await fsDel('semesters', b.dataset.delSem); await loadAll(); showToast('🗑 ลบเทอมแล้ว'); } });
-      document.querySelectorAll('[data-view-sem]').forEach(b => b.onclick = () => { state.selectedSemester = b.dataset.viewSem; state.view = 'courses'; render(); });
+  document.getElementById('darkToggle')?.addEventListener('click', () => {
+    state.darkMode = !state.darkMode; localStorage.setItem('darkMode', state.darkMode);
+    document.documentElement.setAttribute('data-theme', state.darkMode ? 'dark' : 'light'); render();
+  });
 
-      document.getElementById('viewCurrentCourseBtn')?.addEventListener('click', () => { state.courseView = 'current'; render(); });
-      document.getElementById('viewArchiveCourseBtn')?.addEventListener('click', () => { state.courseView = 'archive'; render(); });
-      document.getElementById('courseLocalSearch')?.addEventListener('input', e => {
-        const q = e.target.value.toLowerCase();
-        document.querySelectorAll('.folder-card:not(.add-folder)').forEach(card => {
-          const text = card.textContent.toLowerCase();
-          card.style.display = text.includes(q) ? 'flex' : 'none';
-        });
-      });
-      document.getElementById('semFilterCourse')?.addEventListener('change', e => { state.selectedSemester = e.target.value; render(); });
+  let fabOpen = false;
+  document.getElementById('fabBtn')?.addEventListener('click', () => {
+    fabOpen = !fabOpen;
+    document.getElementById('fabMenu')?.classList.toggle('open', fabOpen);
+  });
+  document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => {
+    fabOpen = false; document.getElementById('fabMenu')?.classList.remove('open');
+    if (b.dataset.quick === 'assignment') openAddAssignmentForm();
+    else if (b.dataset.quick === 'exam') openAddExamForm();
+    else if (b.dataset.quick === 'course') { if (state.semesters.length === 0) { showToast('⚠️ เพิ่มเทอมก่อนนะ', 'err'); return; } openAddCourseForm(); }
+    else if (b.dataset.quick === 'club') openAddClubTaskForm();
+  });
 
-      document.getElementById('schedSemFilter')?.addEventListener('change', e => { state.selectedSemester = e.target.value; render(); });
-      document.getElementById('exportSchedBtn')?.addEventListener('click', async () => {
-        const el = document.getElementById('timetable');
-        if (el && typeof html2canvas !== 'undefined') {
-          showToast('⏳ กำลังประมวลผลรูปภาพ...');
-          const canvas = await html2canvas(el, { backgroundColor: '#1a1a2e', scale: 2 });
-          const link = document.createElement('a');
-          link.download = `Schedule_${Date.now()}.png`;
-          link.href = canvas.toDataURL();
-          link.click();
-          showToast('✅ บันทึกตารางเรียนแล้ว');
-        } else {
-          showToast('❌ ไม่สามารถสร้างรูปได้ (html2canvas not loaded)', 'err');
-        }
-      });
+  document.getElementById('globalSearch')?.addEventListener('input', e => { state.searchQuery = e.target.value; render(); });
+  document.getElementById('clearSearch')?.addEventListener('click', () => { state.searchQuery = ''; render(); });
 
-      document.getElementById('addAssignBtn')?.addEventListener('click', () => { if (Object.values(state.courses).flat().length === 0) { showToast('⚠️ เพิ่มวิชาก่อนนะ', 'err'); return; } openAddAssignmentForm(); });
-      document.querySelectorAll('[data-toggle-assign]').forEach(b => b.onclick = async () => {
-        const id = b.dataset.toggleAssign;
-        const a = Object.values(state.assignments).flat().find(x => x.id === id);
-        if (a) { await fsUpd('assignments', id, { submitted: !a.submitted, status: !a.submitted ? 'ส่งแล้ว' : 'ยังไม่เริ่ม' }); await loadAll(); }
-      });
-      document.querySelectorAll('[data-del-assign]').forEach(b => b.onclick = async () => { if (confirm('ลบงานนี้?')) { await fsDel('assignments', b.dataset.delAssign); await loadAll(); } });
-      document.querySelectorAll('[data-assign-view]').forEach(b => b.onclick = () => { state.assignView = b.dataset.assignView; render(); });
-      document.getElementById('addExamBtn')?.addEventListener('click', () => { if (Object.values(state.courses).flat().length === 0) { showToast('⚠️ เพิ่มวิชาก่อนนะ', 'err'); return; } openAddExamForm(); });
-      document.querySelectorAll('[data-del-exam]').forEach(b => b.onclick = async () => { if (confirm('ลบการสอบนี้?')) { await fsDel('exams', b.dataset.delExam); await loadAll(); } });
+  document.getElementById('addSemBtn')?.addEventListener('click', () => openAddSemesterForm());
+  document.getElementById('importCalBtn')?.addEventListener('click', () => openAddSemesterForm());
+  document.querySelectorAll('[data-edit-sem]').forEach(b => b.onclick = () => { const s = state.semesters.find(x => x.id === b.dataset.editSem); openAddSemesterForm(s); });
+  document.querySelectorAll('[data-del-sem]').forEach(b => b.onclick = async () => { if (confirm('ลบเทอมนี้?')) { await fsDel('semesters', b.dataset.delSem); await loadAll(); showToast('🗑 ลบเทอมแล้ว'); } });
+  document.querySelectorAll('[data-view-sem]').forEach(b => b.onclick = () => { state.selectedSemester = b.dataset.viewSem; state.view = 'courses'; render(); });
 
-      document.getElementById('exportGradeBtn')?.addEventListener('click', exportGradeReport);
-      document.querySelectorAll('.grade-select-inline').forEach(sel => sel.onchange = async () => {
-        await fsUpd('courses', sel.dataset.courseId, { grade: sel.value }); await loadAll();
-      });
+  document.getElementById('viewCurrentCourseBtn')?.addEventListener('click', () => { state.courseView = 'current'; render(); });
+  document.getElementById('viewArchiveCourseBtn')?.addEventListener('click', () => { state.courseView = 'archive'; render(); });
+  document.getElementById('courseLocalSearch')?.addEventListener('input', e => {
+    const q = e.target.value.toLowerCase();
+    document.querySelectorAll('.folder-card:not(.add-folder)').forEach(card => {
+      const text = card.textContent.toLowerCase();
+      card.style.display = text.includes(q) ? 'flex' : 'none';
+    });
+  });
+  document.getElementById('semFilterCourse')?.addEventListener('change', e => { state.selectedSemester = e.target.value; render(); });
 
-      document.getElementById('calcTargetBtn')?.addEventListener('click', () => {
-        const target = parseFloat(document.getElementById('targetGPA')?.value);
-        if (isNaN(target)) return;
-        const res = suggestGradesForTarget(target);
-        const el = document.getElementById('targetResult');
-        if (res.error) el.innerHTML = `<div class="glass-danger" style="font-size:12px; margin-top:8px;">❌ ${res.error}</div>`;
-        else {
-          el.innerHTML = `
+  document.getElementById('schedSemFilter')?.addEventListener('change', e => { state.selectedSemester = e.target.value; render(); });
+  document.getElementById('exportSchedBtn')?.addEventListener('click', async () => {
+    const el = document.getElementById('timetable');
+    if (el && typeof html2canvas !== 'undefined') {
+      showToast('⏳ กำลังประมวลผลรูปภาพ...');
+      const canvas = await html2canvas(el, { backgroundColor: '#1a1a2e', scale: 2 });
+      const link = document.createElement('a');
+      link.download = `Schedule_${Date.now()}.png`;
+      link.href = canvas.toDataURL();
+      link.click();
+      showToast('✅ บันทึกตารางเรียนแล้ว');
+    } else {
+      showToast('❌ ไม่สามารถสร้างรูปได้ (html2canvas not loaded)', 'err');
+    }
+  });
+
+  document.getElementById('addAssignBtn')?.addEventListener('click', () => { if (Object.values(state.courses).flat().length === 0) { showToast('⚠️ เพิ่มวิชาก่อนนะ', 'err'); return; } openAddAssignmentForm(); });
+  document.querySelectorAll('[data-toggle-assign]').forEach(b => b.onclick = async () => {
+    const id = b.dataset.toggleAssign;
+    const a = Object.values(state.assignments).flat().find(x => x.id === id);
+    if (a) { await fsUpd('assignments', id, { submitted: !a.submitted, status: !a.submitted ? 'ส่งแล้ว' : 'ยังไม่เริ่ม' }); await loadAll(); }
+  });
+  document.querySelectorAll('[data-del-assign]').forEach(b => b.onclick = async () => { if (confirm('ลบงานนี้?')) { await fsDel('assignments', b.dataset.delAssign); await loadAll(); } });
+  document.querySelectorAll('[data-assign-view]').forEach(b => b.onclick = () => { state.assignView = b.dataset.assignView; render(); });
+  document.getElementById('addExamBtn')?.addEventListener('click', () => { if (Object.values(state.courses).flat().length === 0) { showToast('⚠️ เพิ่มวิชาก่อนนะ', 'err'); return; } openAddExamForm(); });
+  document.querySelectorAll('[data-del-exam]').forEach(b => b.onclick = async () => { if (confirm('ลบการสอบนี้?')) { await fsDel('exams', b.dataset.delExam); await loadAll(); } });
+
+  document.getElementById('exportGradeBtn')?.addEventListener('click', exportGradeReport);
+  document.querySelectorAll('.grade-select-inline').forEach(sel => sel.onchange = async () => {
+    await fsUpd('courses', sel.dataset.courseId, { grade: sel.value }); await loadAll();
+  });
+
+  document.getElementById('calcTargetBtn')?.addEventListener('click', () => {
+    const target = parseFloat(document.getElementById('targetGPA')?.value);
+    if (isNaN(target)) return;
+    const res = suggestGradesForTarget(target);
+    const el = document.getElementById('targetResult');
+    if (res.error) el.innerHTML = `<div class="glass-danger" style="font-size:12px; margin-top:8px;">❌ ${res.error}</div>`;
+    else {
+      el.innerHTML = `
         <div class="glass-card" style="margin-top:10px; background:rgba(132,204,22,0.05); border-left:4px solid var(--c-lime);">
           <div style="font-size:12px; font-weight:700;">ต้องทำเกรดเฉลี่ยเทอมนี้ให้ได้: <span style="color:var(--c-lime); font-size:16px;">${res.avg}</span></div>
           <div style="font-size:11px; margin-top:6px; opacity:0.8;">
             ${res.suggestion.map(s => `• ${s.code}: อย่างน้อยเกรด <strong>${s.suggest}</strong>`).join('<br>')}
           </div>
         </div>`;
-        }
-      });
-      document.getElementById('simBtn')?.addEventListener('click', () => {
-        const simRows = document.querySelectorAll('.sim-row');
-        const simulated = Array.from(simRows).map(row => ({
-          courseId: row.dataset.cid,
-          grade: row.querySelector('select').value
-        }));
-        const newGPA = calcWhatIf(simulated);
-        const el = document.getElementById('simResult');
-        el.innerHTML = `<div style="font-size:24px; font-weight:800; color:var(--c-accent); text-align:center;">${newGPA}</div>`;
-      });
+    }
+  });
+  document.getElementById('simBtn')?.addEventListener('click', () => {
+    const simRows = document.querySelectorAll('.sim-row');
+    const simulated = Array.from(simRows).map(row => ({
+      courseId: row.dataset.cid,
+      grade: row.querySelector('select').value
+    }));
+    const newGPA = calcWhatIf(simulated);
+    const el = document.getElementById('simResult');
+    el.innerHTML = `<div style="font-size:24px; font-weight:800; color:var(--c-accent); text-align:center;">${newGPA}</div>`;
+  });
 
-      document.getElementById('radioToggleBtn')?.addEventListener('click', () => {
-        if (Radio.isPlaying) {
-          Radio.stopAll();
-        } else {
-          Radio.onPomodoroStart();
-        }
-        render();
-      });
+  document.getElementById('radioToggleBtn')?.addEventListener('click', () => {
+    if (Radio.isPlaying) {
+      Radio.stopAll();
+    } else {
+      Radio.onPomodoroStart();
+    }
+    render();
+  });
 
-      document.getElementById('focusCourseSelect')?.addEventListener('change', e => {
-        state.selectedFocusCourseId = e.target.value;
-      });
-      document.querySelectorAll('.preset-btn').forEach(btn => {
-        btn.onclick = () => {
-          state.pomodoroWork = parseInt(btn.dataset.work);
-          state.pomodoroBreak = parseInt(btn.dataset.break);
-          localStorage.setItem('pomodoroWork', state.pomodoroWork);
-          localStorage.setItem('pomodoroBreak', state.pomodoroBreak);
-          render();
-        };
-      });
-      document.getElementById('focusRainBtn')?.addEventListener('click', () => playWhiteNoise('rain'));
-      document.getElementById('focusCafeBtn')?.addEventListener('click', () => playWhiteNoise('cafe'));
-      document.getElementById('focusStopNoiseBtn')?.addEventListener('click', () => stopWhiteNoise());
-      // Remove old file input logic
+  document.getElementById('focusCourseSelect')?.addEventListener('change', e => {
+    state.selectedFocusCourseId = e.target.value;
+  });
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.onclick = () => {
+      state.pomodoroWork = parseInt(btn.dataset.work);
+      state.pomodoroBreak = parseInt(btn.dataset.break);
+      localStorage.setItem('pomodoroWork', state.pomodoroWork);
+      localStorage.setItem('pomodoroBreak', state.pomodoroBreak);
+      render();
+    };
+  });
+  document.getElementById('focusRainBtn')?.addEventListener('click', () => playWhiteNoise('rain'));
+  document.getElementById('focusCafeBtn')?.addEventListener('click', () => playWhiteNoise('cafe'));
+  document.getElementById('focusStopNoiseBtn')?.addEventListener('click', () => stopWhiteNoise());
+  // Remove old file input logic
 
-      document.getElementById('startImmersiveFocusBtn')?.addEventListener('click', async () => {
-        try {
-          if (document.documentElement.requestFullscreen) {
-            document.documentElement.requestFullscreen().catch(() => console.warn("Fullscreen denied"));
-          }
-        } catch (e) { console.warn("Fullscreen not supported"); }
-        await startPomodoro();
-      });
-      document.getElementById('pausePomBtn')?.addEventListener('click', () => {
-        if (state.pomodoroTimer) {
-          const now = Date.now();
-          state.pomodoroTimeRemaining = Math.max(0, Math.round((state.pomodoroEndTime - now) / 1000));
-          clearInterval(state.pomodoroTimer);
-          state.pomodoroTimer = null;
-          state.pomodoroActive = false;
-          Radio.onPomodoroPause();
-        } else {
-          startPomodoro();
-          if (state.pomodoroPhase === 'work') Radio.onResume();
-        }
-        render();
-      });
-      document.getElementById('stopPomBtn')?.addEventListener('click', () => {
-        if (window.customFocusAudio) { window.customFocusAudio.pause(); window.customFocusAudio = null; }
-        stopPomodoro(true);
-      });
+  document.getElementById('startImmersiveFocusBtn')?.addEventListener('click', async () => {
+    try {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => console.warn("Fullscreen denied"));
+      }
+    } catch (e) { console.warn("Fullscreen not supported"); }
+    await startPomodoro();
+  });
+  document.getElementById('pausePomBtn')?.addEventListener('click', () => {
+    if (state.pomodoroTimer) {
+      const now = Date.now();
+      state.pomodoroTimeRemaining = Math.max(0, Math.round((state.pomodoroEndTime - now) / 1000));
+      clearInterval(state.pomodoroTimer);
+      state.pomodoroTimer = null;
+      state.pomodoroActive = false;
+      Radio.onPomodoroPause();
+    } else {
+      startPomodoro();
+      if (state.pomodoroPhase === 'work') Radio.onResume();
+    }
+    render();
+  });
+  document.getElementById('stopPomBtn')?.addEventListener('click', () => {
+    if (window.customFocusAudio) { window.customFocusAudio.pause(); window.customFocusAudio = null; }
+    stopPomodoro(true);
+  });
 
-      document.getElementById('addClubTaskBtn')?.addEventListener('click', openAddClubTaskForm);
-      document.querySelectorAll('[data-toggle-club]').forEach(b => b.onclick = () => {
-        const idx = parseInt(b.dataset.toggleClub);
-        state.clubTasks[idx].done = !state.clubTasks[idx].done;
-        localStorage.setItem('clubTasks', JSON.stringify(state.clubTasks)); render();
-        if (!state.clubTasks[idx].done && Object.values(state.clubTasks).every(t => t.done)) {
-          triggerConfetti();
-        }
-      });
-      document.querySelectorAll('[data-del-club]').forEach(b => b.onclick = () => {
-        state.clubTasks.splice(parseInt(b.dataset.delClub), 1);
-        localStorage.setItem('clubTasks', JSON.stringify(state.clubTasks)); render();
-      });
-      document.getElementById('restModeBtn')?.addEventListener('click', () => { state.view = 'dashboard'; render(); showToast('😴 พักร่างประธานแล้ว'); });
-      document.getElementById('editBudgetBtn')?.addEventListener('click', () => {
-        const cur = JSON.parse(localStorage.getItem('clubBudget') || '{"in":0,"out":0}');
-        openModal('แก้ไขงบประมาณชุมนุม', `
+  document.getElementById('addClubTaskBtn')?.addEventListener('click', openAddClubTaskForm);
+  document.querySelectorAll('[data-toggle-club]').forEach(b => b.onclick = () => {
+    const idx = parseInt(b.dataset.toggleClub);
+    state.clubTasks[idx].done = !state.clubTasks[idx].done;
+    localStorage.setItem('clubTasks', JSON.stringify(state.clubTasks)); render();
+    if (!state.clubTasks[idx].done && Object.values(state.clubTasks).every(t => t.done)) {
+      triggerConfetti();
+    }
+  });
+  document.querySelectorAll('[data-del-club]').forEach(b => b.onclick = () => {
+    state.clubTasks.splice(parseInt(b.dataset.delClub), 1);
+    localStorage.setItem('clubTasks', JSON.stringify(state.clubTasks)); render();
+  });
+  document.getElementById('restModeBtn')?.addEventListener('click', () => { state.view = 'dashboard'; render(); showToast('😴 พักร่างประธานแล้ว'); });
+  document.getElementById('editBudgetBtn')?.addEventListener('click', () => {
+    const cur = JSON.parse(localStorage.getItem('clubBudget') || '{"in":0,"out":0}');
+    openModal('แก้ไขงบประมาณชุมนุม', `
       <div class="form-grid">
         <div class="fg"><label>รายรับ (฿)</label><input type="number" class="glass-input" id="f-bIn" value="${cur.in}"></div>
         <div class="fg"><label>รายจ่าย (฿)</label><input type="number" class="glass-input" id="f-bOut" value="${cur.out}"></div>
       </div>`,
-          `<button class="btn-glass-primary" id="saveBudgetClubBtn">บันทึก</button>`
-        );
-        document.getElementById('saveBudgetClubBtn').onclick = () => {
-          localStorage.setItem('clubBudget', JSON.stringify({ in: parseFloat(document.getElementById('f-bIn').value) || 0, out: parseFloat(document.getElementById('f-bOut').value) || 0 }));
-          closeModal(); render(); showToast('✅ บันทึกงบแล้ว');
-        };
-      });
+      `<button class="btn-glass-primary" id="saveBudgetClubBtn">บันทึก</button>`
+    );
+    document.getElementById('saveBudgetClubBtn').onclick = () => {
+      localStorage.setItem('clubBudget', JSON.stringify({ in: parseFloat(document.getElementById('f-bIn').value) || 0, out: parseFloat(document.getElementById('f-bOut').value) || 0 }));
+      closeModal(); render(); showToast('✅ บันทึกงบแล้ว');
+    };
+  });
 
-      document.querySelectorAll('[data-mood]').forEach(b => b.onclick = () => {
-        const today = new Date().toISOString().split('T')[0];
-        localStorage.setItem('mood_' + today, b.dataset.mood); render(); showToast('บันทึกอารมณ์แล้ว ' + b.dataset.mood);
-      });
-      document.querySelectorAll('[data-habit]').forEach(b => b.onclick = () => {
-        const today = new Date().toISOString().split('T')[0];
-        const h = JSON.parse(localStorage.getItem('habits_' + today) || '{}');
-        h[b.dataset.habit] = !h[b.dataset.habit];
-        localStorage.setItem('habits_' + today, JSON.stringify(h)); render();
-        if (Object.values(h).filter(Boolean).length === 6) triggerConfetti();
-      });
-      document.getElementById('addExpBtn')?.addEventListener('click', () => {
-        const today = new Date().toISOString().split('T')[0];
-        const desc = document.getElementById('expDesc')?.value;
-        const amt = document.getElementById('expAmt')?.value;
-        if (!desc || !amt) return;
-        const exps = JSON.parse(localStorage.getItem('expenses_' + today) || '[]');
-        exps.push({ desc, amount: parseFloat(amt) });
-        localStorage.setItem('expenses_' + today, JSON.stringify(exps)); render();
-      });
-      document.querySelectorAll('[data-del-exp]').forEach(b => b.onclick = () => {
-        const today = new Date().toISOString().split('T')[0];
-        const exps = JSON.parse(localStorage.getItem('expenses_' + today) || '[]');
-        exps.splice(parseInt(b.dataset.delExp), 1);
-        localStorage.setItem('expenses_' + today, JSON.stringify(exps)); render();
-      });
-      document.getElementById('saveSleepBtn')?.addEventListener('click', () => {
-        const today = new Date().toISOString().split('T')[0];
-        localStorage.setItem('sleep_' + today, document.getElementById('sleepTime')?.value || '');
-        localStorage.setItem('wake_' + today, document.getElementById('wakeTime')?.value || '');
-        showToast('💾 บันทึกการนอนแล้ว');
-      });
-      document.getElementById('saveBrainBtn')?.addEventListener('click', () => { localStorage.setItem('braindump', document.getElementById('brainDump')?.value || ''); showToast('💾 บันทึก Brain Dump แล้ว'); });
-      document.getElementById('saveVisionBtn')?.addEventListener('click', () => { localStorage.setItem('visionboard', document.getElementById('visionBoard')?.value || ''); showToast('💾 บันทึก Vision Board แล้ว'); });
+  document.querySelectorAll('[data-mood]').forEach(b => b.onclick = () => {
+    const today = new Date().toISOString().split('T')[0];
+    localStorage.setItem('mood_' + today, b.dataset.mood); render(); showToast('บันทึกอารมณ์แล้ว ' + b.dataset.mood);
+  });
+  document.querySelectorAll('[data-habit]').forEach(b => b.onclick = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const h = JSON.parse(localStorage.getItem('habits_' + today) || '{}');
+    h[b.dataset.habit] = !h[b.dataset.habit];
+    localStorage.setItem('habits_' + today, JSON.stringify(h)); render();
+    if (Object.values(h).filter(Boolean).length === 6) triggerConfetti();
+  });
+  document.getElementById('addExpBtn')?.addEventListener('click', () => {
+    const today = new Date().toISOString().split('T')[0];
+    const desc = document.getElementById('expDesc')?.value;
+    const amt = document.getElementById('expAmt')?.value;
+    if (!desc || !amt) return;
+    const exps = JSON.parse(localStorage.getItem('expenses_' + today) || '[]');
+    exps.push({ desc, amount: parseFloat(amt) });
+    localStorage.setItem('expenses_' + today, JSON.stringify(exps)); render();
+  });
+  document.querySelectorAll('[data-del-exp]').forEach(b => b.onclick = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const exps = JSON.parse(localStorage.getItem('expenses_' + today) || '[]');
+    exps.splice(parseInt(b.dataset.delExp), 1);
+    localStorage.setItem('expenses_' + today, JSON.stringify(exps)); render();
+  });
+  document.getElementById('saveSleepBtn')?.addEventListener('click', () => {
+    const today = new Date().toISOString().split('T')[0];
+    localStorage.setItem('sleep_' + today, document.getElementById('sleepTime')?.value || '');
+    localStorage.setItem('wake_' + today, document.getElementById('wakeTime')?.value || '');
+    showToast('💾 บันทึกการนอนแล้ว');
+  });
+  document.getElementById('saveBrainBtn')?.addEventListener('click', () => { localStorage.setItem('braindump', document.getElementById('brainDump')?.value || ''); showToast('💾 บันทึก Brain Dump แล้ว'); });
+  document.getElementById('saveVisionBtn')?.addEventListener('click', () => { localStorage.setItem('visionboard', document.getElementById('visionBoard')?.value || ''); showToast('💾 บันทึก Vision Board แล้ว'); });
 
-      document.getElementById('addMusicBtn')?.addEventListener('click', () => {
-        const url = document.getElementById('newMusicUrl').value.trim();
-        if (url && url.includes('dropbox.com')) {
-          const finalUrl = url.replace('dl=0', 'dl=1');
-          state.customMusicUrls.push(finalUrl);
-          localStorage.setItem('custom_music_urls', JSON.stringify(state.customMusicUrls));
-          render();
-          showToast('✅ เพิ่มเพลงเรียบร้อย');
-        } else {
-          showToast('⚠️ กรุณาใช้ลิงก์ Dropbox', 'err');
-        }
-      });
-      window.removeCustomMusic = (idx) => {
-        state.customMusicUrls.splice(idx, 1);
-        localStorage.setItem('custom_music_urls', JSON.stringify(state.customMusicUrls));
+  document.getElementById('addMusicBtn')?.addEventListener('click', () => {
+    const url = document.getElementById('newMusicUrl').value.trim();
+    if (url && url.includes('dropbox.com')) {
+      const finalUrl = url.replace('dl=0', 'dl=1');
+      state.customMusicUrls.push(finalUrl);
+      localStorage.setItem('custom_music_urls', JSON.stringify(state.customMusicUrls));
+      render();
+      showToast('✅ เพิ่มเพลงเรียบร้อย');
+    } else {
+      showToast('⚠️ กรุณาใช้ลิงก์ Dropbox', 'err');
+    }
+  });
+  window.removeCustomMusic = (idx) => {
+    state.customMusicUrls.splice(idx, 1);
+    localStorage.setItem('custom_music_urls', JSON.stringify(state.customMusicUrls));
+    render();
+  };
+
+  document.getElementById('settingDarkMode')?.addEventListener('click', () => { state.darkMode = !state.darkMode; localStorage.setItem('darkMode', state.darkMode); document.documentElement.setAttribute('data-theme', state.darkMode ? 'dark' : 'light'); render(); });
+
+  document.getElementById('saveBudgetBtn')?.addEventListener('click', () => { localStorage.setItem('daily_budget', document.getElementById('dailyBudgetInput')?.value || 200); showToast('✅ บันทึกงบรายวันแล้ว'); });
+  document.getElementById('savePinBtn')?.addEventListener('click', async () => {
+    const pin = document.getElementById('pinInput')?.value;
+    if (pin && pin.length === 6) {
+      const hashed = await hashPIN(pin);
+      setDoc(doc(db, 'app_settings', 'security'), { global_pin: hashed }).then(() => {
+        state.pin = hashed;
+        showToast('🔒 ตั้งรหัส PIN (Hashed) สำเร็จแล้ว');
         render();
-      };
-
-      document.getElementById('settingDarkMode')?.addEventListener('click', () => { state.darkMode = !state.darkMode; localStorage.setItem('darkMode', state.darkMode); document.documentElement.setAttribute('data-theme', state.darkMode ? 'dark' : 'light'); render(); });
-
-      document.getElementById('saveBudgetBtn')?.addEventListener('click', () => { localStorage.setItem('daily_budget', document.getElementById('dailyBudgetInput')?.value || 200); showToast('✅ บันทึกงบรายวันแล้ว'); });
-      document.getElementById('savePinBtn')?.addEventListener('click', async () => {
-        const pin = document.getElementById('pinInput')?.value;
-        if (pin && pin.length === 6) {
-          const hashed = await hashPIN(pin);
-          setDoc(doc(db, 'app_settings', 'security'), { global_pin: hashed }).then(() => {
-            state.pin = hashed;
-            showToast('🔒 ตั้งรหัส PIN (Hashed) สำเร็จแล้ว');
-            render();
-          });
-        } else {
-          showToast('⚠️ กรุณากรอกรหัส PIN ให้ครบ 6 หลัก', 'err');
-        }
       });
-      document.getElementById('removePinBtn')?.addEventListener('click', () => {
-        if (confirm('ต้องการยกเลิกรหัส PIN ใช่หรือไม่?')) {
-          setDoc(doc(db, 'app_settings', 'security'), { global_pin: null }).then(() => {
-            state.pin = null;
-            state.isLocked = false;
-            showToast('🔓 ยกเลิกรหัส PIN แล้ว');
-            render();
-          });
-        }
+    } else {
+      showToast('⚠️ กรุณากรอกรหัส PIN ให้ครบ 6 หลัก', 'err');
+    }
+  });
+  document.getElementById('removePinBtn')?.addEventListener('click', () => {
+    if (confirm('ต้องการยกเลิกรหัส PIN ใช่หรือไม่?')) {
+      setDoc(doc(db, 'app_settings', 'security'), { global_pin: null }).then(() => {
+        state.pin = null;
+        state.isLocked = false;
+        showToast('🔓 ยกเลิกรหัส PIN แล้ว');
+        render();
       });
-      document.getElementById('exportAllBtn')?.addEventListener('click', () => {
-        const data = { semesters: state.semesters, courses: state.courses, assignments: state.assignments, exams: state.exams };
-        const b = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `nitipat_backup_${Date.now()}.json`; a.click();
-      });
-      document.getElementById('clearCacheBtn')?.addEventListener('click', () => { if (confirm('ล้าง local cache? (ข้อมูล Firebase ยังอยู่)')) localStorage.clear(); showToast('🗑 ล้าง cache แล้ว'); });
+    }
+  });
+  document.getElementById('exportAllBtn')?.addEventListener('click', () => {
+    const data = { semesters: state.semesters, courses: state.courses, assignments: state.assignments, exams: state.exams };
+    const b = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `nitipat_backup_${Date.now()}.json`; a.click();
+  });
+  document.getElementById('clearCacheBtn')?.addEventListener('click', () => { if (confirm('ล้าง local cache? (ข้อมูล Firebase ยังอยู่)')) localStorage.clear(); showToast('🗑 ล้าง cache แล้ว'); });
 
-      // Panic Button
-      document.getElementById('panicBtn')?.addEventListener('click', () => {
-        openModal('🆘 Panic Button', `
+  // Panic Button
+  document.getElementById('panicBtn')?.addEventListener('click', () => {
+    openModal('🆘 Panic Button', `
       <div class="panic-screen">
         <div class="panic-icon">💙</div>
         <div class="panic-msg">หายใจเข้าลึกๆ คุณผ่านมาถึงตรงนี้ได้แล้ว<br>นั่นแปลว่าคุณแข็งแกร่งกว่าที่คิด</div>
@@ -4695,119 +4293,119 @@
         </div>
         <div class="panic-quote">"${getTodayQuote()}"</div>
       </div>`
-        );
-      });
+    );
+  });
 
-      // Club & Rest Mode Listeners
-      document.getElementById('addClubTaskBtn')?.addEventListener('click', openAddClubTaskForm);
-      document.querySelectorAll('[data-toggle-club]').forEach(b => b.onclick = () => {
-        const idx = parseInt(b.dataset.toggleClub);
-        state.clubTasks[idx].done = !state.clubTasks[idx].done;
-        localStorage.setItem('clubTasks', JSON.stringify(state.clubTasks)); render();
-        if (!state.clubTasks[idx].done && Object.values(state.clubTasks).every(t => t.done)) triggerConfetti();
-      });
-      document.querySelectorAll('[data-del-club]').forEach(b => b.onclick = () => {
-        state.clubTasks.splice(parseInt(b.dataset.delClub), 1);
-        localStorage.setItem('clubTasks', JSON.stringify(state.clubTasks)); render();
-      });
-      document.getElementById('restModeBtn')?.addEventListener('click', () => { state.view = 'dashboard'; render(); showToast('😴 พักร่างประธานแล้ว'); });
-      document.getElementById('editBudgetBtn')?.addEventListener('click', () => {
-        const cur = JSON.parse(localStorage.getItem('clubBudget') || '{"in":0,"out":0}');
-        openModal('แก้ไขงบประมาณชุมนุม', `
+  // Club & Rest Mode Listeners
+  document.getElementById('addClubTaskBtn')?.addEventListener('click', openAddClubTaskForm);
+  document.querySelectorAll('[data-toggle-club]').forEach(b => b.onclick = () => {
+    const idx = parseInt(b.dataset.toggleClub);
+    state.clubTasks[idx].done = !state.clubTasks[idx].done;
+    localStorage.setItem('clubTasks', JSON.stringify(state.clubTasks)); render();
+    if (!state.clubTasks[idx].done && Object.values(state.clubTasks).every(t => t.done)) triggerConfetti();
+  });
+  document.querySelectorAll('[data-del-club]').forEach(b => b.onclick = () => {
+    state.clubTasks.splice(parseInt(b.dataset.delClub), 1);
+    localStorage.setItem('clubTasks', JSON.stringify(state.clubTasks)); render();
+  });
+  document.getElementById('restModeBtn')?.addEventListener('click', () => { state.view = 'dashboard'; render(); showToast('😴 พักร่างประธานแล้ว'); });
+  document.getElementById('editBudgetBtn')?.addEventListener('click', () => {
+    const cur = JSON.parse(localStorage.getItem('clubBudget') || '{"in":0,"out":0}');
+    openModal('แก้ไขงบประมาณชุมนุม', `
           <div class="form-grid">
             <div class="fg"><label>รายรับ (฿)</label><input type="number" class="glass-input" id="f-bIn" value="${cur.in}"></div>
             <div class="fg"><label>รายจ่าย (฿)</label><input type="number" class="glass-input" id="f-bOut" value="${cur.out}"></div>
           </div>`,
-          `<button class="btn-glass-primary" id="saveBudgetClubBtn">บันทึก</button>`
-        );
-        document.getElementById('saveBudgetClubBtn').onclick = () => {
-          localStorage.setItem('clubBudget', JSON.stringify({ in: parseFloat(document.getElementById('f-bIn').value) || 0, out: parseFloat(document.getElementById('f-bOut').value) || 0 }));
-          closeModal(); render(); showToast('✅ บันทึกงบแล้ว');
-        };
-      });
+      `<button class="btn-glass-primary" id="saveBudgetClubBtn">บันทึก</button>`
+    );
+    document.getElementById('saveBudgetClubBtn').onclick = () => {
+      localStorage.setItem('clubBudget', JSON.stringify({ in: parseFloat(document.getElementById('f-bIn').value) || 0, out: parseFloat(document.getElementById('f-bOut').value) || 0 }));
+      closeModal(); render(); showToast('✅ บันทึกงบแล้ว');
+    };
+  });
 
-      document.getElementById('saveNtfyBtn')?.addEventListener('click', function() {
-        const topic = (document.getElementById('ntfy-topic-input')?.value || '').trim();
-        if (!topic) { showToast('⚠️ ใส่ชื่อ topic ก่อนนะ', 'err'); return; }
-        
-        const statusEl = document.getElementById('ntfy-status');
-        if (statusEl) statusEl.textContent = '⏳ กำลังบันทึก...';
-        
-        state.ntfyTopic = topic;
-        localStorage.setItem('ntfyTopic', topic);
-        
-        google.script.run
-          .withSuccessHandler(function() {
-            if (statusEl) statusEl.textContent = '✅ บันทึกแล้ว — เช็คมือถือดูนะ!';
-            showToast('✅ บันทึก ntfy topic แล้ว');
-          })
-          .withFailureHandler(function(err) {
-            if (statusEl) statusEl.textContent = '❌ บันทึกไม่สำเร็จ: ' + err;
-            showToast('❌ บันทึกไม่สำเร็จ', 'err');
-          })
-          .saveNtfyTopic(topic);
-      });
-    }
+  document.getElementById('saveNtfyBtn')?.addEventListener('click', function () {
+    const topic = (document.getElementById('ntfy-topic-input')?.value || '').trim();
+    if (!topic) { showToast('⚠️ ใส่ชื่อ topic ก่อนนะ', 'err'); return; }
 
-    function renderCourseHub(courseId) {
-      state.activeCourseId = courseId;
-      state.view = 'course-hub';
-      state.activeHubTab = 'Files';
-      state.folderPath = [];
-      state.currentFolderId = null;
-      render();
+    const statusEl = document.getElementById('ntfy-status');
+    if (statusEl) statusEl.textContent = '⏳ กำลังบันทึก...';
 
-      const c = findCourseById(courseId);
-      if (c && c.driveId) {
-        refreshDriveFiles(courseId, c.driveId);
-      }
-    }
-    // ══════════════════════════════════════════════════
-    // CONFETTI
-    // ══════════════════════════════════════════════════
-    function triggerConfetti() {
-      for (let i = 0; i < 60; i++) {
-        const el = document.createElement('div');
-        el.className = 'confetti-piece';
-        el.style.cssText = `left:${Math.random() * 100}vw;background:hsl(${Math.random() * 360},90%,60%);animation-duration:${0.8 + Math.random()}s;animation-delay:${Math.random() * 0.5}s;`;
-        document.body.appendChild(el);
-        setTimeout(() => el.remove(), 2000);
-      }
-    }
+    state.ntfyTopic = topic;
+    localStorage.setItem('ntfyTopic', topic);
+
+    google.script.run
+      .withSuccessHandler(function () {
+        if (statusEl) statusEl.textContent = '✅ บันทึกแล้ว — เช็คมือถือดูนะ!';
+        showToast('✅ บันทึก ntfy topic แล้ว');
+      })
+      .withFailureHandler(function (err) {
+        if (statusEl) statusEl.textContent = '❌ บันทึกไม่สำเร็จ: ' + err;
+        showToast('❌ บันทึกไม่สำเร็จ', 'err');
+      })
+      .saveNtfyTopic(topic);
+  });
+}
+
+function renderCourseHub(courseId) {
+  state.activeCourseId = courseId;
+  state.view = 'course-hub';
+  state.activeHubTab = 'Files';
+  state.folderPath = [];
+  state.currentFolderId = null;
+  render();
+
+  const c = findCourseById(courseId);
+  if (c && c.driveId) {
+    refreshDriveFiles(courseId, c.driveId);
+  }
+}
+// ══════════════════════════════════════════════════
+// CONFETTI
+// ══════════════════════════════════════════════════
+function triggerConfetti() {
+  for (let i = 0; i < 60; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti-piece';
+    el.style.cssText = `left:${Math.random() * 100}vw;background:hsl(${Math.random() * 360},90%,60%);animation-duration:${0.8 + Math.random()}s;animation-delay:${Math.random() * 0.5}s;`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 2000);
+  }
+}
 
 
 
-    // Course Hub functions have been moved up and integrated with the hierarchical system.
+// Course Hub functions have been moved up and integrated with the hierarchical system.
 
-    async function setAttendanceStatus(courseId, status, skipGPS = false) {
-      const c = findCourseById(courseId);
-      let distMeters = null;
+async function setAttendanceStatus(courseId, status, skipGPS = false) {
+  const c = findCourseById(courseId);
+  let distMeters = null;
 
-      const recordAttendance = async (finalStatus) => {
-        const now = new Date();
-        const dateKey = now.toLocaleDateString('en-CA');
-        state.attendanceHistory[courseId] = state.attendanceHistory[courseId] || {};
-        state.attendanceHistory[courseId][dateKey] = { status: finalStatus, timestamp: now.toISOString(), distanceMeters: distMeters };
-        localStorage.setItem('attendance_history', JSON.stringify(state.attendanceHistory));
-        showToast(`✅ บันทึกสถานะ [${finalStatus}] แล้ว`);
-        render();
-        try {
-          await fsSet('attendance_history', courseId, { history: state.attendanceHistory[courseId] });
-        } catch (e) { console.warn("Firebase att sync failed", e); }
-      };
+  const recordAttendance = async (finalStatus) => {
+    const now = new Date();
+    const dateKey = now.toLocaleDateString('en-CA');
+    state.attendanceHistory[courseId] = state.attendanceHistory[courseId] || {};
+    state.attendanceHistory[courseId][dateKey] = { status: finalStatus, timestamp: now.toISOString(), distanceMeters: distMeters };
+    localStorage.setItem('attendance_history', JSON.stringify(state.attendanceHistory));
+    showToast(`✅ บันทึกสถานะ [${finalStatus}] แล้ว`);
+    render();
+    try {
+      await fsSet('attendance_history', courseId, { history: state.attendanceHistory[courseId] });
+    } catch (e) { console.warn("Firebase att sync failed", e); }
+  };
 
-      if (c?.targetCoords && !skipGPS && status !== 'ขาดเรียน') {
-        try {
-          showToast('📍 กำลังตรวจสอบตำแหน่ง GPS...');
-          const pos = await new Promise((res, rej) =>
-            navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000 })
-          );
-          const [tLat, tLon] = c.targetCoords.split(',').map(Number);
-          const dist = getDistance(pos.coords.latitude, pos.coords.longitude, tLat, tLon);
-          distMeters = Math.round(dist * 1000);
+  if (c?.targetCoords && !skipGPS && status !== 'ขาดเรียน') {
+    try {
+      showToast('📍 กำลังตรวจสอบตำแหน่ง GPS...');
+      const pos = await new Promise((res, rej) =>
+        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000 })
+      );
+      const [tLat, tLon] = c.targetCoords.split(',').map(Number);
+      const dist = getDistance(pos.coords.latitude, pos.coords.longitude, tLat, tLon);
+      distMeters = Math.round(dist * 1000);
 
-          if (dist > 0.2) { // 200 เมตร
-            openModal('📍 อยู่นอกพื้นที่ห้องเรียน', `
+      if (dist > 0.2) { // 200 เมตร
+        openModal('📍 อยู่นอกพื้นที่ห้องเรียน', `
               <div style="text-align:center; padding:10px;">
                 <p>คุณอยู่ห่างจากห้องเรียน <strong>${distMeters} เมตร</strong></p>
                 <p>กรุณาระบุเหตุผลการเช็คอิน:</p>
@@ -4819,10 +4417,10 @@
                 </div>
               </div>
             `);
-            return;
-          }
-        } catch (err) {
-          openModal('⚠️ ไม่สามารถเข้าถึง GPS ได้', `
+        return;
+      }
+    } catch (err) {
+      openModal('⚠️ ไม่สามารถเข้าถึง GPS ได้', `
               <div style="text-align:center; padding:10px;">
                 <p>ระบบไม่สามารถตรวจสอบพิกัดได้ (${err.message})</p>
                 <p>กรุณาระบุเหตุผลการเช็คอิน:</p>
@@ -4834,314 +4432,331 @@
                 </div>
               </div>
             `);
-          return;
-        }
-      }
+      return;
+    }
+  }
 
-      await recordAttendance(status);
+  await recordAttendance(status);
+}
+
+function promptAbsenceReason(courseId) {
+  const reason = prompt("กรุณาระบุเหตุผลที่ขาดเรียน (เช่น เจ็บป่วย, ลากิจ, อื่นๆ):");
+  if (reason === null) return;
+  const status = reason.trim() === "" ? "ขาดเรียน" : `ขาดเรียน (${reason.trim()})`;
+  setAttendanceStatus(courseId, status, true);
+}
+
+// ══════════════════════════════════════════════════
+// EXPOSE TO WINDOW (Fix for iOS/Safari & Module Scoping)
+// ══════════════════════════════════════════════════
+window.render = render;
+window.addTopic = addTopic;
+window.setTopicLevel = setTopicLevel;
+window.deleteTopic = deleteTopic;
+window.setAttendanceStatus = setAttendanceStatus;
+window.promptAbsenceReason = promptAbsenceReason;
+window.renderCourseHub = renderCourseHub;
+window.showIDCardModal = showIDCardModal;
+window.closeModal = closeModal;
+window.setupGradeStructure = setupGradeStructure;
+window.openModal = openModal;
+window.openAddSemesterForm = openAddSemesterForm;
+window.openAddCourseForm = openAddCourseForm;
+window.openAddAssignmentForm = openAddAssignmentForm;
+window.openAddExamForm = openAddExamForm;
+window.triggerConfetti = triggerConfetti;
+window.refreshDriveFiles = refreshDriveFiles;
+window.handleFileUpload = handleFileUpload;
+window.initAttendanceMap = initAttendanceMap;
+window.state = state;
+window.Radio = Radio;
+
+// Mini-drive exports
+window.previewFile = previewFile;
+window.toggleItemSelection = toggleItemSelection;
+window.automateDriveFolder = automateDriveFolder;
+window.navigateToFolder = navigateToFolder;
+window.shareSelectedItems = shareSelectedItems;
+window.printSelectedItems = printSelectedItems;
+window.renameSelectedItem = renameSelectedItem;
+window.deleteSelectedItems = deleteSelectedItems;
+window.handleCreateFolder = handleCreateFolder;
+window.addCourseLink = addCourseLink;
+window.removeCourseLink = removeCourseLink;
+window.deleteCourse = deleteCourse;
+window.saveCourseSettings = async function(id) {
+  const form = document.getElementById('courseHubForm');
+  if(!form) return;
+  const updates = {
+    'hubConfig.structure': form.querySelector('#f-hubStructure')?.value || '',
+    'hubConfig.understanding': form.querySelector('#f-hubUnderstanding')?.value || '',
+    'hubConfig.score': form.querySelector('#f-hubScore')?.value || '',
+    'hubConfig.notes': form.querySelector('#f-hubNotes')?.value || ''
+  };
+  try {
+    await updateDoc(doc(db, 'courses', id), updates);
+    showToast('✅ บันทึกข้อมูลวิชาเรียบร้อย');
+    await loadAll();
+  } catch(e) {
+    console.error(e);
+    showToast('❌ บันทึกไม่สำเร็จ', 'err');
+  }
+};
+async function hashPIN(pin) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pin);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+window.updateSetColor = updateSetColor;
+
+window.addEventListener('DOMContentLoaded', async () => {
+  try {
+    document.documentElement.setAttribute('data-theme', state.darkMode ? 'dark' : 'light');
+    loadFromLocalStorage();
+    render();
+    // loadAll() and startHyperNotifications() are now called by startApp() once ready
+
+    if (typeof Radio !== 'undefined') {
+      Radio.init();
     }
 
-    function promptAbsenceReason(courseId) {
-      const reason = prompt("กรุณาระบุเหตุผลที่ขาดเรียน (เช่น เจ็บป่วย, ลากิจ, อื่นๆ):");
-      if (reason === null) return;
-      const status = reason.trim() === "" ? "ขาดเรียน" : `ขาดเรียน (${reason.trim()})`;
-      setAttendanceStatus(courseId, status, true);
-    }
+    setInterval(() => { if (!state.modal) render(); }, 30000);
+  } catch (e) {
+    console.error("Initialization failed:", e);
+    render();
+  }
+});
 
-    // ══════════════════════════════════════════════════
-    // EXPOSE TO WINDOW (Fix for iOS/Safari & Module Scoping)
-    // ══════════════════════════════════════════════════
-    window.render = render;
-    window.addTopic = addTopic;
-    window.setTopicLevel = setTopicLevel;
-    window.deleteTopic = deleteTopic;
-    window.setAttendanceStatus = setAttendanceStatus;
-    window.promptAbsenceReason = promptAbsenceReason;
-    window.renderCourseHub = renderCourseHub;
-    window.showIDCardModal = showIDCardModal;
-    window.closeModal = closeModal;
-    window.setupGradeStructure = setupGradeStructure;
-    window.openModal = openModal;
-    window.openAddSemesterForm = openAddSemesterForm;
-    window.openAddCourseForm = openAddCourseForm;
-    window.openAddAssignmentForm = openAddAssignmentForm;
-    window.openAddExamForm = openAddExamForm;
-    window.triggerConfetti = triggerConfetti;
-    window.refreshDriveFiles = refreshDriveFiles;
-    window.handleFileUpload = handleFileUpload;
-    window.initAttendanceMap = initAttendanceMap;
-    window.state = state;
-    window.Radio = Radio;
+// Page Visibility API — kill tree if unfocused during pomodoro
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && state.pomodoroActive && state.pomodoroPhase === 'work') {
+    state.tree.alive = false;
+    localStorage.setItem('focusTree', JSON.stringify(state.tree));
+    showToast('🪨 ต้นไม้ตายแล้ว! อย่าออกจากหน้าจอระหว่างโฟกัส', 'err');
+  }
+});
+/**
+ * SMART COURSE HUB: DRIVE EXPLORER
+ */
+async function refreshDriveFiles(courseId, folderId, force = false) {
+  if (!folderId) return;
+  state.courseFilesCache = state.courseFilesCache || {};
 
-    // Mini-drive exports
-    window.previewFile = previewFile;
-    window.toggleItemSelection = toggleItemSelection;
-    window.automateDriveFolder = automateDriveFolder;
-    window.navigateToFolder = navigateToFolder;
-    window.shareSelectedItems = shareSelectedItems;
-    window.printSelectedItems = printSelectedItems;
-    window.renameSelectedItem = renameSelectedItem;
-    window.deleteSelectedItems = deleteSelectedItems;
-    window.handleCreateFolder = handleCreateFolder;
-    window.addCourseLink = addCourseLink;
-    window.removeCourseLink = removeCourseLink;
-    window.deleteCourse = deleteCourse;
-    window.saveCourseSettings = saveCourseSettings;
-    async function hashPIN(pin) {
-      const encoder = new TextEncoder();
-      const data = encoder.encode(pin);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    }
-
-    window.updateSetColor = updateSetColor;
-
-    window.addEventListener('DOMContentLoaded', async () => {
-      try {
-        document.documentElement.setAttribute('data-theme', state.darkMode ? 'dark' : 'light');
-        loadFromLocalStorage();
-        render();
-        // loadAll() and startHyperNotifications() are now called by startApp() once ready
-        
-        if (typeof Radio !== 'undefined') {
-          Radio.init();
-        }
-
-        setInterval(() => { if (!state.modal) render(); }, 30000); 
-      } catch (e) {
-        console.error("Initialization failed:", e);
-        render();
-      }
-    });
-
-    // Page Visibility API — kill tree if unfocused during pomodoro
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden && state.pomodoroActive && state.pomodoroPhase === 'work') {
-        state.tree.alive = false;
-        localStorage.setItem('focusTree', JSON.stringify(state.tree));
-        showToast('🪨 ต้นไม้ตายแล้ว! อย่าออกจากหน้าจอระหว่างโฟกัส', 'err');
-      }
-    });
-    /**
-     * SMART COURSE HUB: DRIVE EXPLORER
-     */
-    async function refreshDriveFiles(courseId, folderId, force = false) {
-      if (!folderId) return;
-      state.courseFilesCache = state.courseFilesCache || {};
-
-      if (!force && state.courseFilesCache[folderId]) {
-        if (Date.now() - state.courseFilesCache[folderId].ts < 30000) {
-          state.courseFiles = state.courseFiles || {};
-          state.courseFiles[folderId] = state.courseFilesCache[folderId].data;
-          refreshExplorerOnly(courseId);
-          return;
-        }
-      }
-
+  if (!force && state.courseFilesCache[folderId]) {
+    if (Date.now() - state.courseFilesCache[folderId].ts < 30000) {
       state.courseFiles = state.courseFiles || {};
-      const prevData = state.courseFiles[folderId];
-      state.courseFiles[folderId] = null;
-      state.selectedItems.clear();
+      state.courseFiles[folderId] = state.courseFilesCache[folderId].data;
       refreshExplorerOnly(courseId);
+      return;
+    }
+  }
 
-      let timeoutId;
-      const timeoutPromise = new Promise((_, rej) => {
-        timeoutId = setTimeout(() => rej(new Error('เซิร์ฟเวอร์ตอบกลับช้าเกินไป (Timeout)')), 15000);
-      });
+  state.courseFiles = state.courseFiles || {};
+  const prevData = state.courseFiles[folderId];
+  state.courseFiles[folderId] = null;
+  state.selectedItems.clear();
+  refreshExplorerOnly(courseId);
 
-      const fetchPromise = new Promise((res, rej) => {
-        google.script.run
-          .withSuccessHandler(response => {
-            clearTimeout(timeoutId);
-            if (response.success) res(response);
-            else rej(new Error(response.error || 'โหลดไฟล์ไม่สำเร็จ'));
-          })
-          .withFailureHandler(err => {
-            clearTimeout(timeoutId);
-            rej(err);
-          })
-          .listFilesInFolder(folderId);
-      });
+  let timeoutId;
+  const timeoutPromise = new Promise((_, rej) => {
+    timeoutId = setTimeout(() => rej(new Error('เซิร์ฟเวอร์ตอบกลับช้าเกินไป (Timeout)')), 15000);
+  });
 
-      try {
-        const res = await Promise.race([fetchPromise, timeoutPromise]);
-        state.courseFilesCache[folderId] = { data: res.data, ts: Date.now() };
-        state.courseFiles[folderId] = res.data;
-        refreshExplorerOnly(courseId);
-      } catch (err) {
-        state.courseFiles[folderId] = prevData;
-        const exp = document.getElementById('driveExplorer');
-        if (exp) {
-          exp.innerHTML = `
+  const fetchPromise = new Promise((res, rej) => {
+    google.script.run
+      .withSuccessHandler(response => {
+        clearTimeout(timeoutId);
+        if (response.success) res(response);
+        else rej(new Error(response.error || 'โหลดไฟล์ไม่สำเร็จ'));
+      })
+      .withFailureHandler(err => {
+        clearTimeout(timeoutId);
+        rej(err);
+      })
+      .listFilesInFolder(folderId);
+  });
+
+  try {
+    const res = await Promise.race([fetchPromise, timeoutPromise]);
+    state.courseFilesCache[folderId] = { data: res.data, ts: Date.now() };
+    state.courseFiles[folderId] = res.data;
+    refreshExplorerOnly(courseId);
+  } catch (err) {
+    state.courseFiles[folderId] = prevData;
+    const exp = document.getElementById('driveExplorer');
+    if (exp) {
+      exp.innerHTML = `
             <div style="text-align:center; padding:40px;">
               <div style="font-size:40px; margin-bottom:10px;">⚠️</div>
               <p style="color:var(--c-rust); margin-bottom:15px;">โหลดไฟล์ไม่สำเร็จ (${err.message})</p>
               <button class="nb-btn sm" onclick="refreshDriveFiles('${courseId}', '${folderId}', true)">🔄 ลองใหม่</button>
             </div>
           `;
-        }
-      }
     }
+  }
+}
 
-    async function handleFileUpload(courseId, folderId) {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.multiple = true;
-      input.onchange = async e => {
-        const files = Array.from(e.target.files);
-        if (files.length === 0) return;
+async function handleFileUpload(courseId, folderId) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.multiple = true;
+  input.onchange = async e => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
 
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i];
-          if (file.size > 5 * 1024 * 1024) {
-            showToast(`⚠️ ไฟล์ ${file.name} ใหญ่เกิน 5MB ระบบไม่รองรับ (ข้าม)`, 'err');
-            continue;
-          }
-          await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = async () => {
-              showToast(`📤 อัปโหลด (${i + 1}/${files.length}): ${file.name}...`);
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.size > 5 * 1024 * 1024) {
+        showToast(`⚠️ ไฟล์ ${file.name} ใหญ่เกิน 5MB ระบบไม่รองรับ (ข้าม)`, 'err');
+        continue;
+      }
+      await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = async () => {
+          showToast(`📤 อัปโหลด (${i + 1}/${files.length}): ${file.name}...`);
 
-              let timeoutId;
-              const timeoutPromise = new Promise((_, rej) => {
-                timeoutId = setTimeout(() => rej(new Error('Timeout 30s')), 30000);
-              });
-
-              const uploadPromise = new Promise((res, rej) => {
-                google.script.run
-                  .withSuccessHandler(response => {
-                    clearTimeout(timeoutId);
-                    if (response.success) { showToast(`✅ ${file.name} สำเร็จ!`); res(); }
-                    else rej(new Error(response.error || 'ล้มเหลว'));
-                  })
-                  .withFailureHandler(err => { clearTimeout(timeoutId); rej(err); })
-                  .uploadFileToDrive(reader.result, file.name, folderId);
-              });
-
-              try {
-                await Promise.race([uploadPromise, timeoutPromise]);
-              } catch (err) {
-                showToast(`❌ ${file.name} ล้มเหลว: ${err.message}`, 'err');
-              }
-              resolve();
-            };
-            reader.readAsDataURL(file);
+          let timeoutId;
+          const timeoutPromise = new Promise((_, rej) => {
+            timeoutId = setTimeout(() => rej(new Error('Timeout 30s')), 30000);
           });
-        }
 
-        if (state.courseFilesCache && state.courseFilesCache[folderId]) delete state.courseFilesCache[folderId];
-        refreshDriveFiles(courseId, folderId, true);
-      };
-      input.click();
+          const uploadPromise = new Promise((res, rej) => {
+            google.script.run
+              .withSuccessHandler(response => {
+                clearTimeout(timeoutId);
+                if (response.success) { showToast(`✅ ${file.name} สำเร็จ!`); res(); }
+                else rej(new Error(response.error || 'ล้มเหลว'));
+              })
+              .withFailureHandler(err => { clearTimeout(timeoutId); rej(err); })
+              .uploadFileToDrive(reader.result, file.name, folderId);
+          });
+
+          try {
+            await Promise.race([uploadPromise, timeoutPromise]);
+          } catch (err) {
+            showToast(`❌ ${file.name} ล้มเหลว: ${err.message}`, 'err');
+          }
+          resolve();
+        };
+        reader.readAsDataURL(file);
+      });
     }
 
-    window.saveCourseCoords = async (courseId) => {
-      if (!state.tempCoords) return;
-      try {
-        await fsUpd('courses', courseId, { targetCoords: state.tempCoords });
-        const c = findCourseById(courseId);
-        if (c) c.targetCoords = state.tempCoords;
-        showToast('✅ บันทึกพิกัดห้องเรียนสำเร็จ');
-      } catch (e) {
-        showToast('❌ ไม่สามารถบันทึกพิกัดได้', 'err');
-      }
-    };
+    if (state.courseFilesCache && state.courseFilesCache[folderId]) delete state.courseFilesCache[folderId];
+    refreshDriveFiles(courseId, folderId, true);
+  };
+  input.click();
+}
 
-    function initAttendanceMap(courseId, targetCoords) {
-      setTimeout(() => {
-        const mapEl = document.getElementById('attMap');
-        if (!mapEl) return;
+window.saveCourseCoords = async (courseId) => {
+  if (!state.tempCoords) return;
+  try {
+    await fsUpd('courses', courseId, { targetCoords: state.tempCoords });
+    const c = findCourseById(courseId);
+    if (c) c.targetCoords = state.tempCoords;
+    showToast('✅ บันทึกพิกัดห้องเรียนสำเร็จ');
+  } catch (e) {
+    showToast('❌ ไม่สามารถบันทึกพิกัดได้', 'err');
+  }
+};
 
-        let [lat, lon] = [13.8476, 100.5696]; // Default KU
-        const c = findCourseById(courseId);
-        const savedCoords = targetCoords || (c && c.targetCoords);
-        if (savedCoords) {
-          [lat, lon] = savedCoords.split(',').map(Number);
-        }
+function initAttendanceMap(courseId, targetCoords) {
+  setTimeout(() => {
+    const mapEl = document.getElementById('attMap');
+    if (!mapEl) return;
 
-        const map = L.map('attMap').setView([lat, lon], 17);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    let [lat, lon] = [13.8476, 100.5696]; // Default KU
+    const c = findCourseById(courseId);
+    const savedCoords = targetCoords || (c && c.targetCoords);
+    if (savedCoords) {
+      [lat, lon] = savedCoords.split(',').map(Number);
+    }
 
-        let marker = L.marker([lat, lon], { draggable: true }).addTo(map)
-          .bindPopup(`ตึกเรียนของคุณ${savedCoords ? ' (บันทึกแล้ว)' : ''} (ลากเพื่อย้าย)`).openPopup();
+    const map = L.map('attMap').setView([lat, lon], 17);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        marker.on('dragend', function (e) {
-          const newPos = marker.getLatLng();
-          const coordsStr = `${newPos.lat.toFixed(6)},${newPos.lng.toFixed(6)}`;
-          state.tempCoords = coordsStr;
-          marker.getPopup().setContent(`
+    let marker = L.marker([lat, lon], { draggable: true }).addTo(map)
+      .bindPopup(`ตึกเรียนของคุณ${savedCoords ? ' (บันทึกแล้ว)' : ''} (ลากเพื่อย้าย)`).openPopup();
+
+    marker.on('dragend', function (e) {
+      const newPos = marker.getLatLng();
+      const coordsStr = `${newPos.lat.toFixed(6)},${newPos.lng.toFixed(6)}`;
+      state.tempCoords = coordsStr;
+      marker.getPopup().setContent(`
             พิกัดใหม่: ${coordsStr}<br>
             <button onclick="saveCourseCoords('${courseId}')" style="margin-top:8px; padding:4px 8px; background:#4f46e5; color:white; border:none; border-radius:4px; cursor:pointer;">💾 บันทึกพิกัด</button>
           `).openOn(map);
+    });
+
+    window.useCurrentLocation = () => {
+      if (!navigator.geolocation) return showToast('ไม่รองรับ GPS');
+      navigator.geolocation.getCurrentPosition(pos => {
+        const p = [pos.coords.latitude, pos.coords.longitude];
+        map.setView(p, 17);
+        marker.setLatLng(p);
+        state.tempCoords = `${p[0].toFixed(6)},${p[1].toFixed(6)}`;
+      });
+    };
+  }, 100);
+}
+// ── Web Push & Notification Logic ──
+async function initWebPush() {
+  if ('serviceWorker' in navigator) {
+    try {
+      await navigator.serviceWorker.register('firebase-messaging-sw.js');
+      console.log('Firebase Service Worker registered');
+    } catch (err) {
+      console.warn('Service Worker registration failed:', err);
+    }
+  }
+}
+
+async function requestNotificationPermission() {
+  if (!("Notification" in window)) {
+    alert("เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน");
+    return;
+  }
+
+  let permission = await Notification.requestPermission();
+  if (permission === "granted") {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+
+      const currentToken = await getToken(messaging, {
+        vapidKey: 'BGJJHyr07SwrKxHuo1w8HDRYCb6R-p6kZsk6yRaq-ho-iQ-7S0YdfTgz9KKDFW95jyQ927xCY51r6Wml84TonF4'.trim(),
+        serviceWorkerRegistration: registration
+      });
+
+      if (currentToken) {
+        console.log('FCM Token:', currentToken);
+        // บันทึก Token ลง Firestore เพื่อให้ Backend ส่งแจ้งเตือนได้
+        await setDoc(doc(db, 'app_state', 'notification_token'), {
+          token: currentToken,
+          updatedAt: serverTimestamp(),
+          userId: STUDENT.id
         });
 
-        window.useCurrentLocation = () => {
-          if (!navigator.geolocation) return showToast('ไม่รองรับ GPS');
-          navigator.geolocation.getCurrentPosition(pos => {
-            const p = [pos.coords.latitude, pos.coords.longitude];
-            map.setView(p, 17);
-            marker.setLatLng(p);
-            state.tempCoords = `${p[0].toFixed(6)},${p[1].toFixed(6)}`;
-          });
-        };
-      }, 100);
-    }
-    // ── Web Push & Notification Logic ──
-    async function initWebPush() {
-      if ('serviceWorker' in navigator) {
-        try {
-          await navigator.serviceWorker.register('firebase-messaging-sw.js');
-          console.log('Firebase Service Worker registered');
-        } catch (err) {
-          console.warn('Service Worker registration failed:', err);
-        }
-      }
-    }
+        // บันทึก Token ลง GAS Script Properties (เพื่อให้ GAS ส่งแจ้งเตือนได้)
+        google.script.run.saveFcmToken(currentToken);
 
-    async function requestNotificationPermission() {
-      if (!("Notification" in window)) {
-        alert("เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน");
-        return;
-      }
-      
-      let permission = await Notification.requestPermission();
-      if (permission === "granted") {
-        try {
-          const registration = await navigator.serviceWorker.ready;
-          
-          const currentToken = await getToken(messaging, { 
-            vapidKey: 'BGJJHyr07SwrKxHuo1w8HDRYCb6R-p6kZsk6yRaq-ho-iQ-7S0YdfTgz9KKDFW95jyQ927xCY51r6Wml84TonF4'.trim(),
-            serviceWorkerRegistration: registration
-          });
-          
-          if (currentToken) {
-            console.log('FCM Token:', currentToken);
-            // บันทึก Token ลง Firestore เพื่อให้ Backend ส่งแจ้งเตือนได้
-            await setDoc(doc(db, 'app_state', 'notification_token'), {
-              token: currentToken,
-              updatedAt: serverTimestamp(),
-              userId: STUDENT.id
-            });
-            
-            // บันทึก Token ลง GAS Script Properties (เพื่อให้ GAS ส่งแจ้งเตือนได้)
-            google.script.run.saveFcmToken(currentToken);
-            
-            showToast("✅ เปิดการแจ้งเตือน FCM สำเร็จ!");
-            new Notification("NITIPAT MANAGER", {
-              body: "ระบบลงทะเบียนแจ้งเตือนแบบ Native สำเร็จแล้ว!",
-              icon: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
-            });
-          } else {
-            showToast("⚠️ ไม่สามารถรับรหัสลงทะเบียนได้", "err");
-          }
-        } catch (err) {
-          console.error('An error occurred while retrieving token. ', err);
-          showToast("❌ เกิดข้อผิดพลาดในการลงทะเบียน FCM", "err");
-        }
+        showToast("✅ เปิดการแจ้งเตือน FCM สำเร็จ!");
+        new Notification("NITIPAT MANAGER", {
+          body: "ระบบลงทะเบียนแจ้งเตือนแบบ Native สำเร็จแล้ว!",
+          icon: "https://img1.pic.in.th/images/Gemini_Generated_Image_k0lkzwk0lkzwk0lk.png"
+        });
       } else {
-        showToast("⚠️ คุณยังไม่ได้อนุญาตการแจ้งเตือน", "err");
+        showToast("⚠️ ไม่สามารถรับรหัสลงทะเบียนได้", "err");
       }
+    } catch (err) {
+      console.error('An error occurred while retrieving token. ', err);
+      showToast("❌ เกิดข้อผิดพลาดในการลงทะเบียน FCM", "err");
     }
+  } else {
+    showToast("⚠️ คุณยังไม่ได้อนุญาตการแจ้งเตือน", "err");
+  }
+}
 
-    window.requestNotificationPermission = requestNotificationPermission;
+window.requestNotificationPermission = requestNotificationPermission;
