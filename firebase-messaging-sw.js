@@ -5,6 +5,7 @@ importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-com
 firebase.initializeApp({
   apiKey: "AIzaSyB7pGaPWn4n7NxrQ9l60V16u-qj05khqU8",
   authDomain: "mat-e-db476.firebaseapp.com",
+  databaseURL: "https://mat-e-db476-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "mat-e-db476",
   storageBucket: "mat-e-db476.firebasestorage.app",
   messagingSenderId: "986910230630",
