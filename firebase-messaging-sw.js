@@ -3,12 +3,12 @@ importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-com
 
 // 🚨 รบกวนคุณนำข้อมูลจาก Firebase Console มาวางตรงนี้ครับ
 firebase.initializeApp({
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyB7pGaPWn4n7NxrQ9l60V16u-qj05khqU8",
+  authDomain: "mat-e-db476.firebaseapp.com",
+  projectId: "mat-e-db476",
+  storageBucket: "mat-e-db476.firebasestorage.app",
+  messagingSenderId: "986910230630",
+  appId: "1:986910230630:web:7b4b23ce828d18ab7bc5a7"
 });
 
 const messaging = firebase.messaging();
