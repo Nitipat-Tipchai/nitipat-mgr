@@ -2221,20 +2221,34 @@ function renderAttendanceSummary(courseId) {
 
           <div class="att-status-card glass-card nb-card" style="background:#fff;">
             <div style="font-weight:800; font-size:14px; margin-bottom:10px;">📍 เช็คอินวันนี้ (${new Date().toLocaleDateString('th-TH')})</div>
-            ${todayRecord ? `
-              <div style="background:var(--c-lime)11; border:2px solid var(--c-lime); padding:12px; border-radius:12px; display:flex; align-items:center; gap:10px;">
-                <span style="font-size:20px;">✅</span>
-                <div>
-                  <div style="font-weight:800; color:var(--c-lime); font-size:13px;">เช็คชื่อเรียบร้อยแล้ว</div>
-                  <div style="font-size:11px; opacity:0.7;">เวลา: ${todayRecord.timestamp?.split('T')[1].substring(0, 5) || '-'} | สถานะ: ${todayRecord.status}</div>
-                </div>
-              </div>
-            ` : `
-              <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-                <button class="nb-btn sm nb-btn-primary" onclick="setAttendanceStatus('${courseId}', 'เข้าเรียนปกติ')">✅ เข้าเรียน</button>
-                <button class="nb-btn sm nb-btn-danger" onclick="setAttendanceStatus('${courseId}', 'มาสาย')">⏳ สาย</button>
-              </div>
-            `}
+            ${(() => {
+              const now = new Date();
+              const adjustedDay = getTodayDayIndex();
+              const currentTimeVal = now.getHours() + (now.getMinutes() / 60);
+              const curSem = getCurrentSemester();
+              const course = findCourseById(courseId);
+              const schedules = (course?.schedules || course?.schedule || []);
+              const activeSlot = schedules.find(s => s.day === adjustedDay && currentTimeVal >= s.startHour && currentTimeVal < s.endHour);
+
+              if (todayRecord) {
+                return `
+                  <div style="background:var(--c-lime)11; border:2px solid var(--c-lime); padding:12px; border-radius:12px; display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:20px;">✅</span>
+                    <div>
+                      <div style="font-weight:800; color:var(--c-lime); font-size:13px;">เช็คชื่อเรียบร้อยแล้ว</div>
+                      <div style="font-size:11px; opacity:0.7;">เวลา: ${todayRecord.timestamp?.split('T')[1].substring(0, 5) || '-'} | สถานะ: ${todayRecord.status}</div>
+                    </div>
+                  </div>`;
+              } else if (activeSlot) {
+                return `
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                    <button class="nb-btn sm nb-btn-primary" onclick="setAttendanceStatus('${courseId}', 'เข้าเรียนปกติ')">✅ เข้าเรียน</button>
+                    <button class="nb-btn sm nb-btn-danger" onclick="setAttendanceStatus('${courseId}', 'มาสาย')">⏳ สาย</button>
+                  </div>`;
+              } else {
+                return `<div class="glass-warn" style="text-align:center; padding:12px; border-radius:12px; font-size:13px;">⌛ ยังไม่ถึงเวลาคลาสเรียน (กดได้เฉพาะเวลาเรียน)</div>`;
+              }
+            })()}
           </div>
 
           <div class="reflection-card glass-card nb-card" style="background:#fff;">
