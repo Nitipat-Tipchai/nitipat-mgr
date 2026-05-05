@@ -4174,17 +4174,6 @@ window.renderCourseHubUI_Original = (courseId) => {
   };
 }
 
-function startHyperNotifications() {
-  // Sync ทันทีตอนเริ่ม
-  syncDataToBackend();
-
-  // Sync ทุก 5 นาที เพื่อให้ GAS trigger มีข้อมูลล่าสุด
-  setInterval(function () {
-    if (typeof firebase !== 'undefined' && state.active) {
-      syncDataToBackend();
-    }
-  }, 5 * 60 * 1000);
-}
 
 function syncDataToBackend() {
   // คำนวณ projected GPA
@@ -5304,6 +5293,7 @@ async function addAlarm(time, label, snoozeMin = 5, repeat = []) {
   try { await fsSet('alarms', 'list', { alarms: state.alarms }); } catch(e) {}
   render();
   showToast(`⏰ ตั้งปลุก ${time} แล้ว`);
+  syncDataToBackend();
 }
 
 function openQuickAddModal() {
@@ -5362,6 +5352,7 @@ function toggleAlarm(id, enabled) {
     localStorage.setItem('alarms', JSON.stringify(state.alarms));
     fsSet('alarms', 'list', { alarms: state.alarms }).catch(()=>{});
     showToast(enabled ? `⏰ เปิดปลุก ${alarm.time}` : `🔕 ปิดปลุก ${alarm.time}`);
+    syncDataToBackend();
   }
 }
 
@@ -5371,6 +5362,7 @@ function deleteAlarm(id) {
   fsSet('alarms', 'list', { alarms: state.alarms }).catch(()=>{});
   render();
   showToast('🗑 ลบนาฬิกาปลุกแล้ว');
+  syncDataToBackend();
 }
 
 async function enterSleepMode() {
