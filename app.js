@@ -5931,11 +5931,13 @@ function sendAlarmsToShortcuts() {
     return; 
   }
   
-  // ส่งข้อมูลเป็น JSON เพื่อให้ Shortcut แกะ Label และจัดการลบของเก่าได้
-  const payload = JSON.stringify(enabled.map(a => ({
-    time: a.time,
-    label: (a.label || 'ปลุก') + ' (NITIPAT)'
-  })));
+  // ส่งข้อมูลเป็น JSON แบบมี Key ครอบเพื่อให้ Shortcut จัดการได้ง่ายขึ้น
+  const payload = JSON.stringify({
+    alarms: enabled.map(a => ({
+      time: a.time,
+      label: (a.label || 'ปลุก') + ' (NITIPAT)'
+    }))
+  });
 
   const url = `shortcuts://run-shortcut?name=NITIPAT_ALARM&input=${encodeURIComponent(payload)}`;
   
