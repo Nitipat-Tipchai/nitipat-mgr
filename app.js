@@ -5596,3 +5596,18 @@ function sendAlarmsToShortcuts() {
     </div>
   `, `<button onclick="window.location.href='${url}'; closeModal();" class="nb-btn nb-btn-primary full">🍎 เปิด Shortcuts</button>`);
 }
+
+// Expose Alarm & Notification functions to window for HTML onclick handlers
+window.quickAddAlarms = quickAddAlarms;
+window.openQuickAddModal = openQuickAddModal;
+window.toggleAlarm = toggleAlarm;
+window.deleteAlarm = deleteAlarm;
+window.openAddAlarmModal = openAddAlarmModal;
+window.enterSleepMode = enterSleepMode;
+window.sendAlarmsToShortcuts = sendAlarmsToShortcuts;
+window.quickAddFromModal = quickAddFromModal;
+window.addAlarmFromModal = addAlarmFromModal;
+window.dismissAlarm = dismissAlarm;
+window.snoozeAlarm = snoozeAlarm;
+window.exitSleepMode = exitSleepMode;
+window.hideCheckinBanner = hideCheckinBanner;
