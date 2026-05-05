@@ -3119,6 +3119,17 @@ window.testCalendarPermission = () => {
   }).testCalendar();
 };
 
+window.testAlarmSound = async () => {
+  showToast('🔊 กำลังทดสอบเสียงปลุก...');
+  if (!state.alarmAudioCtx) {
+    state.alarmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (state.alarmAudioCtx.state === 'suspended') await state.alarmAudioCtx.resume();
+  
+  triggerAlarm({ id: 'test', label: '📢 ทดสอบระบบปลุก', repeat: [] });
+  setTimeout(() => dismissAlarm(), 5000);
+};
+
 window.resetFcmTokens = async () => {
   if (!confirm('⚠️ ยืนยันที่จะล้างข้อมูลอุปกรณ์ทั้งหมดใช่หรือไม่?\n\n(ทุกเครื่องจะต้องกด "เปิดใช้งาน" ใหม่เพื่อรับแจ้งเตือนอีกครั้ง)')) return;
   
@@ -3729,6 +3740,7 @@ function renderSettings() {
     <div style="display:flex; gap:8px;">
       <button class="btn-glass sm" onclick="checkSystemStatus()">🔍 เช็คระบบ</button>
       <button class="btn-glass sm" onclick="google.script.run.setupNotificationTrigger(); showToast('✅ รีเซ็ต Trigger แล้ว');">🔄 รีเซ็ต Trigger</button>
+      <button class="btn-glass sm" onclick="testAlarmSound()">🔔 ทดสอบเสียงปลุก</button>
     </div>
   </div>
 
@@ -5605,7 +5617,7 @@ async function enterSleepMode() {
   if (state.alarmAudioCtx.state === 'suspended') {
     await state.alarmAudioCtx.resume();
   }
-  // iOS Keep-Alive: เล่นเสียงเงียบ (อินฟราโซนิก) วนไปเรื่อยๆ เพื่อไม่ให้เบราว์เซอร์โดน Freeze เมื่อดับหน้าจอ
+  // iOS Keep-Alive: เล่นเสียงเงียบ (อินฟราโซนิก) วนไปเรื่อยๆ เพื่อไม่ให้เบราว์เซอร์โดน Freeze
   if (!state.keepAliveOsc) {
     try {
       const osc = state.alarmAudioCtx.createOscillator();
@@ -5617,9 +5629,26 @@ async function enterSleepMode() {
       gain.connect(state.alarmAudioCtx.destination);
       osc.start();
       state.keepAliveOsc = osc;
-      state.keepAliveGain = gain;
-      console.log('🔈 iOS Keep-Alive Audio Started');
-    } catch(e) { console.error('Failed to start keep-alive audio:', e); }
+    } catch(e) {}
+  }
+
+  // iOS Video Wake Lock Hack: เล่นวิดีโอเงียบเพื่อไม่ให้เครื่องหลับ
+  if (!document.getElementById('iosWakeLockVideo')) {
+    const video = document.createElement('video');
+    video.id = 'iosWakeLockVideo';
+    video.muted = true;
+    video.playsInline = true;
+    video.loop = true;
+    video.style.position = 'fixed';
+    video.style.top = '-10px';
+    video.style.left = '-10px';
+    video.style.width = '1px';
+    video.style.height = '1px';
+    video.style.opacity = '0.01';
+    // ใช้วิดีโอสั้นๆ ว่างๆ (Data URL)
+    video.src = 'data:video/mp4;base64,AAAAHGZ0eXBpc29tAAAAAGlzb21tcDQxAAAACHmshZAAAAAIc3R0cwAAAAAAAAABAAAAAQAAABAAAAAOc3RzYwAAAAAAAAABAAAAAQAAAAEAAAABAAAAFHN0c3oAAAAAAAAAEAAAAAEAAAAQAAAAEHN0Y28AAAAAAAAAAQAAADAAAAAAYmZycmVlAAAALW1kYXQAAAAAAAAAABAAAABAAAABAAAABAAAABAAAABAAAABAAAABAAAAA==';
+    document.body.appendChild(video);
+    video.play().catch(e => console.log("Video Play Blocked", e));
   }
 
   state.sleepMode = true;
@@ -5839,6 +5868,9 @@ function exitSleepMode() {
     try { state.keepAliveOsc.stop(); state.keepAliveOsc.disconnect(); } catch(e) {}
     state.keepAliveOsc = null;
   }
+  const v = document.getElementById('iosWakeLockVideo');
+  if (v) { v.pause(); v.remove(); }
+  
   try { state.wakeLock?.release(); } catch(e) {}
   state.wakeLock = null;
   document.getElementById('sleepModeScreen')?.remove();
