@@ -5931,18 +5931,22 @@ function sendAlarmsToShortcuts() {
     return; 
   }
   
-  // ส่งแค่รายการเวลาแยกด้วยการขึ้นบรรทัดใหม่ (เพื่อให้สร้าง Shortcut ง่ายที่สุด)
-  const payload = enabled.map(a => a.time).join('\n');
+  // ส่งข้อมูลเป็น JSON เพื่อให้ Shortcut แกะ Label และจัดการลบของเก่าได้
+  const payload = JSON.stringify(enabled.map(a => ({
+    time: a.time,
+    label: (a.label || 'ปลุก') + ' (NITIPAT)'
+  })));
+
   const url = `shortcuts://run-shortcut?name=NITIPAT_ALARM&input=${encodeURIComponent(payload)}`;
   
   openModal('🍎 ซิงก์นาฬิกาปลุกไป iPhone', `
     <div style="display:flex;flex-direction:column;gap:12px;font-size:14px;font-family:Kanit">
       <div style="background:var(--bg-solid);padding:12px;border-radius:12px;border:1px solid var(--border-color)">
-        <div style="font-weight:600;margin-bottom:8px">เวลาที่จะปลุก (${enabled.length} อัน):</div>
-        ${enabled.map(a => `<div style="font-size:15px; font-weight:bold; color:var(--accent)">• ${a.time} น.</div>`).join('')}
+        <div style="font-weight:600;margin-bottom:8px">เตรียมซิงก์ ${enabled.length} รายการ:</div>
+        ${enabled.map(a => `<div style="font-size:13px; opacity:0.8">⏰ ${a.time} — ${a.label}</div>`).join('')}
       </div>
-      <div style="color:var(--text-muted);font-size:12px; line-height:1.5">
-        💡 ระบบจะส่งเวลาเหล่านี้ไปที่แอป **Shortcuts** เพื่อสร้างนาฬิกาปลุกใน iPhone ให้คุณโดยอัตโนมัติครับ
+      <div style="color:var(--accent);font-size:12px; font-weight:500">
+        💡 ระบบจะลบนาฬิกาปลุก (NITIPAT) อันเก่าในเครื่องคุณออกก่อน และสร้างอันใหม่ให้ตามรายการนี้ครับ
       </div>
     </div>
   `, `
