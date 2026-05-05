@@ -3093,6 +3093,32 @@ window.checkFcmStatus = () => {
   }
 };
 
+window.checkSystemStatus = () => {
+  if (typeof google !== 'undefined' && google.script) {
+    showToast('⌛ กำลังตรวจสอบระบบ...');
+    google.script.run.withSuccessHandler(res => {
+      openModal('🛠 สถานะระบบหลังบ้าน', `
+        <div style="padding:16px; font-size:13px;">
+          <div class="stat-row"><strong>สถานะ Trigger:</strong> ${res.triggerActive ? '✅ ทำงานปกติ' : '❌ ดับอยู่'}</div>
+          <div class="stat-row"><strong>จำนวนอุปกรณ์ (FCM):</strong> ${res.tokensCount} เครื่อง</div>
+          <div class="stat-row"><strong>ทำงานล่าสุดเมื่อ:</strong> ${res.lastRun}</div>
+          <div class="stat-row" style="margin-top:12px;"><strong>รายการ Trigger:</strong><br>${res.triggers.join(', ') || 'ไม่มี'}</div>
+          <hr style="margin:12px 0; opacity:0.1">
+          <button class="nb-btn sm full" onclick="testCalendarPermission()">🧪 ทดสอบสิทธิ์สร้างปฏิทิน</button>
+        </div>
+      `, '<button class="nb-btn nb-btn-primary full" onclick="closeModal()">ปิด</button>');
+    }).getSystemStatus();
+  }
+};
+
+window.testCalendarPermission = () => {
+  showToast('⏳ กำลังทดสอบสร้างปฏิทิน...');
+  google.script.run.withSuccessHandler(res => {
+    if (res.success) showToast('✅ สิทธิ์ปฏิทินปกติ!');
+    else alert('❌ ปัญหาปฏิทิน: ' + res.error);
+  }).testCalendar();
+};
+
 window.resetFcmTokens = async () => {
   if (!confirm('⚠️ ยืนยันที่จะล้างข้อมูลอุปกรณ์ทั้งหมดใช่หรือไม่?\n\n(ทุกเครื่องจะต้องกด "เปิดใช้งาน" ใหม่เพื่อรับแจ้งเตือนอีกครั้ง)')) return;
   
@@ -3695,8 +3721,18 @@ function renderDaily() {
 function renderSettings() {
   return `<div class="page-wrap">
     <div class="page-header"><h1 class="page-title">⚙️ ตั้งค่า</h1></div>
-    
-<div class="settings-card" style="margin-bottom:15px;">
+    <div class="settings-card">
+    <div class="settings-label">
+      <div style="font-weight:600; font-size:14px;">🛠 ระบบหลังบ้าน & Debug</div>
+      <div style="font-size:12px; color:var(--c-muted); margin-top:4px;">ตรวจสอบการทำงานของ Trigger และปฏิทิน</div>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn-glass sm" onclick="checkSystemStatus()">🔍 เช็คระบบ</button>
+      <button class="btn-glass sm" onclick="google.script.run.setupNotificationTrigger(); showToast('✅ รีเซ็ต Trigger แล้ว');">🔄 รีเซ็ต Trigger</button>
+    </div>
+  </div>
+
+  <div class="settings-card" style="margin-bottom:15px;">
   <div style="font-size:16px; font-weight:700; margin-bottom:10px;">🔔 การแจ้งเตือนระบบ</div>
   <div class="settings-row" style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
     <div class="settings-label">
@@ -5569,6 +5605,23 @@ async function enterSleepMode() {
   if (state.alarmAudioCtx.state === 'suspended') {
     await state.alarmAudioCtx.resume();
   }
+  // iOS Keep-Alive: เล่นเสียงเงียบ (อินฟราโซนิก) วนไปเรื่อยๆ เพื่อไม่ให้เบราว์เซอร์โดน Freeze เมื่อดับหน้าจอ
+  if (!state.keepAliveOsc) {
+    try {
+      const osc = state.alarmAudioCtx.createOscillator();
+      const gain = state.alarmAudioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1, state.alarmAudioCtx.currentTime); 
+      gain.gain.setValueAtTime(0.001, state.alarmAudioCtx.currentTime);
+      osc.connect(gain);
+      gain.connect(state.alarmAudioCtx.destination);
+      osc.start();
+      state.keepAliveOsc = osc;
+      state.keepAliveGain = gain;
+      console.log('🔈 iOS Keep-Alive Audio Started');
+    } catch(e) { console.error('Failed to start keep-alive audio:', e); }
+  }
+
   state.sleepMode = true;
   const screen = document.createElement('div');
   screen.id = 'sleepModeScreen';
@@ -5782,6 +5835,10 @@ async function snoozeAlarm(minutes) {
 function exitSleepMode() {
   state.sleepMode = false;
   clearInterval(state.sleepClockInterval);
+  if (state.keepAliveOsc) {
+    try { state.keepAliveOsc.stop(); state.keepAliveOsc.disconnect(); } catch(e) {}
+    state.keepAliveOsc = null;
+  }
   try { state.wakeLock?.release(); } catch(e) {}
   state.wakeLock = null;
   document.getElementById('sleepModeScreen')?.remove();
