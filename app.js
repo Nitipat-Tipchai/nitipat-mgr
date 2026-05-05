@@ -5617,6 +5617,7 @@ async function enterSleepMode() {
   if (state.alarmAudioCtx.state === 'suspended') {
     await state.alarmAudioCtx.resume();
   }
+  let hideTimer;
   // 1. Web Worker Timer: ระบบจับเวลาที่จะไม่หยุดเดินแม้ดับหน้าจอ
   if (!state.timerWorker) {
     const workerCode = `
@@ -5640,21 +5641,22 @@ async function enterSleepMode() {
   }
   state.timerWorker.postMessage('start');
 
-  // 2. Media Session & Silent Audio: ใช้ไฟล์ MP3 เงียบที่ยาวขึ้นเพื่อให้ iOS ยอมรับว่าเป็นเพลง
+  // 2. Media Session & Silent Audio: ใช้ไฟล์ MP3 เงียบมาตรฐานจาก URL จริง (เพื่อให้ iOS ยอมรับ)
   if (!state.keepAliveAudio) {
-    // ไฟล์ MP3 เงียบประมาณ 2 วินาที (Base64 ที่สมบูรณ์กว่าเดิม)
-    const silentMp3 = 'data:audio/mpeg;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA//8AAABhbmFtZSAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//uQxAMAAANIAAAAQAAAAgAAAAsAAAgAAAAbAAAQAAAAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
-    state.keepAliveAudio = new Audio(silentMp3);
+    // ใช้ไฟล์เงียบมาตรฐานความยาว 250ms ที่นิยมใช้ประคองชีพ PWA
+    state.keepAliveAudio = new Audio('https://raw.githubusercontent.com/anars/blank-audio/master/250-milliseconds-of-silence.mp3');
     state.keepAliveAudio.loop = true;
-    state.keepAliveAudio.volume = 0.05; // ปรับเพิ่มนิดหน่อยแต่ยังเบามาก เพื่อให้ iOS มั่นใจว่ามีเสียง
+    state.keepAliveAudio.volume = 0.05;
   }
   
   const startAudio = () => {
     state.keepAliveAudio.play().then(() => {
-      if ('mediaSession' in navigator) {
-        navigator.mediaSession.playbackState = 'playing';
-      }
-    }).catch(e => console.log("Audio Play Failed", e));
+      console.log("✅ iOS Keep-Alive Audio Playing");
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+    }).catch(e => {
+      console.log("❌ Audio Play Failed:", e);
+      showToast('⚠️ โปรดแตะหน้าจอหนึ่งครั้งเพื่อเปิดระบบเสียง', 'warn');
+    });
   };
   
   startAudio();
@@ -5706,7 +5708,7 @@ async function enterSleepMode() {
     if (ctrl) {
       ctrl.style.opacity = '1';
       clearTimeout(hideTimer);
-      hideTimer = setTimeout(() => { ctrl.style.opacity = '0'; }, 3000);
+      hideTimer = setTimeout(() => { if (ctrl) ctrl.style.opacity = '0'; }, 3000);
     }
   });
 
