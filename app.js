@@ -3110,6 +3110,44 @@ window.resetFcmTokens = async () => {
   }
 };
 
+window.syncAllToCalendar = async (semId) => {
+  const sem = state.semesters.find(s => s.id === semId);
+  if (!sem) return;
+  
+  // กรองงานและสอบเฉพาะของเทอมนี้
+  const semCourses = state.courses[semId] || [];
+  const courseIds = semCourses.map(c => c.id);
+  
+  const assignments = Object.values(state.assignments).flat().filter(a => courseIds.includes(a.courseId));
+  const exams = Object.values(state.exams).flat().filter(e => courseIds.includes(e.courseId));
+  
+  if (assignments.length === 0 && exams.length === 0) {
+    showToast('⚠️ ไม่พบข้อมูลงานหรือการสอบในเทอมนี้', 'warn');
+    return;
+  }
+
+  showToast(`⏳ กำลังซิงก์ข้อมูล ${assignments.length + exams.length} รายการไปยัง Google Calendar...`);
+  
+  let successCount = 0;
+  const total = assignments.length + exams.length;
+
+  const handleRes = async (item, type, res) => {
+    if (res && res.success) {
+      item.calendarEventId = res.eventId;
+      await fsSet(type === 'assignment' ? 'assignments' : 'exams', item.id, item);
+      successCount++;
+      if (successCount === total) showToast(`✅ ซิงก์ข้อมูลทั้งหมดสำเร็จ!`);
+    }
+  };
+
+  assignments.forEach(a => {
+    google.script.run.withSuccessHandler(res => handleRes(a, 'assignment', res)).syncCalendarEvent(`NITIPAT MANAGER - ${sem.name}`, 'assignment', a);
+  });
+  exams.forEach(e => {
+    google.script.run.withSuccessHandler(res => handleRes(e, 'exam', res)).syncCalendarEvent(`NITIPAT MANAGER - ${sem.name}`, 'exam', e);
+  });
+};
+
 // ══════════════════════════════════════════════════
 // ASSIGNMENTS
 // ══════════════════════════════════════════════════
@@ -3702,7 +3740,10 @@ function renderSettings() {
       ${state.semesters.map(s => `
         <div class="setting-row">
           <span>เทอม ${s.name}</span>
-          <button class="btn-glass danger sm" onclick="deleteSemesterCalendar('${s.name}')">🗑 ลบ</button>
+          <div style="display:flex; gap:8px;">
+            <button class="btn-glass sm" onclick="syncAllToCalendar('${s.id}')">🔄 ซิงก์ทั้งหมด</button>
+            <button class="btn-glass danger sm" onclick="deleteSemesterCalendar('${s.name}')">🗑 ลบ</button>
+          </div>
         </div>
       `).join('') || '<div class="setting-row"><span class="muted">ไม่มีข้อมูลเทอม</span></div>'}
     </div>
@@ -4403,14 +4444,34 @@ function attachAllEvents() {
     const a = Object.values(state.assignments).flat().find(x => x.id === id);
     if (a) { await fsUpd('assignments', id, { submitted: !a.submitted, status: !a.submitted ? 'ส่งแล้ว' : 'ยังไม่เริ่ม' }); await loadAll(); }
   });
-  document.querySelectorAll('[data-del-assign]').forEach(b => b.onclick = async () => { if (confirm('ลบงานนี้?')) { await fsDel('assignments', b.dataset.delAssign); await loadAll(); } });
+  document.querySelectorAll('[data-del-assign]').forEach(b => b.onclick = async () => {
+    const id = b.dataset.delAssign;
+    const a = Object.values(state.assignments).flat().find(x => x.id === id);
+    if (confirm('ลบงานนี้?')) {
+      if (a?.calendarEventId && typeof google !== 'undefined' && google.script) {
+        const curSem = getCurrentSemester() || state.semesters[state.semesters.length-1];
+        if (curSem) google.script.run.deleteCalendarEvent(`NITIPAT MANAGER - ${curSem.name}`, a.calendarEventId);
+      }
+      await fsDel('assignments', id); await loadAll();
+    }
+  });
   document.querySelectorAll('[data-edit-assign]').forEach(b => b.onclick = () => {
     const a = Object.values(state.assignments).flat().find(x => x.id === b.dataset.editAssign);
     if (a) openAddAssignmentForm(a);
   });
   document.querySelectorAll('[data-assign-view]').forEach(b => b.onclick = () => { state.assignView = b.dataset.assignView; render(); });
   document.getElementById('addExamBtn')?.addEventListener('click', () => { if (Object.values(state.courses).flat().length === 0) { showToast('⚠️ เพิ่มวิชาก่อนนะ', 'err'); return; } openAddExamForm(); });
-  document.querySelectorAll('[data-del-exam]').forEach(b => b.onclick = async () => { if (confirm('ลบการสอบนี้?')) { await fsDel('exams', b.dataset.delExam); await loadAll(); } });
+  document.querySelectorAll('[data-del-exam]').forEach(b => b.onclick = async () => {
+    const id = b.dataset.delExam;
+    const e = Object.values(state.exams).flat().find(x => x.id === id);
+    if (confirm('ลบการสอบนี้?')) {
+      if (e?.calendarEventId && typeof google !== 'undefined' && google.script) {
+        const curSem = getCurrentSemester() || state.semesters[state.semesters.length-1];
+        if (curSem) google.script.run.deleteCalendarEvent(`NITIPAT MANAGER - ${curSem.name}`, e.calendarEventId);
+      }
+      await fsDel('exams', id); await loadAll();
+    }
+  });
   document.querySelectorAll('[data-edit-exam]').forEach(b => b.onclick = () => {
     const e = Object.values(state.exams).flat().find(x => x.id === b.dataset.editExam);
     if (e) openAddExamForm(e);
