@@ -284,7 +284,20 @@ let state = {
   folderPath: [], // Breadcrumbs: [{name, id}]
   selectedItems: new Set(),
   isRenaming: null,
-  links: JSON.parse(localStorage.getItem('course_links') || '{}') // courseId -> [{name, url}]
+  links: JSON.parse(localStorage.getItem('course_links') || '{}'), // courseId -> [{name, url}]
+  alarms: JSON.parse(localStorage.getItem('alarms') || '[]'),
+  sleepMode: false,
+  alarmRinging: false,
+  currentAlarmId: null,
+  wakeLock: null,
+  sleepClockInterval: null,
+  alarmSoundInterval: null,
+  alarmVibrateInterval: null,
+  alarmAudioCtx: null,
+  hyperAlarmInterval: null,
+  hyperNotifInterval: null,
+  hyperSyncInterval: null,
+  notificationsGranted: Notification.permission === 'granted'
 };
 
 const FOCUS_PRESETS = [
@@ -1887,7 +1900,7 @@ function renderTopNav(gpa, pro, curSem) {
 function renderFloatingNav() {
   const items = [
     { id: 'dashboard', icon: '◈' }, { id: 'courses', icon: '📚' },
-    { id: 'assignments', icon: '📋' }, { id: 'focus', icon: '🍅' }, { id: 'daily', icon: '🌅' }
+    { id: 'assignments', icon: '📋' }, { id: 'alarm', icon: '⏰' }, { id: 'focus', icon: '🍅' }, { id: 'daily', icon: '🌅' }
   ];
   return `<nav class="floating-dock glass">
     ${items.map(n => `<button class="dock-item ${state.view === n.id ? 'active' : ''}" data-nav="${n.id}">
@@ -1940,6 +1953,7 @@ function renderPage(gpa, pro, curSem) {
     case 'calendar': return renderCalendar();
     case 'settings': return renderSettings();
     case 'course-hub': return renderCourseHubPage();
+    case 'alarm': return renderAlarmPage();
     default: return renderDashboard(gpa, pro, curSem);
   }
 }
@@ -4195,6 +4209,10 @@ function syncDataToBackend() {
     .reduce(function (sum, e) { return sum + (e.amount || 0); }, 0);
 
   const payload = {
+    projectedGPA,
+    dailyExp: todayExp,
+    alarms: (state.alarms || []).filter(a => a.enabled && !a.isSnooze)
+      .map(a => ({ id: a.id, time: a.time, label: a.label, repeat: a.repeat || [] })),
     courses: state.courses || {},
     assignments: state.assignments || {},
     exams: state.exams || {},
@@ -4543,27 +4561,6 @@ function attachAllEvents() {
     };
   });
 
-  document.getElementById('saveNtfyBtn')?.addEventListener('click', function () {
-    const topic = (document.getElementById('ntfy-topic-input')?.value || '').trim();
-    if (!topic) { showToast('⚠️ ใส่ชื่อ topic ก่อนนะ', 'err'); return; }
-
-    const statusEl = document.getElementById('ntfy-status');
-    if (statusEl) statusEl.textContent = '⏳ กำลังบันทึก...';
-
-    state.ntfyTopic = topic;
-    localStorage.setItem('ntfyTopic', topic);
-
-    google.script.run
-      .withSuccessHandler(function () {
-        if (statusEl) statusEl.textContent = '✅ บันทึกแล้ว — เช็คมือถือดูนะ!';
-        showToast('✅ บันทึก ntfy topic แล้ว');
-      })
-      .withFailureHandler(function (err) {
-        if (statusEl) statusEl.textContent = '❌ บันทึกไม่สำเร็จ: ' + err;
-        showToast('❌ บันทึกไม่สำเร็จ', 'err');
-      })
-      .saveNtfyTopic(topic);
-  });
 }
 
 function renderCourseHub(courseId) {
@@ -5009,3 +5006,601 @@ window.saveSingleReflection = async (id) => {
   else closeModal();
   render();
 };
+// ── Notification Logic ──
+function pushNotif(title, body, delay = 0) {
+  if (!state.notificationsGranted) return;
+  if (delay <= 0) {
+    new Notification(title, { body, icon: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png" });
+  } else {
+    setTimeout(() => {
+      new Notification(title, { body, icon: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png" });
+    }, delay);
+  }
+}
+
+function scheduleAllNotifications() {
+  if (!state.notificationsGranted) return;
+
+  function delayUntil(hour, min = 0) {
+    const now = new Date();
+    const t = new Date(now);
+    t.setHours(hour, min, 0, 0);
+    return Math.max(0, t.getTime() - now.getTime());
+  }
+
+  // งานวันนี้ (d===0) — แจ้งทุกชั่วโมง
+  Object.values(state.assignments).flat()
+    .filter(a => !a.submitted && getDaysUntil(a.dueDate) === 0)
+    .forEach(a => {
+      for (let hr = 8; hr <= 21; hr++) {
+        pushNotif(
+          `🔥 งานส่งวันนี้: ${a.title}`,
+          `ยังไม่ส่งเหรอ! กดเปิดแอปทำตอนนี้เลย`,
+          delayUntil(hr)
+        );
+      }
+    });
+
+  // สอบวันนี้ (d===0) — แจ้งทุก 30 นาทีจนถึงเวลาสอบ
+  Object.values(state.exams).flat()
+    .filter(e => getDaysUntil(e.date) === 0)
+    .forEach(e => {
+      const [examH, examM] = (e.time || '23:59').split(':').map(Number);
+      for (let hr = 5; hr <= examH; hr++) {
+        for (let mn of [0, 30]) {
+          if (hr === examH && mn >= examM) break;
+          const delay = delayUntil(hr, mn);
+          if (delay >= 0) pushNotif(
+            `🚨 สอบวันนี้: ${e.title}`,
+            `เวลา ${e.time} ห้อง ${e.room || 'ไม่ระบุ'}`,
+            delay
+          );
+        }
+      }
+    });
+
+  // งาน d===1 — แจ้ง 7 ครั้ง
+  Object.values(state.assignments).flat()
+    .filter(a => !a.submitted && getDaysUntil(a.dueDate) === 1)
+    .forEach(a => {
+      [6,8,10,12,15,18,21].forEach((hr, i) => {
+        const msgs = [
+          'ตื่นมาแล้วเริ่มทำได้เลย!',
+          'เช้านี้คือโอกาสสุดท้าย',
+          'ทำไปถึงไหนแล้ว?',
+          'พักกินข้าวแล้วกลับมาทำต่อ',
+          'เหลืออีกไม่กี่ชั่วโมง!',
+          'คืนนี้ต้องส่ง!!',
+          'ก่อนนอนต้องส่งให้ได้!'
+        ];
+        pushNotif(`🔴 งานพรุ่งนี้: ${a.title}`, msgs[i], delayUntil(hr));
+      });
+    });
+}
+
+function startHyperNotifications() {
+  if (state.hyperNotifInterval) clearInterval(state.hyperNotifInterval);
+  if (state.hyperSyncInterval)  clearInterval(state.hyperSyncInterval);
+  if (state.hyperAlarmInterval) clearInterval(state.hyperAlarmInterval);
+
+  state.hyperNotifInterval = setInterval(() => {
+    const now = new Date();
+    const todayIdx = (now.getDay() + 6) % 7; // Mon=0
+    const nowMin   = now.getHours() * 60 + now.getMinutes();
+    const todayKey = now.toLocaleDateString('en-CA');
+
+    Object.values(state.courses).flat().forEach(c => {
+      (c.schedules || c.schedule || []).forEach(s => {
+        if (s.day !== todayIdx) return;
+        const startMin = s.startHour * 60;
+        const endMin   = (s.endHour || s.startHour + 3) * 60;
+        const diff     = startMin - nowMin;
+
+        if (diff === 5) {
+          pushNotif(`⏰ อีก 5 นาที!! ${c.nameTh}`, `เข้าห้อง ${c.room||''} ได้เลย!`);
+        }
+        if (diff === 0) {
+          pushNotif(`📍 ถึงเวลาเรียน ${c.nameTh}`, `เช็คชื่อในแอปด้วยนะ!`);
+          showCheckinBanner(c);
+        }
+        if (diff <= 0 && nowMin < endMin) {
+          const attended = state.attendanceHistory?.[c.id]?.[todayKey];
+          if (!attended) showCheckinBanner(c);
+          else hideCheckinBanner();
+        }
+        if (nowMin >= endMin) hideCheckinBanner();
+      });
+    });
+  }, 60000);
+
+  state.hyperAlarmInterval = setInterval(() => checkAlarms(), 30000);
+
+  setInterval(() => {
+    if (!state.notificationsGranted) return;
+    Object.values(state.assignments).flat()
+      .filter(a => !a.submitted && getDaysUntil(a.dueDate) === 0)
+      .forEach(a => {
+        pushNotif(`🔥 ยังไม่ส่ง: ${a.title}`, `วันนี้หมดเขต ทำเดี๋ยวนี้เลย!`);
+      });
+  }, 300000);
+
+  state.hyperSyncInterval = setInterval(() => syncDataToBackend(), 1800000);
+  syncDataToBackend();
+}
+
+function showCheckinBanner(course) {
+  let banner = document.getElementById('checkinBanner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'checkinBanner';
+    banner.style.cssText = `
+      position:fixed; top:0; left:0; right:0; z-index:9999;
+      background:linear-gradient(135deg,#4f46e5,#7c3aed);
+      color:white; padding:12px 16px;
+      display:flex; align-items:center; justify-content:space-between;
+      font-family:Kanit; font-size:14px;
+      box-shadow:0 4px 20px rgba(79,70,229,0.4);
+      animation: slideDown 0.3s ease;
+    `;
+    document.getElementById('app').prepend(banner);
+  }
+  banner.innerHTML = `
+    <div>
+      <div style="font-weight:600">📍 กำลังเรียน: ${course.nameTh}</div>
+      <div style="font-size:12px;opacity:0.85">ห้อง ${course.room||'ไม่ระบุ'} — เช็คชื่อด้วยนะ!</div>
+    </div>
+    <button onclick="setAttendanceStatus('${course.id}','เข้าเรียน');hideCheckinBanner()"
+      style="background:white;color:#4f46e5;border:none;padding:8px 16px;
+             border-radius:20px;font-family:Kanit;font-size:13px;
+             font-weight:600;cursor:pointer;white-space:nowrap">
+      ✅ เช็คชื่อเลย
+    </button>
+  `;
+}
+
+function hideCheckinBanner() {
+  document.getElementById('checkinBanner')?.remove();
+}
+
+// ── Smart Alarm System ──
+function renderAlarmPage() {
+  const alarms = [...state.alarms].sort((a,b) => a.time.localeCompare(b.time));
+  const nextAlarm = alarms.find(a => a.enabled);
+
+  return `
+    <div class="page-container">
+      <div class="page-header">
+        <h2>⏰ นาฬิกาปลุก</h2>
+        ${nextAlarm ? `<div class="next-alarm-pill">ปลุกครั้งถัดไป ${nextAlarm.time}</div>` : ''}
+      </div>
+
+      <div class="quick-add-strip">
+        <div class="quick-label">เพิ่มชุดปลุกด่วน:</div>
+        <button onclick="quickAddAlarms(5,5)" class="nb-btn sm">5×5นาที</button>
+        <button onclick="quickAddAlarms(3,10)" class="nb-btn sm">3×10นาที</button>
+        <button onclick="quickAddAlarms(7,5)" class="nb-btn sm">7×5นาที</button>
+        <button onclick="openQuickAddModal()" class="nb-btn sm nb-btn-primary">กำหนดเอง</button>
+      </div>
+
+      <div class="alarm-list">
+        ${alarms.length === 0 ? `
+          <div class="empty-state">
+            <div style="font-size:48px">⏰</div>
+            <div>ยังไม่มีนาฬิกาปลุก</div>
+            <div style="font-size:13px;opacity:0.6">กดปุ่มด้านล่างเพื่อเพิ่ม</div>
+          </div>
+        ` : alarms.map(a => `
+          <div class="alarm-card ${a.enabled ? '' : 'disabled'}" id="alarm-${a.id}">
+            <div class="alarm-main">
+              <div class="alarm-time">${a.time}</div>
+              <div class="alarm-meta">
+                <div class="alarm-label">${a.label || 'นาฬิกาปลุก'}</div>
+                <div class="alarm-repeat">
+                  ${a.repeat?.length > 0 ? a.repeat.map(d => ({
+                    mon:'จ',tue:'อ',wed:'พ',thu:'พฤ',fri:'ศ',sat:'ส',sun:'อา'
+                  }[d]||d)).join(' ') : 'วันเดียว'}
+                  • snooze ${a.snoozeMin||5} นาที
+                </div>
+              </div>
+            </div>
+            <div class="alarm-actions">
+              <label class="toggle-switch">
+                <input type="checkbox" ${a.enabled?'checked':''} 
+                  onchange="toggleAlarm('${a.id}', this.checked)">
+                <span class="toggle-slider"></span>
+              </label>
+              <button onclick="deleteAlarm('${a.id}')" class="alarm-delete-btn">🗑</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      <button onclick="openAddAlarmModal()" class="add-alarm-btn">
+        + เพิ่มนาฬิกาปลุก
+      </button>
+
+      ${alarms.filter(a=>a.enabled).length > 0 ? `
+        <button onclick="enterSleepMode()" class="sleep-mode-btn">
+          🌙 โหมดนอน — เปิดหน้าจอนาฬิกา
+        </button>
+        <button onclick="sendAlarmsToShortcuts()" class="shortcuts-btn">
+          🍎 ส่งไป iPhone Shortcuts
+        </button>
+      ` : ''}
+    </div>
+  `;
+}
+
+function openAddAlarmModal(prefillTime = '') {
+  const now = new Date();
+  const defaultTime = prefillTime || 
+    `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+
+  openModal('⏰ เพิ่มนาฬิกาปลุก', `
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div>
+        <label class="form-label">เวลาปลุก</label>
+        <input type="time" id="alarmTime" value="${defaultTime}"
+          style="font-size:32px;font-family:JetBrains Mono;width:100%;
+                 padding:12px;border-radius:12px;border:1px solid var(--border);
+                 background:var(--bg);color:var(--text);text-align:center">
+      </div>
+      <div>
+        <label class="form-label">ป้ายชื่อ (optional)</label>
+        <input type="text" id="alarmLabel" class="nb-input"
+          placeholder="เช่น ตื่นไปเรียน, ตื่นส่งงาน" value="ตื่นไปเรียน">
+      </div>
+      <div>
+        <label class="form-label">เลื่อนปลุก (Snooze)</label>
+        <select id="alarmSnooze" class="nb-input">
+          <option value="5">5 นาที</option>
+          <option value="10">10 นาที</option>
+          <option value="15">15 นาที</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">ทำซ้ำ</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${[['mon','จ'],['tue','อ'],['wed','พ'],['thu','พฤ'],
+             ['fri','ศ'],['sat','ส'],['sun','อา']].map(([v,l]) => `
+            <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+              <input type="checkbox" value="${v}" class="alarm-repeat-cb"> ${l}
+            </label>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `, `
+    <button onclick="addAlarmFromModal()" class="nb-btn nb-btn-primary full">
+      ⏰ บันทึกนาฬิกาปลุก
+    </button>
+  `);
+}
+
+async function addAlarmFromModal() {
+  const time  = document.getElementById('alarmTime')?.value;
+  const label = document.getElementById('alarmLabel')?.value || 'นาฬิกาปลุก';
+  const snoozeMin = parseInt(document.getElementById('alarmSnooze')?.value || '5');
+  const repeat = [...document.querySelectorAll('.alarm-repeat-cb:checked')]
+    .map(cb => cb.value);
+
+  if (!time) { showToast('⚠️ กรุณาเลือกเวลา', 'warn'); return; }
+  await addAlarm(time, label, snoozeMin, repeat);
+  closeModal();
+}
+
+async function addAlarm(time, label, snoozeMin = 5, repeat = []) {
+  const alarm = {
+    id: Date.now().toString(),
+    time, label,
+    enabled: true,
+    snoozeMin,
+    repeat,
+    isSnooze: false
+  };
+  state.alarms.push(alarm);
+  state.alarms.sort((a,b) => a.time.localeCompare(b.time));
+  localStorage.setItem('alarms', JSON.stringify(state.alarms));
+  try { await fsSet('alarms', 'list', { alarms: state.alarms }); } catch(e) {}
+  render();
+  showToast(`⏰ ตั้งปลุก ${time} แล้ว`);
+}
+
+function openQuickAddModal() {
+  openModal('⚡ Quick Add ชุดปลุก', `
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div>
+        <label class="form-label">เวลาเริ่มต้น</label>
+        <input type="time" id="qaStartTime" value="07:00"
+          style="font-size:28px;font-family:JetBrains Mono;width:100%;
+                 padding:12px;border-radius:12px;border:1px solid var(--border);
+                 background:var(--bg);color:var(--text);text-align:center">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <label class="form-label">จำนวนครั้ง</label>
+          <input type="number" id="qaCount" class="nb-input" value="5" min="1" max="20">
+        </div>
+        <div>
+          <label class="form-label">ห่างกัน (นาที)</label>
+          <input type="number" id="qaInterval" class="nb-input" value="5" min="1" max="60">
+        </div>
+      </div>
+    </div>
+  `, `
+    <button onclick="quickAddFromModal()" class="nb-btn nb-btn-primary full">
+      ⚡ สร้างชุดปลุก
+    </button>
+  `);
+}
+
+async function quickAddFromModal() {
+  const startTime = document.getElementById('qaStartTime')?.value || '07:00';
+  const count = parseInt(document.getElementById('qaCount')?.value || '5');
+  const interval = parseInt(document.getElementById('qaInterval')?.value || '5');
+  await quickAddAlarms(count, interval, startTime);
+  closeModal();
+}
+
+async function quickAddAlarms(count, intervalMin, startTime = '07:00') {
+  const [h, m] = startTime.split(':').map(Number);
+  for (let i = 0; i < count; i++) {
+    const totalMin = h * 60 + m + i * intervalMin;
+    const nh = Math.floor(totalMin / 60) % 24;
+    const nm = totalMin % 60;
+    const time = `${nh.toString().padStart(2,'0')}:${nm.toString().padStart(2,'0')}`;
+    await addAlarm(time, `ปลุกครั้งที่ ${i+1}`, 5, []);
+    await new Promise(r => setTimeout(r, 50));
+  }
+  showToast(`⏰ สร้าง ${count} นาฬิกาปลุกแล้ว`);
+}
+
+function toggleAlarm(id, enabled) {
+  const alarm = state.alarms.find(a => a.id === id);
+  if (alarm) {
+    alarm.enabled = enabled;
+    localStorage.setItem('alarms', JSON.stringify(state.alarms));
+    fsSet('alarms', 'list', { alarms: state.alarms }).catch(()=>{});
+    showToast(enabled ? `⏰ เปิดปลุก ${alarm.time}` : `🔕 ปิดปลุก ${alarm.time}`);
+  }
+}
+
+function deleteAlarm(id) {
+  state.alarms = state.alarms.filter(a => a.id !== id);
+  localStorage.setItem('alarms', JSON.stringify(state.alarms));
+  fsSet('alarms', 'list', { alarms: state.alarms }).catch(()=>{});
+  render();
+  showToast('🗑 ลบนาฬิกาปลุกแล้ว');
+}
+
+async function enterSleepMode() {
+  state.sleepMode = true;
+  const screen = document.createElement('div');
+  screen.id = 'sleepModeScreen';
+  screen.style.cssText = `
+    position:fixed; inset:0; z-index:99999;
+    background:#000; color:#fff;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    font-family:'JetBrains Mono',monospace;
+    cursor:pointer; user-select:none;
+  `;
+  screen.innerHTML = `
+    <div id="sleepClock" style="font-size:72px;font-weight:600;letter-spacing:4px;
+      text-shadow:0 0 40px rgba(255,255,255,0.3)">00:00</div>
+    <div id="sleepDate" style="font-size:16px;opacity:0.5;margin-top:8px;
+      font-family:Kanit"></div>
+    <div id="sleepNextAlarm" style="margin-top:32px;font-size:14px;
+      opacity:0.4;font-family:Kanit;text-align:center"></div>
+    <div id="sleepControls" style="position:fixed;bottom:40px;right:24px;
+      opacity:0;transition:opacity 0.3s">
+      <button onclick="exitSleepMode()" style="background:rgba(255,255,255,0.1);
+        color:rgba(255,255,255,0.5);border:1px solid rgba(255,255,255,0.2);
+        padding:10px 20px;border-radius:20px;font-family:Kanit;font-size:13px;
+        cursor:pointer">ออกจากโหมดนอน</button>
+    </div>
+  `;
+
+  let hideTimer;
+  screen.addEventListener('click', () => {
+    const ctrl = document.getElementById('sleepControls');
+    if (ctrl) {
+      ctrl.style.opacity = '1';
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => { ctrl.style.opacity = '0'; }, 3000);
+    }
+  });
+
+  document.body.appendChild(screen);
+  updateSleepClock();
+  state.sleepClockInterval = setInterval(updateSleepClock, 1000);
+
+  try {
+    state.wakeLock = await navigator.wakeLock.request('screen');
+  } catch(e) { console.warn('Wake Lock not supported'); }
+}
+
+function updateSleepClock() {
+  const now = new Date();
+  const h = now.getHours().toString().padStart(2,'0');
+  const m = now.getMinutes().toString().padStart(2,'0');
+  const s = now.getSeconds().toString().padStart(2,'0');
+
+  const clockEl = document.getElementById('sleepClock');
+  if (clockEl) clockEl.textContent = `${h}:${m}:${s}`;
+
+  const dateEl = document.getElementById('sleepDate');
+  if (dateEl) {
+    const days = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
+    dateEl.textContent = `${days[now.getDay()]} ${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()+543}`;
+  }
+
+  const nextAlarmEl = document.getElementById('sleepNextAlarm');
+  if (nextAlarmEl) {
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const enabled = state.alarms.filter(a => a.enabled).sort((a,b) => a.time.localeCompare(b.time));
+    const next = enabled.find(a => {
+      const [ah, am] = a.time.split(':').map(Number);
+      return ah * 60 + am > nowMin;
+    }) || enabled[0];
+
+    if (next) {
+      const [ah, am] = next.time.split(':').map(Number);
+      let diff = ah * 60 + am - nowMin;
+      if (diff < 0) diff += 24 * 60;
+      const dh = Math.floor(diff / 60), dm = diff % 60;
+      nextAlarmEl.textContent = `⏰ ปลุก ${next.time} น. — อีก ${dh > 0 ? dh+'ชม.' : ''}${dm}นาที`;
+    } else {
+      nextAlarmEl.textContent = 'ไม่มีนาฬิกาปลุกที่เปิดอยู่';
+    }
+  }
+}
+
+function checkAlarms() {
+  if (state.alarmRinging) return;
+  const now = new Date();
+  const timeStr = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+  const dayMap = ['sun','mon','tue','wed','thu','fri','sat'];
+  const today = dayMap[now.getDay()];
+
+  state.alarms.forEach(alarm => {
+    if (!alarm.enabled || alarm.time !== timeStr) return;
+    if (alarm.repeat.length > 0 && !alarm.repeat.includes(today)) return;
+    const lastRing = localStorage.getItem('alarm_rang_' + alarm.id);
+    if (lastRing === timeStr) return;
+
+    triggerAlarm(alarm);
+    localStorage.setItem('alarm_rang_' + alarm.id, timeStr);
+
+    if (alarm.repeat.length === 0 && !alarm.isSnooze) {
+      alarm.enabled = false;
+      localStorage.setItem('alarms', JSON.stringify(state.alarms));
+    }
+    if (alarm.isSnooze) {
+      state.alarms = state.alarms.filter(a => a.id !== alarm.id);
+      localStorage.setItem('alarms', JSON.stringify(state.alarms));
+    }
+  });
+}
+
+function triggerAlarm(alarm) {
+  state.alarmRinging = true;
+  state.currentAlarmId = alarm.id;
+
+  function playAlarmSound() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      state.alarmAudioCtx = ctx;
+
+      function beep(freq, startTime, duration, vol = 0.3) {
+        const osc  = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = freq;
+        osc.type = 'square';
+        gain.gain.setValueAtTime(vol, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+        osc.start(startTime);
+        osc.stop(startTime + duration);
+      }
+
+      for (let i = 0; i < 8; i++) {
+        const vol = Math.min(0.1 + i * 0.05, 0.5);
+        beep(880,  ctx.currentTime + i * 0.6,      0.3, vol);
+        beep(1100, ctx.currentTime + i * 0.6 + 0.3, 0.2, vol);
+      }
+      beep(1320, ctx.currentTime + 5, 0.5, 0.5);
+      beep(1540, ctx.currentTime + 5.3, 0.5, 0.5);
+    } catch(e) { console.warn('Audio error:', e); }
+  }
+
+  playAlarmSound();
+  state.alarmSoundInterval = setInterval(playAlarmSound, 6000);
+
+  if ('vibrate' in navigator) {
+    navigator.vibrate([500,150,500,150,500,150,1000,300,1000]);
+    state.alarmVibrateInterval = setInterval(() => {
+      navigator.vibrate([500,150,500,150,1000]);
+    }, 3500);
+  }
+  showAlarmOverlay(alarm);
+}
+
+function showAlarmOverlay(alarm) {
+  let overlay = document.getElementById('alarmOverlay');
+  if (overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.id = 'alarmOverlay';
+  overlay.style.cssText = `
+    position:fixed; inset:0; z-index:999999;
+    background:linear-gradient(180deg,#0f0f1a 0%,#1a0f2e 100%);
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    font-family:Kanit; color:white;
+    animation: alarmFadeIn 0.5s ease;
+  `;
+  const now = new Date();
+  const timeStr = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+
+  overlay.innerHTML = `
+    <div style="text-align:center;padding:0 24px">
+      <div style="font-size:16px;opacity:0.5;margin-bottom:8px;font-family:JetBrains Mono">ALARM</div>
+      <div style="font-size:80px;font-family:JetBrains Mono;font-weight:600;animation:alarmPulse 1s infinite;text-shadow:0 0 60px rgba(239,68,68,0.8)">${timeStr}</div>
+      <div style="font-size:22px;margin-top:16px;font-weight:500">${alarm.label || 'นาฬิกาปลุก'}</div>
+      <div style="margin-top:48px;display:flex;flex-direction:column;gap:16px;width:100%;max-width:280px">
+        <button onclick="dismissAlarm()" style="padding:20px;font-size:18px;font-weight:700;background:linear-gradient(135deg,#ef4444,#dc2626);color:white;border:none;border-radius:24px;cursor:pointer;font-family:Kanit;box-shadow:0 8px 32px rgba(239,68,68,0.5);animation:alarmPulse 1s infinite">⛔ หยุดปลุก</button>
+        <button onclick="snoozeAlarm(${alarm.snoozeMin||5})" style="padding:16px;font-size:16px;background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);border:1px solid rgba(255,255,255,0.2);border-radius:20px;cursor:pointer;font-family:Kanit">💤 เลื่อน ${alarm.snoozeMin||5} นาที</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function dismissAlarm() {
+  state.alarmRinging = false;
+  clearInterval(state.alarmSoundInterval);
+  clearInterval(state.alarmVibrateInterval);
+  try { navigator.vibrate(0); } catch(e) {}
+  try { state.alarmAudioCtx?.close(); } catch(e) {}
+  state.alarmAudioCtx = null;
+  document.getElementById('alarmOverlay')?.remove();
+  showToast('✅ หยุดปลุกแล้ว');
+}
+
+async function snoozeAlarm(minutes) {
+  dismissAlarm();
+  const snoozeTime = new Date(Date.now() + minutes * 60000);
+  const h = snoozeTime.getHours().toString().padStart(2,'0');
+  const m = snoozeTime.getMinutes().toString().padStart(2,'0');
+  await addAlarm(`${h}:${m}`, `💤 Snooze (${h}:${m})`, minutes, []);
+  const snoozed = state.alarms.find(a => a.time === `${h}:${m}`);
+  if (snoozed) { snoozed.isSnooze = true; localStorage.setItem('alarms', JSON.stringify(state.alarms)); }
+  showToast(`💤 เลื่อนปลุก ${minutes} นาที (${h}:${m})`);
+}
+
+function exitSleepMode() {
+  state.sleepMode = false;
+  clearInterval(state.sleepClockInterval);
+  try { state.wakeLock?.release(); } catch(e) {}
+  state.wakeLock = null;
+  document.getElementById('sleepModeScreen')?.remove();
+  render();
+}
+
+function sendAlarmsToShortcuts() {
+  const enabled = state.alarms.filter(a => a.enabled && !a.isSnooze);
+  if (enabled.length === 0) { showToast('⚠️ ไม่มีนาฬิกาปลุกที่เปิดอยู่', 'warn'); return; }
+  const times = enabled.map(a => a.time).join(',');
+  const labels = enabled.map(a => encodeURIComponent(a.label || 'ปลุก')).join(',');
+  const url = `shortcuts://run-shortcut?name=NITIPAT_ALARM&input=${encodeURIComponent(JSON.stringify({ times, labels, count: enabled.length }))}`;
+  openModal('🍎 ส่งไป iPhone Shortcuts', `
+    <div style="display:flex;flex-direction:column;gap:16px;font-size:14px">
+      <div style="background:var(--bg-solid);padding:12px;border-radius:12px">
+        <div style="font-weight:600;margin-bottom:8px">นาฬิกาปลุกที่จะส่ง:</div>
+        ${enabled.map(a => `<div>⏰ ${a.time} — ${a.label}</div>`).join('')}
+      </div>
+      <div style="color:var(--text-muted);font-size:13px">⚠️ ต้องติดตั้ง Shortcut ชื่อ "NITIPAT_ALARM" ก่อน</div>
+    </div>
+  `, `<button onclick="window.location.href='${url}'; closeModal();" class="nb-btn nb-btn-primary full">🍎 เปิด Shortcuts</button>`);
+}
