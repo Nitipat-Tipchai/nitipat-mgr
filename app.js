@@ -5640,13 +5640,24 @@ async function enterSleepMode() {
   }
   state.timerWorker.postMessage('start');
 
-  // 2. Media Session & Silent Audio: หลอก iOS ว่าแอปกำลังเล่นสื่ออยู่
+  // 2. Media Session & Silent Audio: ใช้ไฟล์ MP3 เงียบที่ยาวขึ้นเพื่อให้ iOS ยอมรับว่าเป็นเพลง
   if (!state.keepAliveAudio) {
-    state.keepAliveAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+    // ไฟล์ MP3 เงียบประมาณ 2 วินาที (Base64 ที่สมบูรณ์กว่าเดิม)
+    const silentMp3 = 'data:audio/mpeg;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA//8AAABhbmFtZSAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//uQxAMAAANIAAAAQAAAAgAAAAsAAAgAAAAbAAAQAAAAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
+    state.keepAliveAudio = new Audio(silentMp3);
     state.keepAliveAudio.loop = true;
-    state.keepAliveAudio.volume = 0.01;
+    state.keepAliveAudio.volume = 0.05; // ปรับเพิ่มนิดหน่อยแต่ยังเบามาก เพื่อให้ iOS มั่นใจว่ามีเสียง
   }
-  state.keepAliveAudio.play().catch(() => {});
+  
+  const startAudio = () => {
+    state.keepAliveAudio.play().then(() => {
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = 'playing';
+      }
+    }).catch(e => console.log("Audio Play Failed", e));
+  };
+  
+  startAudio();
 
   if ('mediaSession' in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({
@@ -5675,7 +5686,8 @@ async function enterSleepMode() {
       font-family:Kanit"></div>
     <div id="sleepNextAlarm" style="margin-top:32px;font-size:14px;
       opacity:0.4;font-family:Kanit;text-align:center"></div>
-    <div id="keepAlivePulse" style="margin-top:16px; width:6px; height:6px; background:#0f0; border-radius:50%; opacity:0.5; animation: pulse 2s infinite"></div>
+    <div id="keepAlivePulse" style="margin-top:16px; width:6px; height:6px; background:#0f0; border-radius:50%; opacity:0.8; animation: pulse 2s infinite"></div>
+    <div id="iosAudioHint" style="font-size:10px; color:#444; margin-top:20px; font-family:Kanit">หากปัด Control Center แล้วไม่เห็นชื่อแอป ให้กดที่นี่หนึ่งครั้ง</div>
     <div id="sleepControls" style="position:fixed;bottom:40px;right:24px;
       opacity:0;transition:opacity 0.3s">
       <button onclick="exitSleepMode()" style="background:rgba(255,255,255,0.1);
@@ -5685,8 +5697,11 @@ async function enterSleepMode() {
     </div>
   `;
 
-  let hideTimer;
   screen.addEventListener('click', () => {
+    // ทุกครั้งที่กดหน้าจอ ให้ช่วย Re-sync เสียงเผื่อ iOS หลุด
+    if (state.keepAliveAudio && state.keepAliveAudio.paused) {
+      state.keepAliveAudio.play().catch(() => {});
+    }
     const ctrl = document.getElementById('sleepControls');
     if (ctrl) {
       ctrl.style.opacity = '1';
@@ -5697,7 +5712,6 @@ async function enterSleepMode() {
 
   document.body.appendChild(screen);
   updateSleepClock();
-  state.sleepClockInterval = setInterval(updateSleepClock, 1000);
 
   try {
     state.wakeLock = await navigator.wakeLock.request('screen');
@@ -5770,6 +5784,13 @@ function checkAlarms() {
 function triggerAlarm(alarm) {
   state.alarmRinging = true;
   state.currentAlarmId = alarm.id;
+
+  // หากอยู่ในโหมดนอน ให้ใช้ keepAliveAudio เล่นเสียงปลุกแทนเพื่อความชัวร์บน iOS
+  if (state.sleepMode && state.keepAliveAudio) {
+    state.keepAliveAudio.src = 'https://actions.google.com/sounds/v1/alarms/alarm_clock_beep.ogg'; 
+    state.keepAliveAudio.volume = 1.0;
+    state.keepAliveAudio.play().catch(() => {});
+  }
 
   async function playAlarmSound() {
     try {
@@ -5919,3 +5940,11 @@ window.dismissAlarm = dismissAlarm;
 window.snoozeAlarm = snoozeAlarm;
 window.exitSleepMode = exitSleepMode;
 window.hideCheckinBanner = hideCheckinBanner;
+
+// Inject Pulse Animation
+if (!document.getElementById('mgr-animations')) {
+  const s = document.createElement('style');
+  s.id = 'mgr-animations';
+  s.innerHTML = `@keyframes pulse { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 1; transform: scale(1.5); } }`;
+  document.head.appendChild(s);
+}
