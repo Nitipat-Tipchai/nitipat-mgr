@@ -3084,11 +3084,29 @@ window.checkFcmStatus = () => {
             Tokens (Snippets):<br>
             ${res.tokens.map(t => `• ${t}`).join('<br>')}
           </div>
+          <button class="btn-glass danger full" style="margin-top:20px;" onclick="resetFcmTokens()">🗑 ล้างข้อมูลอุปกรณ์ทั้งหมด</button>
         </div>
       `, '<button class="nb-btn nb-btn-primary full" onclick="closeModal()">รับทราบ</button>');
     }).getFcmStatus();
   } else {
     showToast('❌ ไม่สามารถติดต่อเซิร์ฟเวอร์ได้', 'err');
+  }
+};
+
+window.resetFcmTokens = async () => {
+  if (!confirm('⚠️ ยืนยันที่จะล้างข้อมูลอุปกรณ์ทั้งหมดใช่หรือไม่?\n\n(ทุกเครื่องจะต้องกด "เปิดใช้งาน" ใหม่เพื่อรับแจ้งเตือนอีกครั้ง)')) return;
+  
+  if (typeof google !== 'undefined' && google.script) {
+    showToast('⏳ กำลังล้างข้อมูล...');
+    google.script.run.withSuccessHandler(async () => {
+      closeModal();
+      showToast('✅ ล้างข้อมูลสำเร็จ! กรุณากดลงทะเบียนใหม่');
+      // ล้าง Firestore ด้วยเพื่อความสะอาด
+      try {
+        const snap = await getDocs(query(collection(db, 'fcm_tokens'), where('userId', '==', STUDENT.id)));
+        for (const d of snap.docs) await deleteDoc(d.ref);
+      } catch(e) {}
+    }).resetFcmTokens();
   }
 };
 
