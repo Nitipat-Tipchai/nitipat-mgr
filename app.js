@@ -5926,19 +5926,34 @@ function exitSleepMode() {
 
 function sendAlarmsToShortcuts() {
   const enabled = state.alarms.filter(a => a.enabled && !a.isSnooze);
-  if (enabled.length === 0) { showToast('⚠️ ไม่มีนาฬิกาปลุกที่เปิดอยู่', 'warn'); return; }
-  const times = enabled.map(a => a.time).join(',');
-  const labels = enabled.map(a => encodeURIComponent(a.label || 'ปลุก')).join(',');
-  const url = `shortcuts://run-shortcut?name=NITIPAT_ALARM&input=${encodeURIComponent(JSON.stringify({ times, labels, count: enabled.length }))}`;
-  openModal('🍎 ส่งไป iPhone Shortcuts', `
-    <div style="display:flex;flex-direction:column;gap:16px;font-size:14px">
-      <div style="background:var(--bg-solid);padding:12px;border-radius:12px">
-        <div style="font-weight:600;margin-bottom:8px">นาฬิกาปลุกที่จะส่ง:</div>
-        ${enabled.map(a => `<div>⏰ ${a.time} — ${a.label}</div>`).join('')}
+  if (enabled.length === 0) { 
+    showToast('⚠️ ไม่มีนาฬิกาปลุกที่เปิดอยู่', 'warn'); 
+    return; 
+  }
+  
+  // สร้างข้อมูลแบบ List สำหรับ Shortcut
+  const alarmData = enabled.map(a => ({
+    time: a.time,
+    label: (a.label || 'ปลุก') + ' (NITIPAT)'
+  }));
+
+  const payload = JSON.stringify(alarmData);
+  const url = `shortcuts://run-shortcut?name=NITIPAT_ALARM&input=${encodeURIComponent(payload)}`;
+  
+  // เปิด Modal แนะนำ
+  openModal('🍎 ส่งข้อมูลไปแอปนาฬิกา', `
+    <div style="display:flex;flex-direction:column;gap:16px;font-size:14px;font-family:Kanit">
+      <div style="background:var(--bg-solid);padding:12px;border-radius:12px;border:1px solid var(--border-color)">
+        <div style="font-weight:600;margin-bottom:8px">ปลุกทั้งหมด ${enabled.length} รายการ:</div>
+        ${enabled.map(a => `<div style="font-size:13px; opacity:0.8">⏰ ${a.time} — ${a.label}</div>`).join('')}
       </div>
-      <div style="color:var(--text-muted);font-size:13px">⚠️ ต้องติดตั้ง Shortcut ชื่อ "NITIPAT_ALARM" ก่อน</div>
+      <div style="color:var(--accent);font-size:13px; font-weight:500">
+        💡 เมื่อกดปุ่มด้านล่าง ระบบจะเปิดแอป Shortcuts เพื่อสร้างนาฬิกาปลุกให้คุณโดยอัตโนมัติครับ
+      </div>
     </div>
-  `, `<button onclick="window.location.href='${url}'; closeModal();" class="nb-btn nb-btn-primary full">🍎 เปิด Shortcuts</button>`);
+  `, `
+    <button onclick="window.location.href='${url}'; closeModal();" class="nb-btn nb-btn-primary full">🚀 เริ่มซิงก์ไป iPhone</button>
+  `);
 }
 
 // Expose Alarm & Notification functions to window for HTML onclick handlers
