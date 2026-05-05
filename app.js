@@ -5931,28 +5931,22 @@ function sendAlarmsToShortcuts() {
     return; 
   }
   
-  // สร้างข้อมูลแบบ List สำหรับ Shortcut
-  const alarmData = enabled.map(a => ({
-    time: a.time,
-    label: (a.label || 'ปลุก') + ' (NITIPAT)'
-  }));
-
-  const payload = JSON.stringify(alarmData);
+  // ส่งแค่รายการเวลาแยกด้วยการขึ้นบรรทัดใหม่ (เพื่อให้สร้าง Shortcut ง่ายที่สุด)
+  const payload = enabled.map(a => a.time).join('\n');
   const url = `shortcuts://run-shortcut?name=NITIPAT_ALARM&input=${encodeURIComponent(payload)}`;
   
-  // เปิด Modal แนะนำ
-  openModal('🍎 ส่งข้อมูลไปแอปนาฬิกา', `
-    <div style="display:flex;flex-direction:column;gap:16px;font-size:14px;font-family:Kanit">
+  openModal('🍎 ซิงก์นาฬิกาปลุกไป iPhone', `
+    <div style="display:flex;flex-direction:column;gap:12px;font-size:14px;font-family:Kanit">
       <div style="background:var(--bg-solid);padding:12px;border-radius:12px;border:1px solid var(--border-color)">
-        <div style="font-weight:600;margin-bottom:8px">ปลุกทั้งหมด ${enabled.length} รายการ:</div>
-        ${enabled.map(a => `<div style="font-size:13px; opacity:0.8">⏰ ${a.time} — ${a.label}</div>`).join('')}
+        <div style="font-weight:600;margin-bottom:8px">เวลาที่จะปลุก (${enabled.length} อัน):</div>
+        ${enabled.map(a => `<div style="font-size:15px; font-weight:bold; color:var(--accent)">• ${a.time} น.</div>`).join('')}
       </div>
-      <div style="color:var(--accent);font-size:13px; font-weight:500">
-        💡 เมื่อกดปุ่มด้านล่าง ระบบจะเปิดแอป Shortcuts เพื่อสร้างนาฬิกาปลุกให้คุณโดยอัตโนมัติครับ
+      <div style="color:var(--text-muted);font-size:12px; line-height:1.5">
+        💡 ระบบจะส่งเวลาเหล่านี้ไปที่แอป **Shortcuts** เพื่อสร้างนาฬิกาปลุกใน iPhone ให้คุณโดยอัตโนมัติครับ
       </div>
     </div>
   `, `
-    <button onclick="window.location.href='${url}'; closeModal();" class="nb-btn nb-btn-primary full">🚀 เริ่มซิงก์ไป iPhone</button>
+    <button onclick="window.location.href='${url}'; closeModal();" class="nb-btn nb-btn-primary full">🚀 เริ่มส่งข้อมูล</button>
   `);
 }
 
