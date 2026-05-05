@@ -4709,3 +4709,90 @@
       .icon-btn-minimal:hover {
         color: #1e293b;
       }
+
+    /* ══ ALARM SYSTEM ══ */
+    .next-alarm-pill {
+      background: rgba(79, 70, 229, 0.1);
+      color: var(--c-accent);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid rgba(79, 70, 229, 0.2);
+    }
+    .quick-add-strip {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 12px;
+      overflow-x: auto;
+      margin-bottom: 16px;
+      background: var(--surface);
+      border-radius: 12px;
+      scrollbar-width: none;
+    }
+    .quick-label { font-size: 11px; opacity: 0.6; white-space: nowrap; }
+    .alarm-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 80px;
+    }
+    .alarm-card {
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 20px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .alarm-card.disabled { opacity: 0.5; filter: grayscale(0.5); }
+    .alarm-main { flex: 1; }
+    .alarm-time {
+      font-size: 32px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text);
+      line-height: 1;
+    }
+    .alarm-label { font-size: 14px; font-weight: 600; margin-top: 4px; color: var(--text); }
+    .alarm-repeat { font-size: 11px; opacity: 0.5; margin-top: 2px; }
+    .alarm-actions { display: flex; align-items: center; gap: 16px; }
+    .alarm-delete-btn {
+      background: none; border: none; font-size: 18px; cursor: pointer; opacity: 0.3;
+      transition: opacity 0.2s;
+    }
+    .alarm-delete-btn:hover { opacity: 1; color: var(--c-red); }
+    .add-alarm-btn {
+      position: fixed; bottom: 100px; right: 24px;
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      color: white; border: none; padding: 16px 24px;
+      border-radius: 30px; font-weight: 700; font-size: 15px;
+      box-shadow: 0 8px 24px rgba(79, 70, 229, 0.4);
+      cursor: pointer; z-index: 100;
+      animation: float 3s ease-in-out infinite;
+    }
+    .sleep-mode-btn, .shortcuts-btn {
+      width: 100%; padding: 14px; border-radius: 16px;
+      margin-top: 12px; border: 1.5px solid var(--border);
+      background: var(--surface); color: var(--text);
+      font-weight: 600; font-size: 14px; cursor: pointer;
+    }
+    .shortcuts-btn { background: #000; color: #fff; border: none; }
+    @keyframes alarmPulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.05); opacity: 0.8; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    @keyframes alarmFadeIn {
+      from { opacity: 0; transform: scale(1.1); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes slideDown {
+      from { transform: translateY(-100%); }
+      to { transform: translateY(0); }
+    }
