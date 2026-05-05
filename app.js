@@ -5690,6 +5690,9 @@ async function enterSleepMode() {
       opacity:0.4;font-family:Kanit;text-align:center"></div>
     <div id="keepAlivePulse" style="margin-top:16px; width:6px; height:6px; background:#0f0; border-radius:50%; opacity:0.8; animation: pulse 2s infinite"></div>
     <div id="iosAudioHint" style="font-size:10px; color:#444; margin-top:20px; font-family:Kanit">หากปัด Control Center แล้วไม่เห็นชื่อแอป ให้กดที่นี่หนึ่งครั้ง</div>
+    <div style="margin-top:12px;">
+       <button onclick="state.keepAliveAudio.play()" style="background:none; border:1px solid #333; color:#555; padding:4px 12px; border-radius:12px; font-size:11px; font-family:Kanit">🔔 ทดสอบระบบเสียง</button>
+    </div>
     <div id="sleepControls" style="position:fixed;bottom:40px;right:24px;
       opacity:0;transition:opacity 0.3s">
       <button onclick="exitSleepMode()" style="background:rgba(255,255,255,0.1);
@@ -5714,6 +5717,15 @@ async function enterSleepMode() {
 
   document.body.appendChild(screen);
   updateSleepClock();
+
+  // ชวนซิงก์ Shortcuts เป็น Backup
+  if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    setTimeout(() => {
+      if (confirm('🍎 ต้องการซิงก์เวลาปลุกไปยังแอป Shortcuts เพื่อความชัวร์ (Backup) ไหมครับ?')) {
+        sendAlarmsToShortcuts();
+      }
+    }, 1500);
+  }
 
   try {
     state.wakeLock = await navigator.wakeLock.request('screen');
@@ -5789,7 +5801,8 @@ function triggerAlarm(alarm) {
 
   // หากอยู่ในโหมดนอน ให้ใช้ keepAliveAudio เล่นเสียงปลุกแทนเพื่อความชัวร์บน iOS
   if (state.sleepMode && state.keepAliveAudio) {
-    state.keepAliveAudio.src = 'https://actions.google.com/sounds/v1/alarms/alarm_clock_beep.ogg'; 
+    // เปลี่ยนจาก .ogg เป็น .mp3 (iOS รองรับ)
+    state.keepAliveAudio.src = 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.mp3'; 
     state.keepAliveAudio.volume = 1.0;
     state.keepAliveAudio.play().catch(() => {});
   }
