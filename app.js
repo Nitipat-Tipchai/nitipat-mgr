@@ -3069,6 +3069,29 @@ window.deleteSemesterCalendar = async (semName) => {
   }
 };
 
+window.checkFcmStatus = () => {
+  if (typeof google !== 'undefined' && google.script) {
+    showToast('⌛ กำลังตรวจสอบจำนวนอุปกรณ์...');
+    google.script.run.withSuccessHandler(res => {
+      openModal('📱 สถานะการแจ้งเตือน', `
+        <div style="text-align:center; padding:20px;">
+          <div style="font-size:40px; margin-bottom:15px;">📡</div>
+          <div style="font-size:18px; font-weight:700;">ลงทะเบียนไว้ ${res.count} อุปกรณ์</div>
+          <p style="font-size:13px; color:var(--c-muted); margin-top:10px;">
+            หากเปลี่ยนเครื่องใหม่ หรือล้างแคช เบราว์เซอร์จะลงทะเบียนรหัสใหม่ให้อัตโนมัติครับ
+          </p>
+          <div style="margin-top:20px; font-family:monospace; font-size:11px; opacity:0.6; text-align:left; background:rgba(0,0,0,0.05); padding:10px; border-radius:8px;">
+            Tokens (Snippets):<br>
+            ${res.tokens.map(t => `• ${t}`).join('<br>')}
+          </div>
+        </div>
+      `, '<button class="nb-btn nb-btn-primary full" onclick="closeModal()">รับทราบ</button>');
+    }).getFcmStatus();
+  } else {
+    showToast('❌ ไม่สามารถติดต่อเซิร์ฟเวอร์ได้', 'err');
+  }
+};
+
 // ══════════════════════════════════════════════════
 // ASSIGNMENTS
 // ══════════════════════════════════════════════════
@@ -3624,7 +3647,10 @@ function renderSettings() {
       <div style="font-weight:600; font-size:14px;">Browser Push Notification</div>
       <div style="font-size:12px; color:var(--c-muted); margin-top:4px;">รับการแจ้งเตือนเดดไลน์และ GPA โดยตรงผ่านเบราว์เซอร์นี้</div>
     </div>
-    <button class="btn-glass-primary" onclick="requestNotificationPermission()">เปิดใช้งานการแจ้งเตือน</button>
+    <div style="display:flex; gap:8px;">
+      <button class="btn-glass sm" onclick="checkFcmStatus()">🔍 เช็คสถานะ</button>
+      <button class="btn-glass-primary sm" onclick="requestNotificationPermission()">เปิดใช้งาน</button>
+    </div>
   </div>
 </div>
 
@@ -4979,6 +5005,18 @@ async function initWebPush() {
     try {
       await navigator.serviceWorker.register('firebase-messaging-sw.js');
       console.log('Firebase Service Worker registered');
+      
+      // อัปเดต Token อัตโนมัติถ้าเคยอนุญาตแล้ว
+      if (Notification.permission === 'granted' && typeof getToken !== 'undefined') {
+        const registration = await navigator.serviceWorker.ready;
+        const currentToken = await getToken(messaging, {
+          vapidKey: 'BGJJHyr07SwrKxHuo1w8HDRYCb6R-p6kZsk6yRaq-ho-iQ-7S0YdfTgz9KKDFW95jyQ927xCY51r6Wml84TonF4'.trim(),
+          serviceWorkerRegistration: registration
+        });
+        if (currentToken) {
+          google.script.run.saveFcmToken(currentToken);
+        }
+      }
     } catch (err) {
       console.warn('Service Worker registration failed:', err);
     }
@@ -5002,12 +5040,18 @@ async function requestNotificationPermission() {
 
       if (currentToken) {
         console.log('FCM Token:', currentToken);
-        await setDoc(doc(db, 'app_state', 'notification_token'), {
+        // ใช้ ID เครื่อง (deviceId) หรือ Hash ของ Token เพื่อไม่ให้ทับกัน
+        const tokenHash = currentToken.substring(currentToken.length - 20);
+        await setDoc(doc(db, 'fcm_tokens', tokenHash), {
           token: currentToken,
           updatedAt: serverTimestamp(),
-          userId: STUDENT.id
+          userId: STUDENT.id,
+          platform: navigator.platform,
+          userAgent: navigator.userAgent
         });
-        google.script.run.saveFcmToken(currentToken);
+        google.script.run.withSuccessHandler(res => {
+          showToast(`✅ ลงทะเบียนสำเร็จ! (อุปกรณ์ที่ ${res.count})`);
+        }).saveFcmToken(currentToken);
 
         showToast("✅ เปิดการแจ้งเตือน FCM สำเร็จ!");
         new Notification("NITIPAT MANAGER", {
