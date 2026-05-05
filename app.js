@@ -5019,7 +5019,15 @@ async function requestNotificationPermission() {
       }
     } catch (err) {
       console.error('An error occurred while retrieving token. ', err);
-      showToast("❌ เกิดข้อผิดพลาดในการลงทะเบียน FCM", "err");
+      let errorMsg = "❌ เกิดข้อผิดพลาดในการลงทะเบียน FCM";
+      
+      if (err.name === 'AbortError' || err.message.includes('push service error')) {
+        errorMsg = "⚠️ ไม่สามารถติดต่อบริการ Push ได้\n\n(หากใช้ iPhone/iPad ต้อง 'เพิ่มไปยังหน้าจอโฮม' ก่อน หรืออาจเกิดจากบล็อกโฆษณา/VPN)";
+      } else if (err.code === 'messaging/permission-blocked') {
+        errorMsg = "⚠️ คุณบล็อกการแจ้งเตือนไว้ กรุณาปลดล็อกในตั้งค่าเบราว์เซอร์";
+      }
+      
+      showToast(errorMsg, "err");
     }
   } else {
     showToast("⚠️ คุณยังไม่ได้อนุญาตการแจ้งเตือน", "err");
