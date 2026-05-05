@@ -3052,6 +3052,23 @@ window.exportIDCard = async () => {
   }
 };
 
+window.deleteSemesterCalendar = async (semName) => {
+  if (!confirm(`ยืนยันที่จะลบปฏิทิน Google Calendar ของเทอม ${semName} ใช่หรือไม่?\n\n(การกระทำนี้จะลบ event ทั้งหมดที่เกี่ยวข้องกับเทอมนี้ออกจาก Google Calendar เท่านั้น แต่ข้อมูลในแอปยังคงอยู่)`)) return;
+  
+  if (typeof google !== 'undefined' && google.script) {
+    showToast(`⏳ กำลังลบปฏิทิน...`);
+    google.script.run.withSuccessHandler(res => {
+      if (res && res.success) {
+        showToast(`✅ ลบปฏิทิน ${semName} สำเร็จ`);
+      } else {
+        showToast(`❌ เกิดข้อผิดพลาด: ${res?.error || 'Unknown error'}`, 'err');
+      }
+    }).deleteCalendar(`NITIPAT MANAGER - ${semName}`);
+  } else {
+    showToast('❌ ไม่สามารถติดต่อ Google Script ได้', 'err');
+  }
+};
+
 // ══════════════════════════════════════════════════
 // ASSIGNMENTS
 // ══════════════════════════════════════════════════
@@ -3136,6 +3153,7 @@ function renderAssignCard(a, done = false) {
         ${d === 0 ? 'วันนี้!' : d < 0 ? `เลย ${Math.abs(d)}วัน` : `${d} วัน`}
       </span>`: ''}
       <button class="icon-btn" data-add-subtask="${a.id}" title="เพิ่มงานย่อย">➕</button>
+      <button class="icon-btn" data-edit-assign="${a.id}" title="แก้ไข">✏️</button>
       <button class="icon-btn danger" data-del-assign="${a.id}">🗑</button>
     </div>
   </div>`;
@@ -3197,7 +3215,10 @@ function renderExams() {
           ${e.scope ? `<div class="exam-scope">📖 ขอบเขต: ${e.scope}</div>` : ''}
           ${e.notes ? `<div class="exam-scope">📝 ${e.notes}</div>` : ''}
         </div>
-        <button class="icon-btn danger" data-del-exam="${e.id}">🗑</button>
+        <div style="display: flex; gap: 4px; margin-top: 8px;">
+          <button class="icon-btn" data-edit-exam="${e.id}" title="แก้ไข">✏️</button>
+          <button class="icon-btn danger" data-del-exam="${e.id}">🗑</button>
+        </div>
       </div>`).join('')}
     <div class="section-hd mt-4">🗂 ที่ผ่านมา (${past.length})</div>
     ${past.slice(0, 5).map(e => `<div class="exam-card glass-card past-exam">
@@ -3632,6 +3653,16 @@ function renderSettings() {
       <div class="setting-row"><button class="btn-glass danger" id="clearCacheBtn">🗑 ล้างข้อมูล Local Cache</button></div>
     </div>
     <div class="glass-card settings-block">
+      <div class="setting-title">📅 จัดการปฏิทิน (Google Calendar)</div>
+      <div style="font-size:11px; color:var(--c-muted); margin-bottom:10px;">ลบปฏิทินของเทอมเก่าๆ เพื่อเคลียร์พื้นที่ใน Google Calendar ของคุณ</div>
+      ${state.semesters.map(s => `
+        <div class="setting-row">
+          <span>เทอม ${s.name}</span>
+          <button class="btn-glass danger sm" onclick="deleteSemesterCalendar('${s.name}')">🗑 ลบ</button>
+        </div>
+      `).join('') || '<div class="setting-row"><span class="muted">ไม่มีข้อมูลเทอม</span></div>'}
+    </div>
+    <div class="glass-card settings-block">
       <div class="setting-title">ℹ️ เกี่ยวกับระบบ</div>
       <div class="setting-row"><span>นิสิต</span><span>${STUDENT.nameTh}</span></div>
       <div class="setting-row"><span>รหัสนิสิต</span><span class="mono-sm">${STUDENT.id}</span></div>
@@ -3893,44 +3924,48 @@ function openAddCourseForm(existing = null) {
   };
 }
 
-function openAddAssignmentForm() {
+function openAddAssignmentForm(a = null) {
   const allCourses = Object.values(state.courses).flat();
   const curSem = getCurrentSemester() || state.semesters[state.semesters.length - 1];
   const activeCourses = curSem ? (state.courses[curSem.id] || []) : allCourses;
-  openModal('เพิ่มการบ้าน / งาน', `
+  openModal(a ? 'แก้ไขการบ้าน / งาน' : 'เพิ่มการบ้าน / งาน', `
     <div class="form-grid">
       <div class="fg full"><label>วิชา <span class="req">*</span></label>
-        <select class="glass-select" id="f-aCourse">${activeCourses.map(c => `<option value="${c.id}">${c.code} — ${c.nameTh}</option>`).join('')}</select></div>
-      <div class="fg full"><label>ชื่องาน <span class="req">*</span></label><input class="glass-input" id="f-aTitle" placeholder="ชื่องาน / การบ้าน"></div>
+        <select class="glass-select" id="f-aCourse">${activeCourses.map(c => `<option value="${c.id}" ${a && a.courseId===c.id?'selected':''}>${c.code} — ${c.nameTh}</option>`).join('')}</select></div>
+      <div class="fg full"><label>ชื่องาน <span class="req">*</span></label><input class="glass-input" id="f-aTitle" placeholder="ชื่องาน / การบ้าน" value="${a?a.title:''}"></div>
       <div class="fg"><label>ประเภท</label>
         <select class="glass-select" id="f-aType">
-          <option>การบ้าน</option><option>รายงาน</option><option>โปรเจกต์</option><option>Quiz</option><option>Lab</option><option>งานกลุ่ม</option><option>อื่นๆ</option>
+          ${['การบ้าน','รายงาน','โปรเจกต์','Quiz','Lab','งานกลุ่ม','อื่นๆ'].map(t => `<option ${a && a.type===t?'selected':''}>${t}</option>`).join('')}
         </select></div>
-      <div class="fg"><label>กำหนดส่ง <span class="req">*</span></label><input type="date" class="glass-input" id="f-aDue"></div>
-      <div class="fg"><label>เวลาส่ง</label><input type="time" class="glass-input" id="f-aTime"></div>
-      <div class="fg"><label>คะแนนเต็ม</label><input type="number" class="glass-input" id="f-aScore" placeholder="เช่น 10"></div>
+      <div class="fg"><label>กำหนดส่ง <span class="req">*</span></label><input type="date" class="glass-input" id="f-aDue" value="${a?a.dueDate:''}"></div>
+      <div class="fg"><label>เวลาส่ง</label><input type="time" class="glass-input" id="f-aTime" value="${a?a.dueTime||'':''}"></div>
+      <div class="fg"><label>คะแนนเต็ม</label><input type="number" class="glass-input" id="f-aScore" placeholder="เช่น 10" value="${a?a.maxScore||'':''}"></div>
       <div class="fg full"><label>บันทึกช่วยจำ (ที่อาจารย์สั่งปากเปล่า)</label>
-        <textarea class="glass-textarea" id="f-aNote" rows="2" placeholder="รายละเอียด..."></textarea></div>
+        <textarea class="glass-textarea" id="f-aNote" rows="2" placeholder="รายละเอียด...">${a?a.note||'':''}</textarea></div>
     </div>`,
-    `<button class="btn-glass-primary" id="saveAssignBtn">เพิ่มการบ้าน</button>`
+    `<button class="btn-glass-primary" id="saveAssignBtn">${a ? 'บันทึกแก้ไข' : 'เพิ่มการบ้าน'}</button>`
   );
   document.getElementById('saveAssignBtn').onclick = async () => {
     const cid = document.getElementById('f-aCourse').value;
     const course = allCourses.find(c => c.id === cid);
     const data = {
-      id: `a_${Date.now()}`, courseId: cid, courseName: course?.code || '',
+      id: a ? a.id : `a_${Date.now()}`,
+      calendarEventId: a ? a.calendarEventId : null,
+      courseId: cid, courseName: course?.code || '',
       title: document.getElementById('f-aTitle').value,
       type: document.getElementById('f-aType').value,
       dueDate: document.getElementById('f-aDue').value,
       dueTime: document.getElementById('f-aTime').value,
       maxScore: document.getElementById('f-aScore').value,
       note: document.getElementById('f-aNote').value,
-      status: 'ยังไม่เริ่ม', submitted: false, subtasks: []
+      status: a ? a.status : 'ยังไม่เริ่ม', 
+      submitted: a ? a.submitted : false, 
+      subtasks: a ? a.subtasks || [] : []
     };
     if (!data.title || !data.dueDate) { showToast('⚠️ กรอกชื่องานและกำหนดส่ง', 'err'); return; }
     await fsSet('assignments', data.id, data);
 
-    if (course?.driveId && typeof google !== 'undefined' && google.script) {
+    if (!a && course?.driveId && typeof google !== 'undefined' && google.script) {
       showToast(`📂 กำลังเตรียมพื้นที่${data.type === 'Lab' ? ' Lab' : 'เก็บงาน'}...`);
       google.script.run.withSuccessHandler(res => {
         if (res && res.success) {
@@ -3939,39 +3974,51 @@ function openAddAssignmentForm() {
       }).createAssignmentFolder(course.driveId, data.title, data.type);
     }
 
-    closeModal(); await loadAll(); showToast('✅ เพิ่มการบ้านสำเร็จ');
+    if (typeof google !== 'undefined' && google.script) {
+       const semName = curSem ? curSem.name : 'Unknown';
+       google.script.run.withSuccessHandler(async res => {
+          if(res && res.success) {
+             data.calendarEventId = res.eventId;
+             await fsSet('assignments', data.id, data);
+          }
+       }).syncCalendarEvent(`NITIPAT MANAGER - ${semName}`, 'assignment', data);
+    }
+
+    closeModal(); await loadAll(); showToast(a ? '✅ บันทึกแก้ไขสำเร็จ' : '✅ เพิ่มการบ้านสำเร็จ');
   };
 }
 
-function openAddExamForm() {
+function openAddExamForm(e = null) {
   const allCourses = Object.values(state.courses).flat();
   const curSem = getCurrentSemester() || state.semesters[state.semesters.length - 1];
   const activeCourses = curSem ? (state.courses[curSem.id] || []) : allCourses;
-  openModal('เพิ่มการสอบ', `
+  openModal(e ? 'แก้ไขการสอบ' : 'เพิ่มการสอบ', `
     <div class="form-grid">
       <div class="fg full"><label>วิชา <span class="req">*</span></label>
-        <select class="glass-select" id="f-eCourse">${activeCourses.map(c => `<option value="${c.id}">${c.code} — ${c.nameTh}</option>`).join('')}</select></div>
-      <div class="fg full"><label>ชื่อการสอบ <span class="req">*</span></label><input class="glass-input" id="f-eTitle" placeholder="เช่น สอบกลางภาค, Quiz 1"></div>
+        <select class="glass-select" id="f-eCourse">${activeCourses.map(c => `<option value="${c.id}" ${e && e.courseId===c.id?'selected':''}>${c.code} — ${c.nameTh}</option>`).join('')}</select></div>
+      <div class="fg full"><label>ชื่อการสอบ <span class="req">*</span></label><input class="glass-input" id="f-eTitle" placeholder="เช่น สอบกลางภาค, Quiz 1" value="${e?e.title:''}"></div>
       <div class="fg"><label>ประเภท</label>
         <select class="glass-select" id="f-eType">
-          <option>สอบกลางภาค</option><option>สอบปลายภาค</option><option>Quiz</option><option>สอบย่อย</option>
+          ${['สอบกลางภาค','สอบปลายภาค','Quiz','สอบย่อย'].map(t => `<option ${e && e.type===t?'selected':''}>${t}</option>`).join('')}
         </select></div>
-      <div class="fg"><label>วันสอบ <span class="req">*</span></label><input type="date" class="glass-input" id="f-eDate"></div>
-      <div class="fg"><label>เวลาสอบ</label><input type="time" class="glass-input" id="f-eTime"></div>
-      <div class="fg"><label>ห้องสอบ</label><input class="glass-input" id="f-eRoom" placeholder="เช่น E6-201"></div>
-      <div class="fg"><label>คะแนนเต็ม</label><input type="number" class="glass-input" id="f-eScore"></div>
+      <div class="fg"><label>วันสอบ <span class="req">*</span></label><input type="date" class="glass-input" id="f-eDate" value="${e?e.date:''}"></div>
+      <div class="fg"><label>เวลาสอบ</label><input type="time" class="glass-input" id="f-eTime" value="${e?e.time||'':''}"></div>
+      <div class="fg"><label>ห้องสอบ</label><input class="glass-input" id="f-eRoom" placeholder="เช่น E6-201" value="${e?e.room||'':''}"></div>
+      <div class="fg"><label>คะแนนเต็ม</label><input type="number" class="glass-input" id="f-eScore" value="${e?e.maxScore||'':''}"></div>
       <div class="fg full"><label>ขอบเขตที่สอบ</label>
-        <textarea class="glass-textarea" id="f-eScope" rows="2" placeholder="เนื้อหาที่ออกสอบ..."></textarea></div>
+        <textarea class="glass-textarea" id="f-eScope" rows="2" placeholder="เนื้อหาที่ออกสอบ...">${e?e.scope||'':''}</textarea></div>
       <div class="fg full"><label>บันทึก / Tips สำหรับสอบ</label>
-        <textarea class="glass-textarea" id="f-eNotes" rows="2"></textarea></div>
+        <textarea class="glass-textarea" id="f-eNotes" rows="2">${e?e.notes||'':''}</textarea></div>
     </div>`,
-    `<button class="btn-glass-primary" id="saveExamBtn">เพิ่มการสอบ</button>`
+    `<button class="btn-glass-primary" id="saveExamBtn">${e ? 'บันทึกแก้ไข' : 'เพิ่มการสอบ'}</button>`
   );
   document.getElementById('saveExamBtn').onclick = async () => {
     const cid = document.getElementById('f-eCourse').value;
     const course = allCourses.find(c => c.id === cid);
     const data = {
-      id: `e_${Date.now()}`, courseId: cid, courseName: course?.code || '',
+      id: e ? e.id : `e_${Date.now()}`,
+      calendarEventId: e ? e.calendarEventId : null,
+      courseId: cid, courseName: course?.code || '',
       title: document.getElementById('f-eTitle').value,
       type: document.getElementById('f-eType').value,
       date: document.getElementById('f-eDate').value,
@@ -3983,20 +4030,32 @@ function openAddExamForm() {
     };
     if (!data.title || !data.date) { showToast('⚠️ กรอกชื่อสอบและวันสอบ', 'err'); return; }
 
-    const conflictExam = Object.values(state.exams).flat().find(e => e.date === data.date && e.id !== data.id && e.time === data.time);
-    if (conflictExam) {
-      if (!confirm(`⚠️ วันและเวลาสอบนี้ซ้อนกับวิชา ${conflictExam.courseName} (${conflictExam.title}) ยืนยันที่จะบันทึกหรือไม่?`)) return;
-    }
+    if (!e) {
+      const conflictExam = Object.values(state.exams).flat().find(ex => ex.date === data.date && ex.id !== data.id && ex.time === data.time);
+      if (conflictExam) {
+        if (!confirm(`⚠️ วันและเวลาสอบนี้ซ้อนกับวิชา ${conflictExam.courseName} (${conflictExam.title}) ยืนยันที่จะบันทึกหรือไม่?`)) return;
+      }
 
-    if (state.calendarSettings) {
-      if (state.calendarSettings.midtermStart && data.date === state.calendarSettings.midtermStart) {
-        showToast('ℹ️ ข้อสังเกต: จัดสอบวันเดียวกับวันเริ่มสอบกลางภาค', 'info');
+      if (state.calendarSettings) {
+        if (state.calendarSettings.midtermStart && data.date === state.calendarSettings.midtermStart) {
+          showToast('ℹ️ ข้อสังเกต: จัดสอบวันเดียวกับวันเริ่มสอบกลางภาค', 'info');
+        }
       }
     }
 
     await fsSet('exams', data.id, data);
-    closeModal(); await loadAll(); showToast('✅ เพิ่มการสอบสำเร็จ');
-    closeModal(); await loadAll(); showToast('✅ เพิ่มการสอบสำเร็จ');
+
+    if (typeof google !== 'undefined' && google.script) {
+       const semName = curSem ? curSem.name : 'Unknown';
+       google.script.run.withSuccessHandler(async res => {
+          if(res && res.success) {
+             data.calendarEventId = res.eventId;
+             await fsSet('exams', data.id, data);
+          }
+       }).syncCalendarEvent(`NITIPAT MANAGER - ${semName}`, 'exam', data);
+    }
+
+    closeModal(); await loadAll(); showToast(e ? '✅ บันทึกแก้ไขสำเร็จ' : '✅ เพิ่มการสอบสำเร็จ');
     startHyperNotifications();
   };
 }
@@ -4198,6 +4257,7 @@ function syncDataToBackend() {
     .reduce(function (sum, e) { return sum + (e.amount || 0); }, 0);
 
   const payload = {
+    semesters: state.semesters || [],
     projectedGPA,
     dailyExp: todayExp,
     alarms: (state.alarms || []).filter(a => a.enabled && !a.isSnooze)
@@ -4205,9 +4265,7 @@ function syncDataToBackend() {
     courses: state.courses || {},
     assignments: state.assignments || {},
     exams: state.exams || {},
-    projectedGPA: projectedGPA,
     gpaGoal: parseFloat(state.gpaGoal) || 3.5,
-    dailyExp: todayExp,
     budget: parseFloat(state.dailyBudget) || 200
   };
 
@@ -4302,9 +4360,17 @@ function attachAllEvents() {
     if (a) { await fsUpd('assignments', id, { submitted: !a.submitted, status: !a.submitted ? 'ส่งแล้ว' : 'ยังไม่เริ่ม' }); await loadAll(); }
   });
   document.querySelectorAll('[data-del-assign]').forEach(b => b.onclick = async () => { if (confirm('ลบงานนี้?')) { await fsDel('assignments', b.dataset.delAssign); await loadAll(); } });
+  document.querySelectorAll('[data-edit-assign]').forEach(b => b.onclick = () => {
+    const a = Object.values(state.assignments).flat().find(x => x.id === b.dataset.editAssign);
+    if (a) openAddAssignmentForm(a);
+  });
   document.querySelectorAll('[data-assign-view]').forEach(b => b.onclick = () => { state.assignView = b.dataset.assignView; render(); });
   document.getElementById('addExamBtn')?.addEventListener('click', () => { if (Object.values(state.courses).flat().length === 0) { showToast('⚠️ เพิ่มวิชาก่อนนะ', 'err'); return; } openAddExamForm(); });
   document.querySelectorAll('[data-del-exam]').forEach(b => b.onclick = async () => { if (confirm('ลบการสอบนี้?')) { await fsDel('exams', b.dataset.delExam); await loadAll(); } });
+  document.querySelectorAll('[data-edit-exam]').forEach(b => b.onclick = () => {
+    const e = Object.values(state.exams).flat().find(x => x.id === b.dataset.editExam);
+    if (e) openAddExamForm(e);
+  });
 
   document.getElementById('exportGradeBtn')?.addEventListener('click', exportGradeReport);
   document.querySelectorAll('.grade-select-inline').forEach(sel => sel.onchange = async () => {
@@ -5366,6 +5432,12 @@ function deleteAlarm(id) {
 }
 
 async function enterSleepMode() {
+  if (!state.alarmAudioCtx) {
+    state.alarmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (state.alarmAudioCtx.state === 'suspended') {
+    await state.alarmAudioCtx.resume();
+  }
   state.sleepMode = true;
   const screen = document.createElement('div');
   screen.id = 'sleepModeScreen';
@@ -5479,31 +5551,36 @@ function triggerAlarm(alarm) {
   state.alarmRinging = true;
   state.currentAlarmId = alarm.id;
 
-  function playAlarmSound() {
+  async function playAlarmSound() {
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      state.alarmAudioCtx = ctx;
+      if (!state.alarmAudioCtx) {
+        state.alarmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      const ctx = state.alarmAudioCtx;
+      if (ctx.state === 'suspended') await ctx.resume();
 
       function beep(freq, startTime, duration, vol = 0.3) {
-        const osc  = ctx.createOscillator();
+        const osc = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.connect(gain);
+        osc.type = 'sine'; osc2.type = 'sine';
+        osc.frequency.value = freq; osc2.frequency.value = freq * 2;
+        osc.connect(gain); osc2.connect(gain);
         gain.connect(ctx.destination);
-        osc.frequency.value = freq;
-        osc.type = 'square';
-        gain.gain.setValueAtTime(vol, startTime);
+        gain.gain.setValueAtTime(0, startTime);
+        gain.gain.linearRampToValueAtTime(vol, startTime + 0.02);
         gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-        osc.start(startTime);
-        osc.stop(startTime + duration);
+        osc.start(startTime); osc2.start(startTime);
+        osc.stop(startTime + duration); osc2.stop(startTime + duration);
       }
 
-      for (let i = 0; i < 8; i++) {
-        const vol = Math.min(0.1 + i * 0.05, 0.5);
-        beep(880,  ctx.currentTime + i * 0.6,      0.3, vol);
-        beep(1100, ctx.currentTime + i * 0.6 + 0.3, 0.2, vol);
+      const now = ctx.currentTime;
+      for (let i = 0; i < 4; i++) {
+        const base = now + i * 1.5;
+        const v = Math.min(0.2 + i * 0.1, 0.6);
+        beep(880, base, 0.2, v);
+        beep(880, base + 0.25, 0.2, v);
       }
-      beep(1320, ctx.currentTime + 5, 0.5, 0.5);
-      beep(1540, ctx.currentTime + 5.3, 0.5, 0.5);
     } catch(e) { console.warn('Audio error:', e); }
   }
 
