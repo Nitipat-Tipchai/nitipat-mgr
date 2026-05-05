@@ -5617,38 +5617,44 @@ async function enterSleepMode() {
   if (state.alarmAudioCtx.state === 'suspended') {
     await state.alarmAudioCtx.resume();
   }
-  // iOS Keep-Alive: เล่นเสียงเงียบ (อินฟราโซนิก) วนไปเรื่อยๆ เพื่อไม่ให้เบราว์เซอร์โดน Freeze
-  if (!state.keepAliveOsc) {
-    try {
-      const osc = state.alarmAudioCtx.createOscillator();
-      const gain = state.alarmAudioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(1, state.alarmAudioCtx.currentTime); 
-      gain.gain.setValueAtTime(0.001, state.alarmAudioCtx.currentTime);
-      osc.connect(gain);
-      gain.connect(state.alarmAudioCtx.destination);
-      osc.start();
-      state.keepAliveOsc = osc;
-    } catch(e) {}
+  // 1. Web Worker Timer: ระบบจับเวลาที่จะไม่หยุดเดินแม้ดับหน้าจอ
+  if (!state.timerWorker) {
+    const workerCode = `
+      let timer;
+      self.onmessage = function(e) {
+        if (e.data === 'start') {
+          timer = setInterval(() => self.postMessage('tick'), 1000);
+        } else if (e.data === 'stop') {
+          clearInterval(timer);
+        }
+      };
+    `;
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    state.timerWorker = new Worker(URL.createObjectURL(blob));
+    state.timerWorker.onmessage = () => {
+      if (state.sleepMode) {
+        updateSleepClock();
+        checkAlarms();
+      }
+    };
   }
+  state.timerWorker.postMessage('start');
 
-  // iOS Video Wake Lock Hack: เล่นวิดีโอเงียบเพื่อไม่ให้เครื่องหลับ
-  if (!document.getElementById('iosWakeLockVideo')) {
-    const video = document.createElement('video');
-    video.id = 'iosWakeLockVideo';
-    video.muted = true;
-    video.playsInline = true;
-    video.loop = true;
-    video.style.position = 'fixed';
-    video.style.top = '-10px';
-    video.style.left = '-10px';
-    video.style.width = '1px';
-    video.style.height = '1px';
-    video.style.opacity = '0.01';
-    // ใช้วิดีโอสั้นๆ ว่างๆ (Data URL)
-    video.src = 'data:video/mp4;base64,AAAAHGZ0eXBpc29tAAAAAGlzb21tcDQxAAAACHmshZAAAAAIc3R0cwAAAAAAAAABAAAAAQAAABAAAAAOc3RzYwAAAAAAAAABAAAAAQAAAAEAAAABAAAAFHN0c3oAAAAAAAAAEAAAAAEAAAAQAAAAEHN0Y28AAAAAAAAAAQAAADAAAAAAYmZycmVlAAAALW1kYXQAAAAAAAAAABAAAABAAAABAAAABAAAABAAAABAAAABAAAABAAAAA==';
-    document.body.appendChild(video);
-    video.play().catch(e => console.log("Video Play Blocked", e));
+  // 2. Media Session & Silent Audio: หลอก iOS ว่าแอปกำลังเล่นสื่ออยู่
+  if (!state.keepAliveAudio) {
+    state.keepAliveAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+    state.keepAliveAudio.loop = true;
+    state.keepAliveAudio.volume = 0.01;
+  }
+  state.keepAliveAudio.play().catch(() => {});
+
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: 'NITIPAT Alarms Active',
+      artist: 'System Protection',
+      album: 'Keep-Alive Mode'
+    });
+    navigator.mediaSession.playbackState = 'playing';
   }
 
   state.sleepMode = true;
@@ -5669,6 +5675,7 @@ async function enterSleepMode() {
       font-family:Kanit"></div>
     <div id="sleepNextAlarm" style="margin-top:32px;font-size:14px;
       opacity:0.4;font-family:Kanit;text-align:center"></div>
+    <div id="keepAlivePulse" style="margin-top:16px; width:6px; height:6px; background:#0f0; border-radius:50%; opacity:0.5; animation: pulse 2s infinite"></div>
     <div id="sleepControls" style="position:fixed;bottom:40px;right:24px;
       opacity:0;transition:opacity 0.3s">
       <button onclick="exitSleepMode()" style="background:rgba(255,255,255,0.1);
@@ -5863,6 +5870,10 @@ async function snoozeAlarm(minutes) {
 
 function exitSleepMode() {
   state.sleepMode = false;
+  if (state.timerWorker) state.timerWorker.postMessage('stop');
+  if (state.keepAliveAudio) { state.keepAliveAudio.pause(); }
+  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
+  
   clearInterval(state.sleepClockInterval);
   if (state.keepAliveOsc) {
     try { state.keepAliveOsc.stop(); state.keepAliveOsc.disconnect(); } catch(e) {}
