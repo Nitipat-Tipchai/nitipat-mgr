@@ -958,12 +958,15 @@ async function loadAll() {
   render();
 
   try {
-    const [sSnap, cSnap, aSnap, eSnap, secSnap] = await Promise.all([
+    const [sSnap, cSnap, aSnap, eSnap, secSnap, mastSnap, structSnap, reflSnap] = await Promise.all([
       getDocs(collection(db, "semesters")),
       getDocs(collection(db, "courses")),
       getDocs(collection(db, "assignments")),
       getDocs(collection(db, "exams")),
-      getDoc(doc(db, "app_settings", "security"))
+      getDoc(doc(db, "app_settings", "security")),
+      getDocs(collection(db, "topic_mastery")),
+      getDocs(collection(db, "course_structures")),
+      getDocs(collection(db, "reflections"))
     ]);
 
     if (secSnap.exists()) {
@@ -979,6 +982,16 @@ async function loadAll() {
     aSnap.docs.forEach(d => { const a = { id: d.id, ...d.data() }; if (!state.assignments[a.courseId]) state.assignments[a.courseId] = []; state.assignments[a.courseId].push(a); });
     state.exams = {};
     eSnap.docs.forEach(d => { const e = { id: d.id, ...d.data() }; if (!state.exams[e.courseId]) state.exams[e.courseId] = []; state.exams[e.courseId].push(e); });
+
+    // Cloud Sync for specialized collections
+    mastSnap.docs.forEach(d => { state.topicMastery[d.id] = d.data().topics || []; });
+    structSnap.docs.forEach(d => { state.courseStructures[d.id] = d.data() || { components: [] }; });
+    reflSnap.docs.forEach(d => { state.reflections[d.id] = d.data().text || d.data().reflection || ""; });
+
+    // Sync to LocalStorage as backup
+    localStorage.setItem('topic_mastery', JSON.stringify(state.topicMastery));
+    localStorage.setItem('course_structures', JSON.stringify(state.courseStructures));
+    localStorage.setItem('reflections', JSON.stringify(state.reflections));
 
     // Focus Sync Listener
     onSnapshot(doc(db, 'app_state', 'focus_session'), (snap) => {
@@ -2293,6 +2306,25 @@ function renderAttendanceSummary(courseId) {
   return html;
 }
 
+window.saveReflection = async (courseId) => {
+  const el = document.getElementById('reflInput_adv');
+  if (!el) return;
+  const val = el.value.trim();
+  if (!val) { showToast('⚠️ กรุณากรอกเนื้อหา', 'err'); return; }
+  
+  showToast('⏳ กำลังบันทึก Reflection...');
+  state.reflections[courseId] = val;
+  localStorage.setItem('reflections', JSON.stringify(state.reflections));
+  
+  try {
+    await fsSet('reflections', courseId, { text: val, updatedAt: new Date().toISOString() });
+    showToast('✅ บันทึก Reflection สำเร็จ!');
+    render();
+  } catch (e) {
+    showToast('❌ บันทึกล้มเหลว: ' + e.message, 'err');
+  }
+};
+
 async function navigateToFolder(courseId, folderId, folderName, pathIdx = -1) {
   if (folderName === 'Root') {
     state.folderPath = [];
@@ -2377,17 +2409,30 @@ function toggleItemSelection(id, event) {
 
 async function handleCreateFolder(courseId, parentId) {
   if (!isGAS()) { alert("ฟีเจอร์นี้ต้องใช้ผ่าน Google Apps Script URL"); return; }
+  const c = findCourseById(courseId);
+  const targetParentId = parentId || (c ? c.driveId : null);
+  
+  if (!targetParentId) {
+    showToast('❌ ไม่สามารถระบุโฟลเดอร์ปลายทางได้', 'err');
+    return;
+  }
+
   const name = prompt('ชื่อโฟลเดอร์ใหม่:');
   if (!name) return;
-  showToast('📂 กำลังสร้าง...');
+  
+  showToast('📂 กำลังสร้างโฟลเดอร์ใหม่...');
   google.script.run
-    .withSuccessHandler(() => {
-      showToast('✅ สร้างโฟลเดอร์แล้ว');
-      if (state.courseFilesCache) delete state.courseFilesCache[parentId];
-      refreshDriveFiles(courseId, parentId, true);
+    .withSuccessHandler((res) => {
+      if (res && res.success) {
+        showToast('✅ สร้างโฟลเดอร์แล้ว');
+        if (state.courseFilesCache) delete state.courseFilesCache[targetParentId];
+        refreshDriveFiles(courseId, targetParentId, true);
+      } else {
+        showToast(`❌ สร้างไม่สำเร็จ: ${res?.error || 'Unknown'}`, 'err');
+      }
     })
     .withFailureHandler(err => showToast(`❌ สร้างไม่สำเร็จ: ${err.message}`, 'err'))
-    .createFolder(parentId, name);
+    .createFolder(targetParentId, name);
 }
 
 async function renameSelectedItem() {
@@ -5718,13 +5763,15 @@ async function enterSleepMode() {
   document.body.appendChild(screen);
   updateSleepClock();
 
-  // ชวนซิงก์ Shortcuts เป็น Backup
+  // ในโหมดนอน ถ้ามีนาฬิกาปลุก ให้ส่งไป Shortcuts ทันที (Native Alarms)
   if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-    setTimeout(() => {
-      if (confirm('🍎 ต้องการซิงก์เวลาปลุกไปยังแอป Shortcuts เพื่อความชัวร์ (Backup) ไหมครับ?')) {
-        sendAlarmsToShortcuts();
-      }
-    }, 1500);
+    const enabled = state.alarms.filter(a => a.enabled && !a.isSnooze);
+    if (enabled.length > 0) {
+      // ส่งไป Shortcuts ทันทีโดยไม่รอถาม เพื่อความรวดเร็วตามความต้องการผู้ใช้
+      setTimeout(() => {
+        sendAlarmsToShortcuts(true); // true = auto-trigger URL
+      }, 800);
+    }
   }
 
   try {
@@ -5924,23 +5971,28 @@ function exitSleepMode() {
   render();
 }
 
-function sendAlarmsToShortcuts() {
+function sendAlarmsToShortcuts(autoTrigger = false) {
   const enabled = state.alarms.filter(a => a.enabled && !a.isSnooze);
   if (enabled.length === 0) { 
-    showToast('⚠️ ไม่มีนาฬิกาปลุกที่เปิดอยู่', 'warn'); 
+    if (!autoTrigger) showToast('⚠️ ไม่มีนาฬิกาปลุกที่เปิดอยู่', 'warn'); 
     return; 
   }
   
   // ส่งข้อมูลเป็น JSON แบบมี Key ครอบเพื่อให้ Shortcut จัดการได้ง่ายขึ้น
   const payload = JSON.stringify({
-    alarms: enabled.map(a => ({
+    alarms: enabled.map((a, idx) => ({
       time: a.time,
-      label: (a.label || 'ปลุก') + ' (NITIPAT)'
+      label: `ปลุกครั้งที่ ${idx + 1} (${a.label || 'NITIPAT'})`
     }))
   });
 
   const url = `shortcuts://run-shortcut?name=NITIPAT_ALARM&input=${encodeURIComponent(payload)}`;
   
+  if (autoTrigger) {
+    window.location.href = url;
+    return;
+  }
+
   openModal('🍎 ซิงก์นาฬิกาปลุกไป iPhone', `
     <div style="display:flex;flex-direction:column;gap:12px;font-size:14px;font-family:Kanit">
       <div style="background:var(--bg-solid);padding:12px;border-radius:12px;border:1px solid var(--border-color)">
