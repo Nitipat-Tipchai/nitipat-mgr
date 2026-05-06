@@ -3326,9 +3326,14 @@ function renderKanban(all) {
   return `<div class="kanban-board">
     ${statuses.map((s, si) => {
     const items = all.filter(a => (a.status || 'ยังไม่เริ่ม') === s);
-    return `<div class="kanban-col glass-card">
+    return `<div class="kanban-col glass-card" 
+                 ondragover="window.handleDragOver(event)" 
+                 ondragleave="window.handleDragLeave(event)"
+                 ondrop="window.handleDrop(event, '${s}')">
         <div class="kanban-hd">${statusIcons[si]} ${s} <span class="kanbadge">${items.length}</span></div>
-        ${items.map(a => `<div class="kanban-item" draggable="true">
+        ${items.map(a => `<div class="kanban-item" draggable="true" 
+                               ondragstart="window.handleDragStart(event, '${a.id}')"
+                               ondragend="window.handleDragEnd(event)">
           <div class="ki-title">${a.title}</div>
           <div class="ki-meta">${a.courseName} • ${getDaysUntil(a.dueDate)} วัน</div>
         </div>`).join('')}
@@ -3336,6 +3341,60 @@ function renderKanban(all) {
   }).join('')}
   </div>`;
 }
+
+// Drag & Drop Handlers
+window.handleDragStart = (e, id) => {
+  e.dataTransfer.setData('text/plain', id);
+  e.target.classList.add('dragging');
+};
+
+window.handleDragEnd = (e) => {
+  e.target.classList.remove('dragging');
+};
+
+window.handleDragOver = (e) => {
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over');
+};
+
+window.handleDragLeave = (e) => {
+  e.currentTarget.classList.remove('drag-over');
+};
+
+window.handleDrop = async (e, newStatus) => {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  const id = e.dataTransfer.getData('text/plain');
+  
+  // Find assignment across all courses
+  let assignment = null;
+  let courseId = null;
+  for (const cid in state.assignments) {
+    const found = state.assignments[cid].find(a => a.id === id);
+    if (found) {
+      assignment = found;
+      courseId = cid;
+      break;
+    }
+  }
+
+  if (assignment && assignment.status !== newStatus) {
+    assignment.status = newStatus;
+    // Auto-update 'submitted' flag if moved to 'ส่งแล้ว'
+    if (newStatus === 'ส่งแล้ว') assignment.submitted = true;
+    else if (newStatus === 'ยังไม่เริ่ม') assignment.submitted = false;
+
+    showToast(`📦 ย้ายงานไปที่ [${newStatus}]`);
+    localStorage.setItem('assignments', JSON.stringify(state.assignments));
+    render();
+    
+    try {
+      await fsSet('assignments', courseId, { assignments: state.assignments[courseId] });
+    } catch (err) {
+      console.warn("Firebase Kanban sync failed", err);
+    }
+  }
+};
 
 // ══════════════════════════════════════════════════
 // EXAMS
