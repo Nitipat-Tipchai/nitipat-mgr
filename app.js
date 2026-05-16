@@ -832,6 +832,17 @@ window.NotionSync = NotionSync;
 // ══════════════════════════════════════════════════
 // 📍 GPS & CHECK-IN MANAGER
 // ══════════════════════════════════════════════════
+function getDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371e3; 
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 const GPSManager = {
   async checkInSuggestion() {
     const curClass = this.getCurrentClass();
@@ -1305,6 +1316,10 @@ const PDFManager = {
 window.PDFManager = PDFManager;
 
 function getCurrentSemester() {
+  const now = new Date();
+  const dateStr = now.toISOString().split('T')[0];
+  return state.semesters.find(s => dateStr >= s.start && dateStr <= s.end);
+}
 
 // ══════════════════════════════════════════════════
 // FIREBASE CRUD
@@ -6621,12 +6636,6 @@ function sendAlarmsToShortcuts(autoTrigger = false) {
   `);
 }
 
-async function hashPIN(pin) {
-  const msgBuffer = new TextEncoder().encode(pin);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
 
 // Expose Alarm & Notification functions to window for HTML onclick handlers
 window.quickAddAlarms = quickAddAlarms;
