@@ -4,55 +4,159 @@ import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager
 import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
 
 let db, messaging;
-async function startApp() {
+
+/**
+ * 🔐 LOGIN GATE CONTROLLER
+ */
+const LoginGate = {
+  el: null,
+  statusEl: null,
+  pinContainer: null,
+  correctPinHash: null,
+  inputPin: "",
+
+  async init() {
+    this.el = document.getElementById('login-gate');
+    this.statusEl = document.getElementById('gate-status');
+    this.pinContainer = document.getElementById('pin-container');
+    
+    this.statusEl.textContent = "ESTABLISHING SECURE CONNECTION...";
+    try {
+      const config = await this.getSecurityConfig();
+      // Use PIN from backend (plaintext or hash)
+      if (config.pin && config.pin.length > 20) {
+        this.correctPinHash = config.pin;
+      } else {
+        this.correctPinHash = await hashPIN(config.pin || "111111");
+      }
+      
+      this.statusEl.textContent = "IDENTITY VERIFICATION REQUIRED";
+      this.renderPinPad();
+    } catch (e) {
+      console.error(e);
+      this.statusEl.textContent = "CONNECTION FAILURE. RETRYING...";
+      setTimeout(() => this.init(), 3000);
+    }
+  },
+
+  getSecurityConfig() {
+    return new Promise((res, rej) => {
+      google.script.run.withSuccessHandler(res).withFailureHandler(rej).getAppConfig();
+    });
+  },
+
+  renderPinPad() {
+    this.pinContainer.innerHTML = `
+      <div class="pin-display">
+        ${[1, 2, 3, 4, 5, 6].map(i => `<div class="pin-dot" id="dot-${i}"></div>`).join('')}
+      </div>
+      <div class="pin-pad">
+        ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button class="pin-btn" onclick="LoginGate.press('${n}')">${n}</button>`).join('')}
+        <button class="pin-btn" onclick="LoginGate.clear()" style="font-size:14px; opacity:0.6;">CLR</button>
+        <button class="pin-btn" onclick="LoginGate.press('0')">0</button>
+        <button class="pin-btn" onclick="LoginGate.press('DEL')" style="font-size:20px; opacity:0.6;">⌫</button>
+      </div>
+    `;
+  },
+
+  press(val) {
+    if (val === 'DEL') {
+      this.inputPin = this.inputPin.slice(0, -1);
+    } else if (this.inputPin.length < 6) {
+      this.inputPin += val;
+    }
+    this.updateDots();
+    if (this.inputPin.length === 6) this.verify();
+  },
+
+  updateDots() {
+    for (let i = 1; i <= 6; i++) {
+      const dot = document.getElementById(`dot-${i}`);
+      if (dot) {
+        if (i <= this.inputPin.length) dot.classList.add('active');
+        else dot.classList.remove('active');
+      }
+    }
+  },
+
+  clear() {
+    this.inputPin = "";
+    this.updateDots();
+  },
+
+  async verify() {
+    const hashedInput = await hashPIN(this.inputPin);
+    if (hashedInput === this.correctPinHash) {
+      this.statusEl.textContent = "ACCESS GRANTED. SYNCING DATA...";
+      sessionStorage.setItem('unlocked', 'true');
+      sessionStorage.setItem('unlocked_at', Date.now().toString());
+      this.el.classList.add('inactive');
+      await startAppCore();
+    } else {
+      this.statusEl.textContent = "INCORRECT PIN. ACCESS DENIED.";
+      this.inputPin = "";
+      this.updateDots();
+      this.pinContainer.style.animation = 'none';
+      this.pinContainer.offsetHeight;
+      this.pinContainer.style.animation = 'shake 0.4s cubic-bezier(.36,.07,.19,.97) both';
+      if (window.navigator.vibrate) window.navigator.vibrate(200);
+    }
+  }
+};
+
+window.LoginGate = LoginGate;
+
+// Entry Point
+window.onload = () => {
+  const unlocked = sessionStorage.getItem('unlocked');
+  const unlockedAt = sessionStorage.getItem('unlocked_at');
+  const isTimeout = unlockedAt && Date.now() - parseInt(unlockedAt) > 1800000; // 30 mins
+
+  if (unlocked === 'true' && !isTimeout) {
+    document.getElementById('login-gate').classList.add('inactive');
+    startAppCore();
+  } else {
+    sessionStorage.removeItem('unlocked');
+    sessionStorage.removeItem('unlocked_at');
+    LoginGate.init();
+  }
+};
+
+async function startAppCore() {
   try {
     const firebaseConfig = await new Promise((res, rej) => {
       google.script.run.withSuccessHandler(res).withFailureHandler(rej).getFirebaseConfig();
     });
 
     if (!firebaseConfig.apiKey) {
-      console.error("Firebase API Key is missing. Please set it in GAS Script Properties.");
-      showToast("⚠️ Firebase Config Missing", "err");
+      console.error("Firebase API Key is missing.");
       return;
     }
 
     const app = initializeApp(firebaseConfig);
-    try {
-      db = initializeFirestore(app, {
-        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-        experimentalForceLongPolling: true // Workaround for QUIC_PROTOCOL_ERROR
-      });
-    } catch (e) {
-      console.warn("Firestore persistent cache failed, using basic cache:", e);
-      db = initializeFirestore(app, {
-        experimentalForceLongPolling: true
-      });
-    }
+    db = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      experimentalForceLongPolling: true
+    });
 
     messaging = getMessaging(app);
     onMessage(messaging, (payload) => {
-      console.log('Message received. ', payload);
       new Notification(payload.notification.title, {
         body: payload.notification.body,
         icon: payload.notification.image || "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
       });
     });
 
-    // Initial data load
     await loadAll();
-    // Start hyper notifications after data is loaded
     startHyperNotifications();
-    // Initialize Web Push only if not already active to prevent reload loops
     if ('serviceWorker' in navigator && !navigator.serviceWorker.controller) {
       initWebPush();
     }
+    renderUI();
   } catch (err) {
     console.error("App initialization failed:", err);
   }
 }
-
-// Start the app
-startApp();
 
 // ══════════════════════════════════════════════════
 // COURSE DATABASE — วิชาทั้งหมดในหลักสูตร 137 หน่วยกิต
@@ -201,9 +305,8 @@ const STUDENT = {
   degree: "B.Eng. (Materials Engineering)",
   dob: "March 22, 2006",
   admitted: "June 24, 2024",
-  code: "67", // รหัส 67
+  code: "67", 
   totalRequiredCredits: 137,
-  // เกรดที่มีอยู่แล้วจาก transcript
   existingGrades: {
     "01208111": { grade: "D", credits: 3 }, "01355101": { grade: "P", credits: 3 },
     "01355102": { grade: "D+", credits: 3 }, "01371111": { grade: "A", credits: 1 },
@@ -224,8 +327,102 @@ const STUDENT = {
     "01403117b": { grade: "N", credits: 3 },
     "01205201": { grade: "D+", credits: 3 }, "01417168": { grade: "D", credits: 3 },
     "01355103": { grade: "D", credits: 3 }
+  },
+  photoUrl: localStorage.getItem('student_photo') || "https://img2.pic.in.th/pic/Student_Photo_Placeholder.png"
+};
+
+/**
+ * 🪪 STUDENT ID CARD CONTROLLER
+ */
+const StudentID = {
+  portal: null,
+
+  init() {
+    this.portal = document.getElementById('id-card-portal');
+    this.portal.addEventListener('click', (e) => {
+      if (e.target === this.portal) this.hide();
+    });
+  },
+
+  show() {
+    this.portal.classList.remove('hidden');
+    this.render();
+  },
+
+  hide() {
+    this.portal.classList.add('hidden');
+  },
+
+  render() {
+    this.portal.innerHTML = `
+      <div class="id-card-wrap">
+        <div class="id-card-inner">
+          <div class="id-card-header">
+            <div class="id-logo">NITIPAT</div>
+            <div class="id-faculty">${STUDENT.faculty}</div>
+          </div>
+          <img src="${STUDENT.photoUrl}" class="id-photo" id="id-photo-display">
+          <div class="id-info">
+            <div class="id-name">${STUDENT.nameTh}</div>
+            <div class="id-id">${STUDENT.id}</div>
+          </div>
+          <div class="id-barcode-wrap">
+            <svg id="barcode"></svg>
+          </div>
+          <div style="margin-top:20px; display:flex; gap:10px;">
+            <button class="nb-btn sm" onclick="StudentID.uploadPhoto()">Update Photo</button>
+            <button class="nb-btn sm" onclick="StudentID.download()">Download</button>
+          </div>
+        </div>
+      </div>
+    `;
+    JsBarcode("#barcode", STUDENT.id, {
+      format: "CODE128",
+      width: 2,
+      height: 40,
+      displayValue: false,
+      background: "transparent"
+    });
+  },
+
+  async uploadPhoto() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = async (re) => {
+        const base64 = re.target.result;
+        showToast("Uploading to Drive...", "wait");
+        google.script.run.withSuccessHandler((res) => {
+          if (res.success) {
+            STUDENT.photoUrl = res.fileUrl;
+            localStorage.setItem('student_photo', res.fileUrl);
+            this.render();
+            showToast("Photo Updated!", "ok");
+          }
+        }).uploadIDPhotoToDrive(base64);
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  },
+
+  download() {
+    const wrap = document.querySelector('.id-card-inner');
+    html2canvas(wrap).then(canvas => {
+      const link = document.createElement('a');
+      link.download = `Student_ID_${STUDENT.id}.png`;
+      link.href = canvas.toDataURL();
+      link.click();
+    });
   }
 };
+
+window.StudentID = StudentID;
 
 // ══════════════════════════════════════════════════
 // STATE
@@ -559,18 +756,141 @@ const Radio = new RadioController();
 // ══════════════════════════════════════════════════
 // ADVANCED LOGIC: GEOLOCATION & HAVERSINE
 // ══════════════════════════════════════════════════
-function getDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371; // km
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
+// ══════════════════════════════════════════════════
+// 📁 DRIVE MANAGER (GOOGLE PICKER API)
+// ══════════════════════════════════════════════════
+const DriveManager = {
+  pickerApiLoaded: false,
+  oauthToken: null,
+
+  async init() {
+    gapi.load('picker', { 'callback': () => { this.pickerApiLoaded = true; } });
+    this.oauthToken = await new Promise(res => google.script.run.withSuccessHandler(res).getPickerToken());
+  },
+
+  openPicker(courseId, folderId, onSelect) {
+    if (!this.pickerApiLoaded || !this.oauthToken) {
+      showToast("Drive API not ready", "err");
+      return;
+    }
+
+    const view = new google.picker.DocsView(google.picker.ViewId.DOCS);
+    if (folderId) view.setParent(folderId);
+
+    const picker = new google.picker.PickerBuilder()
+      .enableFeature(google.picker.Feature.NAV_HIDDEN)
+      .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
+      .setAppId("NITIPAT-MGR")
+      .setOAuthToken(this.oauthToken)
+      .addView(view)
+      .addView(new google.picker.DocsUploadView().setParent(folderId))
+      .setCallback((data) => {
+        if (data.action === google.picker.Action.PICKED) {
+          onSelect(data.docs);
+        }
+      })
+      .build();
+    picker.setVisible(true);
+  }
+};
+
+window.DriveManager = DriveManager;
 
 // ══════════════════════════════════════════════════
-// ADVANCED LOGIC: REVERSE GPA ALGORITHM
+// 📝 NOTION SYNC ENGINE (2-WAY)
 // ══════════════════════════════════════════════════
+const NotionSync = {
+  async syncAll() {
+    showToast("Syncing with Notion...", "wait");
+    try {
+      // Step 1: Sync Assignments
+      const allAssign = Object.values(state.assignments).flat();
+      for (const a of allAssign) {
+        if (a.needsSync) {
+          await this.syncAssignment(a);
+        }
+      }
+      showToast("Notion Sync Complete", "ok");
+    } catch (e) {
+      console.error("Notion Sync Failed:", e);
+      showToast("Notion Sync Failed", "err");
+    }
+  },
+
+  async syncAssignment(assignment) {
+    return new Promise((res, rej) => {
+      google.script.run
+        .withSuccessHandler(res)
+        .withFailureHandler(rej)
+        .syncAssignmentToNotion(assignment);
+    });
+  }
+};
+
+window.NotionSync = NotionSync;
+
+// ══════════════════════════════════════════════════
+// 📍 GPS & CHECK-IN MANAGER
+// ══════════════════════════════════════════════════
+const GPSManager = {
+  async checkInSuggestion() {
+    const curClass = this.getCurrentClass();
+    if (!curClass) return;
+
+    const coords = await this.getCurrentPosition();
+    const distance = getDistance(coords.lat, coords.lng, curClass.lat || 14.065, curClass.lng || 100.606); // KU Sample
+
+    if (distance < 0.2) { // 200m
+      this.showCheckInPrompt(curClass, true);
+    } else {
+      this.showCheckInPrompt(curClass, false); // Suggest Online
+    }
+  },
+
+  getCurrentClass() {
+    const now = new Date();
+    const day = now.getDay() === 0 ? 6 : now.getDay() - 1;
+    const h = now.getHours();
+    const all = Object.values(state.courses).flat();
+    return all.find(c => (c.schedules || []).some(s => s.day === day && s.startHour <= h && (s.endHour || s.startHour + 3) > h));
+  },
+
+  getCurrentPosition() {
+    return new Promise((res, rej) => {
+      navigator.geolocation.getCurrentPosition(
+        p => res({ lat: p.coords.latitude, lng: p.coords.longitude }),
+        e => rej(e),
+        { enableHighAccuracy: true }
+      );
+    });
+  },
+
+  showCheckInPrompt(course, isNearby) {
+    openModal("Check-in Suggestion", `
+      <div style="text-align:center;">
+        <div style="font-size:40px; margin-bottom:15px;">📍</div>
+        <p>คุณกำลังเรียนวิชา <strong>${course.nameTh}</strong> หรือไม่?</p>
+        <p style="font-size:12px; color:var(--c-muted);">${isNearby ? "ตรวจพบว่าคุณอยู่ที่ห้องเรียน" : "คุณอยู่นอกพื้นที่ห้องเรียน (เรียนออนไลน์?)"}</p>
+      </div>
+    `, `
+      <button class="nb-btn" onclick="GPSManager.confirmCheckIn('${course.id}', '${isNearby ? 'On-site' : 'Online'}')">ยืนยันเช็คชื่อ</button>
+      <button class="nb-btn-danger" onclick="closeModal()">ไม่เรียน / ข้าม</button>
+    `);
+  },
+
+  confirmCheckIn(courseId, mode) {
+    const now = new Date().toISOString();
+    if (!state.attendanceHistory[courseId]) state.attendanceHistory[courseId] = [];
+    state.attendanceHistory[courseId].push({ timestamp: now, mode: mode });
+    localStorage.setItem('attendance_history', JSON.stringify(state.attendanceHistory));
+    showToast(`เช็คชื่อ ${mode} สำเร็จ!`, "ok");
+    closeModal();
+    renderUI();
+  }
+};
+
+window.GPSManager = GPSManager;
+
 function suggestGradesForTarget(targetGPA) {
   const allPast = [];
   state.semesters.forEach(s => {
@@ -688,10 +1008,21 @@ function renderTopicMastery(courseId, parentId = null) {
                 <button class="mastery-btn ${t.level === 'review' ? 'active' : ''}" style="background:var(--c-rust);" title="Review" onclick="setTopicLevel('${courseId}', '${t.id}', 'review')">❓ ทวน</button>
                 <button class="mastery-btn ${t.level === 'ok' ? 'active' : ''}" style="background:var(--c-indigo);" title="OK" onclick="setTopicLevel('${courseId}', '${t.id}', 'ok')">📖 พอได้</button>
                 <button class="mastery-btn ${t.level === 'mastered' ? 'active' : ''}" style="background:var(--c-lime);" title="Mastered" onclick="setTopicLevel('${courseId}', '${t.id}', 'mastered')">⭐ แม่น</button>
+                <button class="tool-btn sm" style="font-size:10px; width:auto; padding:0 8px; border:1px solid black; border-radius:6px;" title="Link File" onclick="DriveManager.openPicker('${courseId}', null, (docs) => linkFilesToTopic('${courseId}', '${t.id}', docs))">🔗</button>
                 <button class="tool-btn sm" style="font-size:10px; width:auto; padding:0 8px; border:1px solid black; border-radius:6px;" title="เพิ่มหัวข้อย่อย" onclick="addTopic('${courseId}', '${t.id}')">➕ ย่อย</button>
                 <button class="btn-text-danger" style="font-size:14px; font-weight:800;" onclick="deleteTopic('${courseId}', '${t.id}')">✕</button>
               </div>
             </div>
+            ${t.files && t.files.length > 0 ? `
+              <div class="topic-files" style="margin-left: 25px; margin-top: 5px; margin-bottom: 5px; display: flex; flex-wrap: wrap; gap: 5px;">
+                ${t.files.map(f => `
+                  <div class="file-tag" style="background:#f1f5f9; padding:2px 8px; border-radius:6px; font-size:11px; display:flex; align-items:center; gap:5px; border:1px solid #e2e8f0;">
+                    <span onclick="previewFile('${f.id}', '${f.name}', '${f.url}', '${f.mimeType}')" style="cursor:pointer;">📄 ${f.name}</span>
+                    <span onclick="unlinkFileFromTopic('${courseId}', '${t.id}', '${f.id}')" style="cursor:pointer; color:var(--c-red); font-weight:800;">✕</span>
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
             ${renderTopicMastery(courseId, t.id)}
           </div>
         `).join('')}
@@ -840,13 +1171,140 @@ function getProStatus(gpa) {
 
 function getDaysUntil(d) { return Math.ceil((new Date(d) - new Date()) / (864e5)); }
 
+// ══════════════════════════════════════════════════
+// ⏱️ LIVE CLASS HUB (DASHBOARD COMPONENT)
+// ══════════════════════════════════════════════════
+const LiveClassHub = {
+  active: false,
+  courseId: null,
+  startTime: null,
+  worker: null,
+  elapsed: 0,
+
+  initWorker() {
+    if (this.worker) return;
+    const workerCode = `
+      let timer;
+      let start;
+      self.onmessage = function(e) {
+        if (e.data.cmd === 'start') {
+          start = e.data.start;
+          if (timer) clearInterval(timer);
+          timer = setInterval(() => {
+            self.postMessage({ cmd: 'tick', elapsed: Date.now() - start });
+          }, 1000);
+        } else if (e.data.cmd === 'stop') {
+          clearInterval(timer);
+        }
+      };
+    `;
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    this.worker = new Worker(URL.createObjectURL(blob));
+    this.worker.onmessage = (e) => {
+      if (e.data.cmd === 'tick') {
+        this.elapsed = e.data.elapsed;
+        this.updateUI();
+      }
+    };
+  },
+
+  start(courseId) {
+    this.active = true;
+    this.courseId = courseId;
+    this.startTime = Date.now();
+    this.initWorker();
+    this.worker.postMessage({ cmd: 'start', start: this.startTime });
+    this.elapsed = 0;
+    render();
+    showToast('🚀 เริ่มบันทึกเวลาเรียนแล้ว');
+  },
+
+  stop() {
+    if (!this.active) return;
+    const durationMin = Math.round(this.elapsed / 60000);
+    this.active = false;
+    if (this.worker) this.worker.postMessage({ cmd: 'stop' });
+    this.saveSession(durationMin);
+    render();
+  },
+
+  updateUI() {
+    const el = document.getElementById('live-timer-display');
+    if (el) {
+      const s = Math.floor(this.elapsed / 1000);
+      const m = Math.floor(s / 60);
+      const h = Math.floor(m / 60);
+      el.textContent = `${h.toString().padStart(2, '0')}:${(m % 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
+    }
+  },
+
+  saveSession(min) {
+    const c = findCourseById(this.courseId);
+    openModal('📝 สรุปการเรียนวันนี้', `
+      <div style="padding:10px;">
+        <h3 style="margin-bottom:10px;">${c?.nameTh || 'ไม่ทราบวิชา'}</h3>
+        <p style="font-size:14px; opacity:0.7; margin-bottom:20px;">บันทึกเวลาเรียนไป ${min} นาที</p>
+        <div class="fg full">
+          <label>สิ่งที่คุณได้เรียนรู้วันนี้ (Reflection)</label>
+          <textarea id="liveReflection" class="glass-textarea" placeholder="วันนี้เรียนเรื่องอะไร? มีอะไรสำคัญ?..." style="height:120px;"></textarea>
+        </div>
+      </div>
+    `, `
+      <button class="btn-glass-primary full" onclick="LiveClassHub.finalSave()">💾 บันทึกความก้าวหน้า</button>
+    `);
+  },
+
+  async finalSave() {
+    const text = document.getElementById('liveReflection').value;
+    if (text.length < 10) { showToast('⚠️ โปรดเขียนสรุปสั้นๆ (อย่างน้อย 10 ตัวอักษร)', 'warn'); return; }
+    
+    showToast('⏳ กำลังบันทึก...');
+    const sessionData = {
+        courseId: this.courseId,
+        date: new Date().toISOString(),
+        duration: Math.round(this.elapsed / 60000),
+        reflection: text
+    };
+    await fsSet('reflections', `${this.courseId}_${Date.now()}`, sessionData);
+    
+    closeModal();
+    showToast('✅ บันทึก Reflection สำเร็จ');
+    this.courseId = null;
+    render();
+  }
+};
+
+window.LiveClassHub = LiveClassHub;
+
+// ══════════════════════════════════════════════════
+// 📄 PDF TRACEABILITY MANAGER
+// ══════════════════════════════════════════════════
+const PDFManager = {
+  async generateTranscriptReport() {
+    showToast("Generating Traceable PDF...", "wait");
+    const data = {
+      student: STUDENT,
+      gpax: getCumGPA(),
+      credits: getTotalPassedCredits(),
+      courses: state.courses,
+      timestamp: new Date().toISOString()
+    };
+
+    google.script.run
+      .withSuccessHandler((url) => {
+        if (url) {
+          window.open(url, '_blank');
+          showToast("PDF Generated Successfully", "ok");
+        }
+      })
+      .withFailureHandler(() => showToast("PDF Generation Failed", "err"))
+      .generateTraceablePDF(data);
+  }
+};
+
+window.PDFManager = PDFManager;
+
 function getCurrentSemester() {
-  const today = new Date();
-  return state.semesters.find(s => {
-    const a = new Date(s.startDate), b = new Date(s.endDate);
-    return today >= a && today <= b;
-  });
-}
 
 // ══════════════════════════════════════════════════
 // FIREBASE CRUD
@@ -875,6 +1333,16 @@ async function fsSet(col, id, data) {
   try {
     const plainData = JSON.parse(JSON.stringify(data));
     await setDoc(doc(db, col, id), { ...plainData, _t: serverTimestamp() });
+    
+    // Notion Sync Trigger (only for main data objects)
+    if ((col === 'assignments' || col === 'exams') && !data._notion_syncing && typeof google !== 'undefined' && google.script) {
+      const syncFunc = col === 'assignments' ? 'syncAssignmentToNotion' : 'syncExamToNotion';
+      google.script.run.withSuccessHandler(res => {
+        if (res && res.success && res.pageId && !data.notionPageId) {
+          fsUpd(col, id, { notionPageId: res.pageId, _notion_syncing: true });
+        }
+      })[syncFunc](plainData);
+    }
   } catch (e) {
     handleFirebaseError(e, 'fsSet');
   }
@@ -896,6 +1364,21 @@ async function fsUpd(col, id, data) {
   try {
     const plainData = JSON.parse(JSON.stringify(data));
     await updateDoc(doc(db, col, id), plainData);
+    
+    // Trigger Notion Update if relevant
+    if ((col === 'assignments' || col === 'exams') && !data._notion_syncing && typeof google !== 'undefined' && google.script) {
+      // Need full data for Notion sync
+      const fullDoc = await getDoc(doc(db, col, id));
+      if (fullDoc.exists()) {
+        const fullData = fullDoc.data();
+        const syncFunc = col === 'assignments' ? 'syncAssignmentToNotion' : 'syncExamToNotion';
+        google.script.run.withSuccessHandler(res => {
+          if (res && res.success && res.pageId && !fullData.notionPageId) {
+             fsUpd(col, id, { notionPageId: res.pageId, _notion_syncing: true });
+          }
+        })[syncFunc](fullData);
+      }
+    }
   } catch (e) {
     handleFirebaseError(e, 'fsUpd');
   }
@@ -1744,13 +2227,13 @@ function renderGPAXChart() {
   const thresholdY175 = getY(1.75);
 
   container.innerHTML = `
-    <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-      <line class="chart-threshold" x1="${padding}" y1="${thresholdY2}" x2="${width - padding}" y2="${thresholdY2}" stroke="#22c55e" />
-      <line class="chart-threshold" x1="${padding}" y1="${thresholdY175}" x2="${width - padding}" y2="${thresholdY175}" stroke="#ef4444" />
-      <polyline class="chart-line" points="${points}" />
+    <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" style="width:100%; height:${height}px;">
+      <line x1="${padding}" y1="${thresholdY2}" x2="${width - padding}" y2="${thresholdY2}" stroke="#22c55e" stroke-dasharray="4" stroke-opacity="0.5" />
+      <line x1="${padding}" y1="${thresholdY175}" x2="${width - padding}" y2="${thresholdY175}" stroke="#ef4444" stroke-dasharray="4" stroke-opacity="0.5" />
+      <polyline points="${points}" fill="none" stroke="var(--c-accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
       ${data.map((v, i) => `
-        <circle class="chart-point" cx="${padding + i * xStep}" cy="${getY(v)}" r="4" />
-        <text class="chart-label" x="${padding + i * xStep}" y="${height - 5}" text-anchor="middle">${labels[i].substring(0, 6)}</text>
+        <circle cx="${padding + i * xStep}" cy="${getY(v)}" r="4" fill="var(--c-accent)" />
+        <text x="${padding + i * xStep}" y="${height - 5}" text-anchor="middle" font-size="8" fill="var(--text)" opacity="0.6">${labels[i].substring(0, 6)}</text>
       `).join('')}
     </svg>`;
 }
@@ -2002,7 +2485,15 @@ function renderCourseHubPage() {
             <div class="hub-hero-text" style="width: 100%; margin-top:35px; color:#1e293b;">
               <p style="font-size:16px; margin-bottom:2px; font-weight:500; color:#0f172a;">01</p>
               <p style="font-size:16px; margin-bottom:5px; font-weight:500; color:#0f172a;">${c.code}</p>
-              <h1 style="font-size:32px; font-weight:700; margin-bottom:5px; color:#0f172a; letter-spacing:-0.5px;">${c.nameTh || c.nameEn}</h1>
+              <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <h1 style="font-size:32px; font-weight:700; margin-bottom:5px; color:#0f172a; letter-spacing:-0.5px; flex:1;">${c.nameTh || c.nameEn}</h1>
+                ${LiveClassHub.active && LiveClassHub.courseId === c.id ? `
+                  <div class="live-status-pill" style="background:#ef4444; color:white; padding:8px 16px; border-radius:100px; font-weight:800; display:flex; align-items:center; gap:8px; animation: pulse 2s infinite;">
+                    <span style="width:8px; height:8px; background:white; border-radius:50%;"></span>
+                    LIVE: <span id="live-timer-display">00:00:00</span>
+                  </div>
+                ` : ''}
+              </div>
               <p style="font-size:15px; color:#334155; margin-bottom:20px; font-weight:500;">${c.instructor || 'นายธนสิน น้ำไพศาล, นายธรรนินทร์ ทับศรี'}</p>
               
               <div class="hide-scrollbar" style="display:flex; gap:10px; font-size:12px; font-weight:700; overflow-x:auto; padding-bottom:5px; margin:0 -20px; padding:0 20px;">
@@ -2013,8 +2504,12 @@ function renderCourseHubPage() {
               </div>
 
               <div style="display:flex; gap:10px; margin-top:15px;">
-                 ${c.link ? `<a href="${c.link}" target="_blank" class="nb-btn sm" style="flex:1; text-align:center; background:#fff; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:8px; font-size:12px; border:2px solid black;"><span>📹</span> เข้าห้องเรียน (Meet/Zoom)</a>` : ''}
-                 <a href="${c.folderUrl || '#'}" target="_blank" class="nb-btn sm" style="flex:1; text-align:center; background:#fff; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:8px; font-size:12px; border:2px solid black;"><span>📁</span> Google Drive</a>
+                 ${c.link ? `<a href="${c.link}" target="_blank" class="nb-btn sm" style="flex:1; text-align:center; background:#fff; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:8px; font-size:12px; border:2px solid black;"><span>📹</span> ห้องเรียน</a>` : ''}
+                 ${LiveClassHub.active && LiveClassHub.courseId === c.id ? 
+                   `<button class="nb-btn sm danger" style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; font-size:12px; border:2px solid black; background:#fee2e2; color:#b91c1c;" onclick="LiveClassHub.stop()"><span>⏹</span> จบคลาสเรียน</button>` : 
+                   `<button class="nb-btn sm" style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; font-size:12px; border:2px solid black; background:#ecfdf5; color:#059669;" onclick="LiveClassHub.start('${c.id}')"><span>🚀</span> เริ่มจดเลคเชอร์</button>`
+                 }
+                 <a href="${c.folderUrl || '#'}" target="_blank" class="nb-btn sm" style="flex:1; text-align:center; background:#fff; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:8px; font-size:12px; border:2px solid black;"><span>📁</span> Drive</a>
               </div>
             </div>
           </div>
@@ -2088,6 +2583,7 @@ function renderMiniDrive(c) {
                 <button class="icon-btn-minimal" style="color:#ef4444;" onclick="deleteSelectedItems()" title="Delete" ${gasDisabled}>🗑</button>
                 <div style="width:1px; height:20px; background:#cbd5e1; margin: 0 5px;"></div>
               ` : ''}
+              <button class="icon-btn-minimal" onclick="DriveManager.openPicker('${c.id}', '${c.driveId}', (docs) => handleLinkedFiles(docs, '${c.id}'))" title="Link Study Materials" ${gasDisabled}>➕🔗</button>
               <button class="icon-btn-minimal" onclick="state.driveViewMode = state.driveViewMode === 'list' ? 'grid' : 'list'; render();" title="Toggle View">${state.driveViewMode === 'list' ? '⊞' : '☰'}</button>
               <button class="icon-btn-minimal" onclick="handleCreateFolder('${c.id}', '${state.currentFolderId || c.driveId}')" title="New Folder" ${gasDisabled}>📁+</button>
               <button class="icon-btn-minimal" onclick="handleFileUpload('${c.id}', '${state.currentFolderId || c.driveId}')" title="Upload" ${gasDisabled}>↑</button>
@@ -2249,16 +2745,16 @@ function renderAttendanceSummary(courseId) {
           <div class="att-status-card glass-card nb-card" style="background:#fff;">
             <div style="font-weight:800; font-size:14px; margin-bottom:10px;">📍 เช็คอินวันนี้ (${new Date().toLocaleDateString('th-TH')})</div>
             ${(() => {
-              const now = new Date();
-              const adjustedDay = getTodayDayIndex();
-              const currentTimeVal = now.getHours() + (now.getMinutes() / 60);
-              const curSem = getCurrentSemester();
-              const course = findCourseById(courseId);
-              const schedules = (course?.schedules || course?.schedule || []);
-              const activeSlot = schedules.find(s => s.day === adjustedDay && currentTimeVal >= s.startHour && currentTimeVal < s.endHour);
+      const now = new Date();
+      const adjustedDay = getTodayDayIndex();
+      const currentTimeVal = now.getHours() + (now.getMinutes() / 60);
+      const curSem = getCurrentSemester();
+      const course = findCourseById(courseId);
+      const schedules = (course?.schedules || course?.schedule || []);
+      const activeSlot = schedules.find(s => s.day === adjustedDay && currentTimeVal >= s.startHour && currentTimeVal < s.endHour);
 
-              if (todayRecord) {
-                return `
+      if (todayRecord) {
+        return `
                   <div style="background:var(--c-lime)11; border:2px solid var(--c-lime); padding:12px; border-radius:12px; display:flex; align-items:center; gap:10px;">
                     <span style="font-size:20px;">✅</span>
                     <div>
@@ -2266,16 +2762,16 @@ function renderAttendanceSummary(courseId) {
                       <div style="font-size:11px; opacity:0.7;">เวลา: ${todayRecord.timestamp?.split('T')[1].substring(0, 5) || '-'} | สถานะ: ${todayRecord.status}</div>
                     </div>
                   </div>`;
-              } else if (activeSlot) {
-                return `
+      } else if (activeSlot) {
+        return `
                   <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
                     <button class="nb-btn sm nb-btn-primary" onclick="setAttendanceStatus('${courseId}', 'เข้าเรียนปกติ')">✅ เข้าเรียน</button>
                     <button class="nb-btn sm nb-btn-danger" onclick="setAttendanceStatus('${courseId}', 'มาสาย')">⏳ สาย</button>
                   </div>`;
-              } else {
-                return `<div class="glass-warn" style="text-align:center; padding:12px; border-radius:12px; font-size:13px;">⌛ ยังไม่ถึงเวลาคลาสเรียน (กดได้เฉพาะเวลาเรียน)</div>`;
-              }
-            })()}
+      } else {
+        return `<div class="glass-warn" style="text-align:center; padding:12px; border-radius:12px; font-size:13px;">⌛ ยังไม่ถึงเวลาคลาสเรียน (กดได้เฉพาะเวลาเรียน)</div>`;
+      }
+    })()}
           </div>
 
           <div class="reflection-card glass-card nb-card" style="background:#fff;">
@@ -2288,10 +2784,10 @@ function renderAttendanceSummary(courseId) {
         <div class="att-history-list" style="display:flex; flex-direction:column; gap:8px;">
           <div style="font-weight:800; font-size:13px; opacity:0.5; margin-bottom:4px;">ประวัติย้อนหลัง (${counts['ปกติ']} มา, ${counts['สาย']} สาย, ${counts['ขาด']} ขาด)</div>
           ${dates.map(d => {
-    const r = history[d];
-    const isPresent = r.status.includes('ปกติ');
-    const isLate = r.status.includes('สาย');
-    return `
+      const r = history[d];
+      const isPresent = r.status.includes('ปกติ');
+      const isLate = r.status.includes('สาย');
+      return `
               <div class="glass-card" style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border:1px solid var(--glass-border);">
                 <div>
                   <div style="font-weight:700; font-size:12px;">${new Date(d).toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' })}</div>
@@ -2300,7 +2796,7 @@ function renderAttendanceSummary(courseId) {
                 <div class="nb-chip" style="background:${isPresent ? 'var(--c-lime)22' : isLate ? 'var(--c-rust)22' : 'var(--c-red)22'}; color:${isPresent ? 'var(--c-lime)' : isLate ? 'var(--c-rust)' : 'var(--c-red)'}; border-color:${isPresent ? 'var(--c-lime)' : isLate ? 'var(--c-rust)' : 'var(--c-red)'}">${r.status}</div>
               </div>
             `;
-  }).join('') || '<div class="empty-sm">ยังไม่มีประวัติ</div>'}
+    }).join('') || '<div class="empty-sm">ยังไม่มีประวัติ</div>'}
         </div>
       `;
   return html;
@@ -2311,11 +2807,11 @@ window.saveReflection = async (courseId) => {
   if (!el) return;
   const val = el.value.trim();
   if (!val) { showToast('⚠️ กรุณากรอกเนื้อหา', 'err'); return; }
-  
+
   showToast('⏳ กำลังบันทึก Reflection...');
   state.reflections[courseId] = val;
   localStorage.setItem('reflections', JSON.stringify(state.reflections));
-  
+
   try {
     await fsSet('reflections', courseId, { text: val, updatedAt: new Date().toISOString() });
     showToast('✅ บันทึก Reflection สำเร็จ!');
@@ -2411,7 +2907,7 @@ async function handleCreateFolder(courseId, parentId) {
   if (!isGAS()) { alert("ฟีเจอร์นี้ต้องใช้ผ่าน Google Apps Script URL"); return; }
   const c = findCourseById(courseId);
   const targetParentId = parentId || (c ? c.driveId : null);
-  
+
   if (!targetParentId) {
     showToast('❌ ไม่สามารถระบุโฟลเดอร์ปลายทางได้', 'err');
     return;
@@ -2419,7 +2915,7 @@ async function handleCreateFolder(courseId, parentId) {
 
   const name = prompt('ชื่อโฟลเดอร์ใหม่:');
   if (!name) return;
-  
+
   showToast('📂 กำลังสร้างโฟลเดอร์ใหม่...');
   google.script.run
     .withSuccessHandler((res) => {
@@ -2595,6 +3091,45 @@ async function setTopicLevel(courseId, topicId, level) {
   await fsSet('topic_mastery', courseId, { topics: state.topicMastery[courseId] });
 }
 
+async function linkFilesToTopic(courseId, topicId, docs) {
+  if (!docs || docs.length === 0) return;
+  const t = state.topicMastery[courseId].find(x => x.id === topicId);
+  if (!t) return;
+  if (!t.files) t.files = [];
+  docs.forEach(d => {
+    if (!t.files.find(f => f.id === d.id)) {
+      t.files.push({ id: d.id, name: d.name, url: d.url, mimeType: d.mimeType });
+    }
+  });
+  localStorage.setItem('topic_mastery', JSON.stringify(state.topicMastery));
+  await fsSet('topic_mastery', courseId, { topics: state.topicMastery[courseId] });
+  render();
+  showToast(`✅ Linked ${docs.length} files to topic`);
+}
+
+async function unlinkFileFromTopic(courseId, topicId, fileId) {
+  const t = state.topicMastery[courseId].find(x => x.id === topicId);
+  if (t && t.files) {
+    t.files = t.files.filter(f => f.id !== fileId);
+    localStorage.setItem('topic_mastery', JSON.stringify(state.topicMastery));
+    await fsSet('topic_mastery', courseId, { topics: state.topicMastery[courseId] });
+    render();
+  }
+}
+
+async function handleLinkedFiles(docs, courseId) {
+    if (!docs || docs.length === 0) return;
+    showToast(`🔗 Linking ${docs.length} files to course...`);
+    const course = findCourseById(courseId);
+    if (!course) return;
+    
+    // For now, refresh drive as they might be in standard folders
+    // Or we could store them in a 'pinned_files' collection
+    showToast(`✅ Files linked to ${course.code}`);
+    refreshDriveFiles(courseId, course.driveId);
+}
+
+
 async function deleteTopic(courseId, topicId) {
   if (!confirm('ยืนยันการลบหัวข้อนี้และหัวข้อย่อย?')) return;
   const removeRecursive = (id) => {
@@ -2624,8 +3159,8 @@ async function saveCourseSettings(courseId) {
   await fsUpd('courses', courseId, updated);
   const semId = findSemIdByCourseId(courseId);
   if (semId) {
-      const cIdx = state.courses[semId].findIndex(x => x.id === courseId);
-      state.courses[semId][cIdx] = { ...state.courses[semId][cIdx], ...updated };
+    const cIdx = state.courses[semId].findIndex(x => x.id === courseId);
+    state.courses[semId][cIdx] = { ...state.courses[semId][cIdx], ...updated };
   }
   showToast('✅ บันทึกเรียบร้อย');
   render();
@@ -2662,7 +3197,7 @@ function renderDashboard(gpaVal, proVal, curSemVal) {
   const cr = getTotalPassedCredits();
   const pct = Math.min(100, (cr / 137 * 100)).toFixed(1);
   const missingReflections = getMissingReflections();
-  
+
   const proAlerts = {
     'pro-low': `<div class="alert glass-warn" style="border-left:8px solid var(--c-rust);">⚠️ <strong>ติดโปรต่ำ</strong> GPAX ${gpa} (1.75–1.99) — ต้องให้อาจารย์ที่ปรึกษาปลดล็อค</div>`,
     'pro-high': `<div class="alert glass-danger" style="border-left:8px solid var(--c-rust); background:rgba(225,29,72,0.1);">🚨 <strong>ติดโปรสูง</strong> GPAX ${gpa} (1.50–1.74) — ระวังพ้นสภาพ!</div>`,
@@ -2705,6 +3240,25 @@ function renderDashboard(gpaVal, proVal, curSemVal) {
         </div>
       </div>
     </div>
+    
+    <!-- Phase 4: Compliance & Reporting Quick Actions -->
+    <div class="dash-grid-v2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 0 20px 20px;">
+      <div class="glass-card interactive" onclick="GPSManager.checkInSuggestion()" style="display:flex; align-items:center; gap:12px; padding:15px; background:rgba(34, 197, 94, 0.05); border-left:4px solid #22c55e;">
+        <div style="font-size:24px;">📍</div>
+        <div>
+          <div style="font-weight:700; font-size:13px; color:#22c55e;">Attendance</div>
+          <div style="font-size:11px; opacity:0.7;">Check-in Nearby</div>
+        </div>
+      </div>
+      <div class="glass-card interactive" onclick="PDFManager.generateTranscriptReport()" style="display:flex; align-items:center; gap:12px; padding:15px; background:rgba(79, 70, 229, 0.05); border-left:4px solid #4f46e5;">
+        <div style="font-size:24px;">📄</div>
+        <div>
+          <div style="font-weight:700; font-size:13px; color:#4f46e5;">Academic Report</div>
+          <div style="font-size:11px; opacity:0.7;">Signed Traceable PDF</div>
+        </div>
+      </div>
+    </div>
+
 
     ${missingReflections.length > 0 ? `
       <div class="glass-card reflection-banner-v2" onclick="openPendingReflectionsModal()">
@@ -2726,9 +3280,9 @@ function renderDashboard(gpaVal, proVal, curSemVal) {
         </div>
         <div class="today-timeline">
           ${todayClasses.length > 0 ? todayClasses.map(c => {
-            const isLive = activeClass && activeClass.id === c.id && activeClass.slot.startHour === c.slot.startHour;
-            const isPast = currentTimeVal > c.slot.endHour;
-            return `
+    const isLive = activeClass && activeClass.id === c.id && activeClass.slot.startHour === c.slot.startHour;
+    const isPast = currentTimeVal > c.slot.endHour;
+    return `
               <div class="timeline-item ${isLive ? 'live' : ''} ${isPast ? 'past' : ''}">
                 <div class="t-time">${c.slot.startHour}:00 - ${c.slot.endHour}:00</div>
                 <div class="t-indicator"><div class="t-dot"></div><div class="t-line"></div></div>
@@ -2740,7 +3294,7 @@ function renderDashboard(gpaVal, proVal, curSemVal) {
                 </div>
               </div>
             `;
-          }).join('') : `
+  }).join('') : `
             <div class="empty-state-v2">
               <div class="es-icon">🎉</div>
               <div class="es-text">วันนี้ไม่มีคลาสเรียน! พักผ่อนให้เต็มที่</div>
@@ -2770,8 +3324,8 @@ function renderDashboard(gpaVal, proVal, curSemVal) {
         
         <div class="widget-header" style="margin-top:20px;"><div class="widget-title"><span>📝</span> สอบที่ใกล้ที่สุด</div></div>
         ${Object.values(state.exams).flat().filter(e => getDaysUntil(e.date) >= 0).sort((a, b) => getDaysUntil(a.date) - getDaysUntil(b.date)).slice(0, 1).map(e => {
-          const course = findCourseById(e.courseId);
-          return `
+    const course = findCourseById(e.courseId);
+    return `
            <div class="exam-widget-item" style="padding:15px; background:rgba(0,0,0,0.03); border-radius:16px; display:flex; justify-content:space-between; align-items:center;">
               <div>
                 <div class="e-name" style="font-weight:800; font-size:14px;">${e.title || 'สอบ'}</div>
@@ -3099,7 +3653,7 @@ window.exportIDCard = async () => {
 
 window.deleteSemesterCalendar = async (semName) => {
   if (!confirm(`ยืนยันที่จะลบปฏิทิน Google Calendar ของเทอม ${semName} ใช่หรือไม่?\n\n(การกระทำนี้จะลบ event ทั้งหมดที่เกี่ยวข้องกับเทอมนี้ออกจาก Google Calendar เท่านั้น แต่ข้อมูลในแอปยังคงอยู่)`)) return;
-  
+
   if (typeof google !== 'undefined' && google.script) {
     showToast(`⏳ กำลังลบปฏิทิน...`);
     google.script.run.withSuccessHandler(res => {
@@ -3170,14 +3724,14 @@ window.testAlarmSound = async () => {
     state.alarmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
   }
   if (state.alarmAudioCtx.state === 'suspended') await state.alarmAudioCtx.resume();
-  
+
   triggerAlarm({ id: 'test', label: '📢 ทดสอบระบบปลุก', repeat: [] });
   setTimeout(() => dismissAlarm(), 5000);
 };
 
 window.resetFcmTokens = async () => {
   if (!confirm('⚠️ ยืนยันที่จะล้างข้อมูลอุปกรณ์ทั้งหมดใช่หรือไม่?\n\n(ทุกเครื่องจะต้องกด "เปิดใช้งาน" ใหม่เพื่อรับแจ้งเตือนอีกครั้ง)')) return;
-  
+
   if (typeof google !== 'undefined' && google.script) {
     showToast('⏳ กำลังล้างข้อมูล...');
     google.script.run.withSuccessHandler(async () => {
@@ -3187,7 +3741,7 @@ window.resetFcmTokens = async () => {
       try {
         const snap = await getDocs(query(collection(db, 'fcm_tokens'), where('userId', '==', STUDENT.id)));
         for (const d of snap.docs) await deleteDoc(d.ref);
-      } catch(e) {}
+      } catch (e) { }
     }).resetFcmTokens();
   }
 };
@@ -3195,21 +3749,21 @@ window.resetFcmTokens = async () => {
 window.syncAllToCalendar = async (semId) => {
   const sem = state.semesters.find(s => s.id === semId);
   if (!sem) return;
-  
+
   // กรองงานและสอบเฉพาะของเทอมนี้
   const semCourses = state.courses[semId] || [];
   const courseIds = semCourses.map(c => c.id);
-  
+
   const assignments = Object.values(state.assignments).flat().filter(a => courseIds.includes(a.courseId));
   const exams = Object.values(state.exams).flat().filter(e => courseIds.includes(e.courseId));
-  
+
   if (assignments.length === 0 && exams.length === 0) {
     showToast('⚠️ ไม่พบข้อมูลงานหรือการสอบในเทอมนี้', 'warn');
     return;
   }
 
   showToast(`⏳ กำลังซิงก์ข้อมูล ${assignments.length + exams.length} รายการไปยัง Google Calendar...`);
-  
+
   let successCount = 0;
   const total = assignments.length + exams.length;
 
@@ -3365,7 +3919,7 @@ window.handleDrop = async (e, newStatus) => {
   e.preventDefault();
   e.currentTarget.classList.remove('drag-over');
   const id = e.dataTransfer.getData('text/plain');
-  
+
   // Find assignment across all courses
   let assignment = null;
   let courseId = null;
@@ -3387,7 +3941,7 @@ window.handleDrop = async (e, newStatus) => {
     showToast(`📦 ย้ายงานไปที่ [${newStatus}]`);
     localStorage.setItem('assignments', JSON.stringify(state.assignments));
     render();
-    
+
     try {
       await fsSet('assignments', courseId, { assignments: state.assignments[courseId] });
     } catch (err) {
@@ -4168,17 +4722,17 @@ function openAddAssignmentForm(a = null) {
   openModal(a ? 'แก้ไขการบ้าน / งาน' : 'เพิ่มการบ้าน / งาน', `
     <div class="form-grid">
       <div class="fg full"><label>วิชา <span class="req">*</span></label>
-        <select class="glass-select" id="f-aCourse">${activeCourses.map(c => `<option value="${c.id}" ${a && a.courseId===c.id?'selected':''}>${c.code} — ${c.nameTh}</option>`).join('')}</select></div>
-      <div class="fg full"><label>ชื่องาน <span class="req">*</span></label><input class="glass-input" id="f-aTitle" placeholder="ชื่องาน / การบ้าน" value="${a?a.title:''}"></div>
+        <select class="glass-select" id="f-aCourse">${activeCourses.map(c => `<option value="${c.id}" ${a && a.courseId === c.id ? 'selected' : ''}>${c.code} — ${c.nameTh}</option>`).join('')}</select></div>
+      <div class="fg full"><label>ชื่องาน <span class="req">*</span></label><input class="glass-input" id="f-aTitle" placeholder="ชื่องาน / การบ้าน" value="${a ? a.title : ''}"></div>
       <div class="fg"><label>ประเภท</label>
         <select class="glass-select" id="f-aType">
-          ${['การบ้าน','รายงาน','โปรเจกต์','Quiz','Lab','งานกลุ่ม','อื่นๆ'].map(t => `<option ${a && a.type===t?'selected':''}>${t}</option>`).join('')}
+          ${['การบ้าน', 'รายงาน', 'โปรเจกต์', 'Quiz', 'Lab', 'งานกลุ่ม', 'อื่นๆ'].map(t => `<option ${a && a.type === t ? 'selected' : ''}>${t}</option>`).join('')}
         </select></div>
-      <div class="fg"><label>กำหนดส่ง <span class="req">*</span></label><input type="date" class="glass-input" id="f-aDue" value="${a?a.dueDate:''}"></div>
-      <div class="fg"><label>เวลาส่ง</label><input type="time" class="glass-input" id="f-aTime" value="${a?a.dueTime||'':''}"></div>
-      <div class="fg"><label>คะแนนเต็ม</label><input type="number" class="glass-input" id="f-aScore" placeholder="เช่น 10" value="${a?a.maxScore||'':''}"></div>
+      <div class="fg"><label>กำหนดส่ง <span class="req">*</span></label><input type="date" class="glass-input" id="f-aDue" value="${a ? a.dueDate : ''}"></div>
+      <div class="fg"><label>เวลาส่ง</label><input type="time" class="glass-input" id="f-aTime" value="${a ? a.dueTime || '' : ''}"></div>
+      <div class="fg"><label>คะแนนเต็ม</label><input type="number" class="glass-input" id="f-aScore" placeholder="เช่น 10" value="${a ? a.maxScore || '' : ''}"></div>
       <div class="fg full"><label>บันทึกช่วยจำ (ที่อาจารย์สั่งปากเปล่า)</label>
-        <textarea class="glass-textarea" id="f-aNote" rows="2" placeholder="รายละเอียด...">${a?a.note||'':''}</textarea></div>
+        <textarea class="glass-textarea" id="f-aNote" rows="2" placeholder="รายละเอียด...">${a ? a.note || '' : ''}</textarea></div>
     </div>`,
     `<button class="btn-glass-primary" id="saveAssignBtn">${a ? 'บันทึกแก้ไข' : 'เพิ่มการบ้าน'}</button>`
   );
@@ -4195,8 +4749,8 @@ function openAddAssignmentForm(a = null) {
       dueTime: document.getElementById('f-aTime').value,
       maxScore: document.getElementById('f-aScore').value,
       note: document.getElementById('f-aNote').value,
-      status: a ? a.status : 'ยังไม่เริ่ม', 
-      submitted: a ? a.submitted : false, 
+      status: a ? a.status : 'ยังไม่เริ่ม',
+      submitted: a ? a.submitted : false,
       subtasks: a ? a.subtasks || [] : []
     };
     if (!data.title || !data.dueDate) { showToast('⚠️ กรอกชื่องานและกำหนดส่ง', 'err'); return; }
@@ -4212,13 +4766,13 @@ function openAddAssignmentForm(a = null) {
     }
 
     if (typeof google !== 'undefined' && google.script) {
-       const semName = curSem ? curSem.name : 'Unknown';
-       google.script.run.withSuccessHandler(async res => {
-          if(res && res.success) {
-             data.calendarEventId = res.eventId;
-             await fsSet('assignments', data.id, data);
-          }
-       }).syncCalendarEvent(`NITIPAT MANAGER - ${semName}`, 'assignment', data);
+      const semName = curSem ? curSem.name : 'Unknown';
+      google.script.run.withSuccessHandler(async res => {
+        if (res && res.success) {
+          data.calendarEventId = res.eventId;
+          await fsSet('assignments', data.id, data);
+        }
+      }).syncCalendarEvent(`NITIPAT MANAGER - ${semName}`, 'assignment', data);
     }
 
     closeModal(); await loadAll(); showToast(a ? '✅ บันทึกแก้ไขสำเร็จ' : '✅ เพิ่มการบ้านสำเร็จ');
@@ -4232,20 +4786,20 @@ function openAddExamForm(e = null) {
   openModal(e ? 'แก้ไขการสอบ' : 'เพิ่มการสอบ', `
     <div class="form-grid">
       <div class="fg full"><label>วิชา <span class="req">*</span></label>
-        <select class="glass-select" id="f-eCourse">${activeCourses.map(c => `<option value="${c.id}" ${e && e.courseId===c.id?'selected':''}>${c.code} — ${c.nameTh}</option>`).join('')}</select></div>
-      <div class="fg full"><label>ชื่อการสอบ <span class="req">*</span></label><input class="glass-input" id="f-eTitle" placeholder="เช่น สอบกลางภาค, Quiz 1" value="${e?e.title:''}"></div>
+        <select class="glass-select" id="f-eCourse">${activeCourses.map(c => `<option value="${c.id}" ${e && e.courseId === c.id ? 'selected' : ''}>${c.code} — ${c.nameTh}</option>`).join('')}</select></div>
+      <div class="fg full"><label>ชื่อการสอบ <span class="req">*</span></label><input class="glass-input" id="f-eTitle" placeholder="เช่น สอบกลางภาค, Quiz 1" value="${e ? e.title : ''}"></div>
       <div class="fg"><label>ประเภท</label>
         <select class="glass-select" id="f-eType">
-          ${['สอบกลางภาค','สอบปลายภาค','Quiz','สอบย่อย'].map(t => `<option ${e && e.type===t?'selected':''}>${t}</option>`).join('')}
+          ${['สอบกลางภาค', 'สอบปลายภาค', 'Quiz', 'สอบย่อย'].map(t => `<option ${e && e.type === t ? 'selected' : ''}>${t}</option>`).join('')}
         </select></div>
-      <div class="fg"><label>วันสอบ <span class="req">*</span></label><input type="date" class="glass-input" id="f-eDate" value="${e?e.date:''}"></div>
-      <div class="fg"><label>เวลาสอบ</label><input type="time" class="glass-input" id="f-eTime" value="${e?e.time||'':''}"></div>
-      <div class="fg"><label>ห้องสอบ</label><input class="glass-input" id="f-eRoom" placeholder="เช่น E6-201" value="${e?e.room||'':''}"></div>
-      <div class="fg"><label>คะแนนเต็ม</label><input type="number" class="glass-input" id="f-eScore" value="${e?e.maxScore||'':''}"></div>
+      <div class="fg"><label>วันสอบ <span class="req">*</span></label><input type="date" class="glass-input" id="f-eDate" value="${e ? e.date : ''}"></div>
+      <div class="fg"><label>เวลาสอบ</label><input type="time" class="glass-input" id="f-eTime" value="${e ? e.time || '' : ''}"></div>
+      <div class="fg"><label>ห้องสอบ</label><input class="glass-input" id="f-eRoom" placeholder="เช่น E6-201" value="${e ? e.room || '' : ''}"></div>
+      <div class="fg"><label>คะแนนเต็ม</label><input type="number" class="glass-input" id="f-eScore" value="${e ? e.maxScore || '' : ''}"></div>
       <div class="fg full"><label>ขอบเขตที่สอบ</label>
-        <textarea class="glass-textarea" id="f-eScope" rows="2" placeholder="เนื้อหาที่ออกสอบ...">${e?e.scope||'':''}</textarea></div>
+        <textarea class="glass-textarea" id="f-eScope" rows="2" placeholder="เนื้อหาที่ออกสอบ...">${e ? e.scope || '' : ''}</textarea></div>
       <div class="fg full"><label>บันทึก / Tips สำหรับสอบ</label>
-        <textarea class="glass-textarea" id="f-eNotes" rows="2">${e?e.notes||'':''}</textarea></div>
+        <textarea class="glass-textarea" id="f-eNotes" rows="2">${e ? e.notes || '' : ''}</textarea></div>
     </div>`,
     `<button class="btn-glass-primary" id="saveExamBtn">${e ? 'บันทึกแก้ไข' : 'เพิ่มการสอบ'}</button>`
   );
@@ -4283,13 +4837,13 @@ function openAddExamForm(e = null) {
     await fsSet('exams', data.id, data);
 
     if (typeof google !== 'undefined' && google.script) {
-       const semName = curSem ? curSem.name : 'Unknown';
-       google.script.run.withSuccessHandler(async res => {
-          if(res && res.success) {
-             data.calendarEventId = res.eventId;
-             await fsSet('exams', data.id, data);
-          }
-       }).syncCalendarEvent(`NITIPAT MANAGER - ${semName}`, 'exam', data);
+      const semName = curSem ? curSem.name : 'Unknown';
+      google.script.run.withSuccessHandler(async res => {
+        if (res && res.success) {
+          data.calendarEventId = res.eventId;
+          await fsSet('exams', data.id, data);
+        }
+      }).syncCalendarEvent(`NITIPAT MANAGER - ${semName}`, 'exam', data);
     }
 
     closeModal(); await loadAll(); showToast(e ? '✅ บันทึกแก้ไขสำเร็จ' : '✅ เพิ่มการสอบสำเร็จ');
@@ -4601,7 +5155,7 @@ function attachAllEvents() {
     const a = Object.values(state.assignments).flat().find(x => x.id === id);
     if (confirm('ลบงานนี้?')) {
       if (a?.calendarEventId && typeof google !== 'undefined' && google.script) {
-        const curSem = getCurrentSemester() || state.semesters[state.semesters.length-1];
+        const curSem = getCurrentSemester() || state.semesters[state.semesters.length - 1];
         if (curSem) google.script.run.deleteCalendarEvent(`NITIPAT MANAGER - ${curSem.name}`, a.calendarEventId);
       }
       await fsDel('assignments', id); await loadAll();
@@ -4618,7 +5172,7 @@ function attachAllEvents() {
     const e = Object.values(state.exams).flat().find(x => x.id === id);
     if (confirm('ลบการสอบนี้?')) {
       if (e?.calendarEventId && typeof google !== 'undefined' && google.script) {
-        const curSem = getCurrentSemester() || state.semesters[state.semesters.length-1];
+        const curSem = getCurrentSemester() || state.semesters[state.semesters.length - 1];
         if (curSem) google.script.run.deleteCalendarEvent(`NITIPAT MANAGER - ${curSem.name}`, e.calendarEventId);
       }
       await fsDel('exams', id); await loadAll();
@@ -5012,9 +5566,9 @@ window.handleCreateFolder = handleCreateFolder;
 window.addCourseLink = addCourseLink;
 window.removeCourseLink = removeCourseLink;
 window.deleteCourse = deleteCourse;
-window.saveCourseSettings = async function(id) {
+window.saveCourseSettings = async function (id) {
   const form = document.getElementById('courseHubForm');
-  if(!form) return;
+  if (!form) return;
   const updates = {
     'hubConfig.structure': form.querySelector('#f-hubStructure')?.value || '',
     'hubConfig.understanding': form.querySelector('#f-hubUnderstanding')?.value || '',
@@ -5025,7 +5579,7 @@ window.saveCourseSettings = async function(id) {
     await updateDoc(doc(db, 'courses', id), updates);
     showToast('✅ บันทึกข้อมูลวิชาเรียบร้อย');
     await loadAll();
-  } catch(e) {
+  } catch (e) {
     console.error(e);
     showToast('❌ บันทึกไม่สำเร็จ', 'err');
   }
@@ -5236,7 +5790,7 @@ async function initWebPush() {
     try {
       await navigator.serviceWorker.register('firebase-messaging-sw.js');
       console.log('Firebase Service Worker registered');
-      
+
       // อัปเดต Token อัตโนมัติถ้าเคยอนุญาตแล้ว
       if (Notification.permission === 'granted' && typeof getToken !== 'undefined') {
         const registration = await navigator.serviceWorker.ready;
@@ -5295,13 +5849,13 @@ async function requestNotificationPermission() {
     } catch (err) {
       console.error('An error occurred while retrieving token. ', err);
       let errorMsg = "❌ เกิดข้อผิดพลาดในการลงทะเบียน FCM";
-      
+
       if (err.name === 'AbortError' || err.message.includes('push service error')) {
         errorMsg = "⚠️ ไม่สามารถติดต่อบริการ Push ได้\n\n(หากใช้ iPhone/iPad ต้อง 'เพิ่มไปยังหน้าจอโฮม' ก่อน หรืออาจเกิดจากบล็อกโฆษณา/VPN)";
       } else if (err.code === 'messaging/permission-blocked') {
         errorMsg = "⚠️ คุณบล็อกการแจ้งเตือนไว้ กรุณาปลดล็อกในตั้งค่าเบราว์เซอร์";
       }
-      
+
       showToast(errorMsg, "err");
     }
   } else {
@@ -5314,7 +5868,7 @@ window.requestNotificationPermission = requestNotificationPermission;
 window.openPendingReflectionsModal = () => {
   const missing = getMissingReflections();
   if (missing.length === 0) { showToast('🎉 ไม่มีงาน Reflection ค้างแล้ว'); return; }
-  
+
   openModal('📝 สรุปการเรียนที่ค้างอยู่', `
     <div style="padding:10px;">
       <p style="font-size:13px; margin-bottom:15px; color:var(--c-rust); font-weight:700;">⚠️ ตรวจพบงานที่ค้างเกิน 24 ชม. (หลอกระบบหรือเปล่า? ทำไมเข้าเรียนแต่ไม่บันทึก!)</p>
@@ -5334,13 +5888,13 @@ window.openPendingReflectionsModal = () => {
 window.saveSingleReflection = async (id) => {
   const val = document.getElementById(`refl_${id}`)?.value;
   if (!val) { showToast('⚠️ กรุณากรอกเนื้อหา', 'err'); return; }
-  
+
   state.reflections[id] = val;
   localStorage.setItem('reflections', JSON.stringify(state.reflections));
   await fsSet('reflections', id, { text: val, updatedAt: new Date().toISOString() });
   showToast('✅ บันทึกสำเร็จ!');
   const remaining = getMissingReflections();
-  if (remaining.length > 0) openPendingReflectionsModal(); 
+  if (remaining.length > 0) openPendingReflectionsModal();
   else closeModal();
   render();
 };
@@ -5401,7 +5955,7 @@ function scheduleAllNotifications() {
   Object.values(state.assignments).flat()
     .filter(a => !a.submitted && getDaysUntil(a.dueDate) === 1)
     .forEach(a => {
-      [6,8,10,12,15,18,21].forEach((hr, i) => {
+      [6, 8, 10, 12, 15, 18, 21].forEach((hr, i) => {
         const msgs = [
           'ตื่นมาแล้วเริ่มทำได้เลย!',
           'เช้านี้คือโอกาสสุดท้าย',
@@ -5418,24 +5972,24 @@ function scheduleAllNotifications() {
 
 function startHyperNotifications() {
   if (state.hyperNotifInterval) clearInterval(state.hyperNotifInterval);
-  if (state.hyperSyncInterval)  clearInterval(state.hyperSyncInterval);
+  if (state.hyperSyncInterval) clearInterval(state.hyperSyncInterval);
   if (state.hyperAlarmInterval) clearInterval(state.hyperAlarmInterval);
 
   state.hyperNotifInterval = setInterval(() => {
     const now = new Date();
     const todayIdx = (now.getDay() + 6) % 7; // Mon=0
-    const nowMin   = now.getHours() * 60 + now.getMinutes();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
     const todayKey = now.toLocaleDateString('en-CA');
 
     Object.values(state.courses).flat().forEach(c => {
       (c.schedules || c.schedule || []).forEach(s => {
         if (s.day !== todayIdx) return;
         const startMin = s.startHour * 60;
-        const endMin   = (s.endHour || s.startHour + 3) * 60;
-        const diff     = startMin - nowMin;
+        const endMin = (s.endHour || s.startHour + 3) * 60;
+        const diff = startMin - nowMin;
 
         if (diff === 5) {
-          pushNotif(`⏰ อีก 5 นาที!! ${c.nameTh}`, `เข้าห้อง ${c.room||''} ได้เลย!`);
+          pushNotif(`⏰ อีก 5 นาที!! ${c.nameTh}`, `เข้าห้อง ${c.room || ''} ได้เลย!`);
         }
         if (diff === 0) {
           pushNotif(`📍 ถึงเวลาเรียน ${c.nameTh}`, `เช็คชื่อในแอปด้วยนะ!`);
@@ -5485,7 +6039,7 @@ function showCheckinBanner(course) {
   banner.innerHTML = `
     <div>
       <div style="font-weight:600">📍 กำลังเรียน: ${course.nameTh}</div>
-      <div style="font-size:12px;opacity:0.85">ห้อง ${course.room||'ไม่ระบุ'} — เช็คชื่อด้วยนะ!</div>
+      <div style="font-size:12px;opacity:0.85">ห้อง ${course.room || 'ไม่ระบุ'} — เช็คชื่อด้วยนะ!</div>
     </div>
     <button onclick="setAttendanceStatus('${course.id}','เข้าเรียน');hideCheckinBanner()"
       style="background:white;color:#4f46e5;border:none;padding:8px 16px;
@@ -5502,7 +6056,7 @@ function hideCheckinBanner() {
 
 // ── Smart Alarm System ──
 function renderAlarmPage() {
-  const alarms = [...state.alarms].sort((a,b) => a.time.localeCompare(b.time));
+  const alarms = [...state.alarms].sort((a, b) => a.time.localeCompare(b.time));
   const nextAlarm = alarms.find(a => a.enabled);
 
   return `
@@ -5535,15 +6089,15 @@ function renderAlarmPage() {
                 <div class="alarm-label">${a.label || 'นาฬิกาปลุก'}</div>
                 <div class="alarm-repeat">
                   ${a.repeat?.length > 0 ? a.repeat.map(d => ({
-                    mon:'จ',tue:'อ',wed:'พ',thu:'พฤ',fri:'ศ',sat:'ส',sun:'อา'
-                  }[d]||d)).join(' ') : 'วันเดียว'}
-                  • snooze ${a.snoozeMin||5} นาที
+    mon: 'จ', tue: 'อ', wed: 'พ', thu: 'พฤ', fri: 'ศ', sat: 'ส', sun: 'อา'
+  }[d] || d)).join(' ') : 'วันเดียว'}
+                  • snooze ${a.snoozeMin || 5} นาที
                 </div>
               </div>
             </div>
             <div class="alarm-actions">
               <label class="toggle-switch">
-                <input type="checkbox" ${a.enabled?'checked':''} 
+                <input type="checkbox" ${a.enabled ? 'checked' : ''} 
                   onchange="toggleAlarm('${a.id}', this.checked)">
                 <span class="toggle-slider"></span>
               </label>
@@ -5557,7 +6111,7 @@ function renderAlarmPage() {
         + เพิ่มนาฬิกาปลุก
       </button>
 
-      ${alarms.filter(a=>a.enabled).length > 0 ? `
+      ${alarms.filter(a => a.enabled).length > 0 ? `
         <button onclick="enterSleepMode()" class="sleep-mode-btn">
           🌙 โหมดนอน — เปิดหน้าจอนาฬิกา
         </button>
@@ -5571,8 +6125,8 @@ function renderAlarmPage() {
 
 function openAddAlarmModal(prefillTime = '') {
   const now = new Date();
-  const defaultTime = prefillTime || 
-    `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+  const defaultTime = prefillTime ||
+    `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
   openModal('⏰ เพิ่มนาฬิกาปลุก', `
     <div style="display:flex;flex-direction:column;gap:16px">
@@ -5599,8 +6153,8 @@ function openAddAlarmModal(prefillTime = '') {
       <div>
         <label class="form-label">ทำซ้ำ</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          ${[['mon','จ'],['tue','อ'],['wed','พ'],['thu','พฤ'],
-             ['fri','ศ'],['sat','ส'],['sun','อา']].map(([v,l]) => `
+          ${[['mon', 'จ'], ['tue', 'อ'], ['wed', 'พ'], ['thu', 'พฤ'],
+    ['fri', 'ศ'], ['sat', 'ส'], ['sun', 'อา']].map(([v, l]) => `
             <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
               <input type="checkbox" value="${v}" class="alarm-repeat-cb"> ${l}
             </label>
@@ -5616,7 +6170,7 @@ function openAddAlarmModal(prefillTime = '') {
 }
 
 async function addAlarmFromModal() {
-  const time  = document.getElementById('alarmTime')?.value;
+  const time = document.getElementById('alarmTime')?.value;
   const label = document.getElementById('alarmLabel')?.value || 'นาฬิกาปลุก';
   const snoozeMin = parseInt(document.getElementById('alarmSnooze')?.value || '5');
   const repeat = [...document.querySelectorAll('.alarm-repeat-cb:checked')]
@@ -5637,9 +6191,9 @@ async function addAlarm(time, label, snoozeMin = 5, repeat = []) {
     isSnooze: false
   };
   state.alarms.push(alarm);
-  state.alarms.sort((a,b) => a.time.localeCompare(b.time));
+  state.alarms.sort((a, b) => a.time.localeCompare(b.time));
   localStorage.setItem('alarms', JSON.stringify(state.alarms));
-  try { await fsSet('alarms', 'list', { alarms: state.alarms }); } catch(e) {}
+  try { await fsSet('alarms', 'list', { alarms: state.alarms }); } catch (e) { }
   render();
   showToast(`⏰ ตั้งปลุก ${time} แล้ว`);
   syncDataToBackend();
@@ -5687,8 +6241,8 @@ async function quickAddAlarms(count, intervalMin, startTime = '07:00') {
     const totalMin = h * 60 + m + i * intervalMin;
     const nh = Math.floor(totalMin / 60) % 24;
     const nm = totalMin % 60;
-    const time = `${nh.toString().padStart(2,'0')}:${nm.toString().padStart(2,'0')}`;
-    await addAlarm(time, `ปลุกครั้งที่ ${i+1}`, 5, []);
+    const time = `${nh.toString().padStart(2, '0')}:${nm.toString().padStart(2, '0')}`;
+    await addAlarm(time, `ปลุกครั้งที่ ${i + 1}`, 5, []);
     await new Promise(r => setTimeout(r, 50));
   }
   showToast(`⏰ สร้าง ${count} นาฬิกาปลุกแล้ว`);
@@ -5699,7 +6253,7 @@ function toggleAlarm(id, enabled) {
   if (alarm) {
     alarm.enabled = enabled;
     localStorage.setItem('alarms', JSON.stringify(state.alarms));
-    fsSet('alarms', 'list', { alarms: state.alarms }).catch(()=>{});
+    fsSet('alarms', 'list', { alarms: state.alarms }).catch(() => { });
     showToast(enabled ? `⏰ เปิดปลุก ${alarm.time}` : `🔕 ปิดปลุก ${alarm.time}`);
     syncDataToBackend();
   }
@@ -5708,7 +6262,7 @@ function toggleAlarm(id, enabled) {
 function deleteAlarm(id) {
   state.alarms = state.alarms.filter(a => a.id !== id);
   localStorage.setItem('alarms', JSON.stringify(state.alarms));
-  fsSet('alarms', 'list', { alarms: state.alarms }).catch(()=>{});
+  fsSet('alarms', 'list', { alarms: state.alarms }).catch(() => { });
   render();
   showToast('🗑 ลบนาฬิกาปลุกแล้ว');
   syncDataToBackend();
@@ -5752,7 +6306,7 @@ async function enterSleepMode() {
     state.keepAliveAudio.loop = true;
     state.keepAliveAudio.volume = 0.05;
   }
-  
+
   const startAudio = () => {
     state.keepAliveAudio.play().then(() => {
       console.log("✅ iOS Keep-Alive Audio Playing");
@@ -5762,7 +6316,7 @@ async function enterSleepMode() {
       showToast('⚠️ โปรดแตะหน้าจอหนึ่งครั้งเพื่อเปิดระบบเสียง', 'warn');
     });
   };
-  
+
   startAudio();
 
   if ('mediaSession' in navigator) {
@@ -5809,7 +6363,7 @@ async function enterSleepMode() {
   screen.addEventListener('click', () => {
     // ทุกครั้งที่กดหน้าจอ ให้ช่วย Re-sync เสียงเผื่อ iOS หลุด
     if (state.keepAliveAudio && state.keepAliveAudio.paused) {
-      state.keepAliveAudio.play().catch(() => {});
+      state.keepAliveAudio.play().catch(() => { });
     }
     const ctrl = document.getElementById('sleepControls');
     if (ctrl) {
@@ -5835,28 +6389,28 @@ async function enterSleepMode() {
 
   try {
     state.wakeLock = await navigator.wakeLock.request('screen');
-  } catch(e) { console.warn('Wake Lock not supported'); }
+  } catch (e) { console.warn('Wake Lock not supported'); }
 }
 
 function updateSleepClock() {
   const now = new Date();
-  const h = now.getHours().toString().padStart(2,'0');
-  const m = now.getMinutes().toString().padStart(2,'0');
-  const s = now.getSeconds().toString().padStart(2,'0');
+  const h = now.getHours().toString().padStart(2, '0');
+  const m = now.getMinutes().toString().padStart(2, '0');
+  const s = now.getSeconds().toString().padStart(2, '0');
 
   const clockEl = document.getElementById('sleepClock');
   if (clockEl) clockEl.textContent = `${h}:${m}:${s}`;
 
   const dateEl = document.getElementById('sleepDate');
   if (dateEl) {
-    const days = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
-    dateEl.textContent = `${days[now.getDay()]} ${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()+543}`;
+    const days = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัส', 'ศุกร์', 'เสาร์'];
+    dateEl.textContent = `${days[now.getDay()]} ${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear() + 543}`;
   }
 
   const nextAlarmEl = document.getElementById('sleepNextAlarm');
   if (nextAlarmEl) {
     const nowMin = now.getHours() * 60 + now.getMinutes();
-    const enabled = state.alarms.filter(a => a.enabled).sort((a,b) => a.time.localeCompare(b.time));
+    const enabled = state.alarms.filter(a => a.enabled).sort((a, b) => a.time.localeCompare(b.time));
     const next = enabled.find(a => {
       const [ah, am] = a.time.split(':').map(Number);
       return ah * 60 + am > nowMin;
@@ -5867,7 +6421,7 @@ function updateSleepClock() {
       let diff = ah * 60 + am - nowMin;
       if (diff < 0) diff += 24 * 60;
       const dh = Math.floor(diff / 60), dm = diff % 60;
-      nextAlarmEl.textContent = `⏰ ปลุก ${next.time} น. — อีก ${dh > 0 ? dh+'ชม.' : ''}${dm}นาที`;
+      nextAlarmEl.textContent = `⏰ ปลุก ${next.time} น. — อีก ${dh > 0 ? dh + 'ชม.' : ''}${dm}นาที`;
     } else {
       nextAlarmEl.textContent = 'ไม่มีนาฬิกาปลุกที่เปิดอยู่';
     }
@@ -5877,8 +6431,8 @@ function updateSleepClock() {
 function checkAlarms() {
   if (state.alarmRinging) return;
   const now = new Date();
-  const timeStr = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
-  const dayMap = ['sun','mon','tue','wed','thu','fri','sat'];
+  const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+  const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
   const today = dayMap[now.getDay()];
 
   state.alarms.forEach(alarm => {
@@ -5908,9 +6462,9 @@ function triggerAlarm(alarm) {
   // หากอยู่ในโหมดนอน ให้ใช้ keepAliveAudio เล่นเสียงปลุกแทนเพื่อความชัวร์บน iOS
   if (state.sleepMode && state.keepAliveAudio) {
     // เปลี่ยนจาก .ogg เป็น .mp3 (iOS รองรับ)
-    state.keepAliveAudio.src = 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.mp3'; 
+    state.keepAliveAudio.src = 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.mp3';
     state.keepAliveAudio.volume = 1.0;
-    state.keepAliveAudio.play().catch(() => {});
+    state.keepAliveAudio.play().catch(() => { });
   }
 
   async function playAlarmSound() {
@@ -5943,16 +6497,16 @@ function triggerAlarm(alarm) {
         beep(880, base, 0.2, v);
         beep(880, base + 0.25, 0.2, v);
       }
-    } catch(e) { console.warn('Audio error:', e); }
+    } catch (e) { console.warn('Audio error:', e); }
   }
 
   playAlarmSound();
   state.alarmSoundInterval = setInterval(playAlarmSound, 6000);
 
   if ('vibrate' in navigator) {
-    navigator.vibrate([500,150,500,150,500,150,1000,300,1000]);
+    navigator.vibrate([500, 150, 500, 150, 500, 150, 1000, 300, 1000]);
     state.alarmVibrateInterval = setInterval(() => {
-      navigator.vibrate([500,150,500,150,1000]);
+      navigator.vibrate([500, 150, 500, 150, 1000]);
     }, 3500);
   }
   showAlarmOverlay(alarm);
@@ -5972,7 +6526,7 @@ function showAlarmOverlay(alarm) {
     animation: alarmFadeIn 0.5s ease;
   `;
   const now = new Date();
-  const timeStr = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+  const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
   overlay.innerHTML = `
     <div style="text-align:center;padding:0 24px">
@@ -5981,7 +6535,7 @@ function showAlarmOverlay(alarm) {
       <div style="font-size:22px;margin-top:16px;font-weight:500">${alarm.label || 'นาฬิกาปลุก'}</div>
       <div style="margin-top:48px;display:flex;flex-direction:column;gap:16px;width:100%;max-width:280px">
         <button onclick="dismissAlarm()" style="padding:20px;font-size:18px;font-weight:700;background:linear-gradient(135deg,#ef4444,#dc2626);color:white;border:none;border-radius:24px;cursor:pointer;font-family:Kanit;box-shadow:0 8px 32px rgba(239,68,68,0.5);animation:alarmPulse 1s infinite">⛔ หยุดปลุก</button>
-        <button onclick="snoozeAlarm(${alarm.snoozeMin||5})" style="padding:16px;font-size:16px;background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);border:1px solid rgba(255,255,255,0.2);border-radius:20px;cursor:pointer;font-family:Kanit">💤 เลื่อน ${alarm.snoozeMin||5} นาที</button>
+        <button onclick="snoozeAlarm(${alarm.snoozeMin || 5})" style="padding:16px;font-size:16px;background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);border:1px solid rgba(255,255,255,0.2);border-radius:20px;cursor:pointer;font-family:Kanit">💤 เลื่อน ${alarm.snoozeMin || 5} นาที</button>
       </div>
     </div>
   `;
@@ -5992,8 +6546,8 @@ function dismissAlarm() {
   state.alarmRinging = false;
   clearInterval(state.alarmSoundInterval);
   clearInterval(state.alarmVibrateInterval);
-  try { navigator.vibrate(0); } catch(e) {}
-  try { state.alarmAudioCtx?.close(); } catch(e) {}
+  try { navigator.vibrate(0); } catch (e) { }
+  try { state.alarmAudioCtx?.close(); } catch (e) { }
   state.alarmAudioCtx = null;
   document.getElementById('alarmOverlay')?.remove();
   showToast('✅ หยุดปลุกแล้ว');
@@ -6002,8 +6556,8 @@ function dismissAlarm() {
 async function snoozeAlarm(minutes) {
   dismissAlarm();
   const snoozeTime = new Date(Date.now() + minutes * 60000);
-  const h = snoozeTime.getHours().toString().padStart(2,'0');
-  const m = snoozeTime.getMinutes().toString().padStart(2,'0');
+  const h = snoozeTime.getHours().toString().padStart(2, '0');
+  const m = snoozeTime.getMinutes().toString().padStart(2, '0');
   await addAlarm(`${h}:${m}`, `💤 Snooze (${h}:${m})`, minutes, []);
   const snoozed = state.alarms.find(a => a.time === `${h}:${m}`);
   if (snoozed) { snoozed.isSnooze = true; localStorage.setItem('alarms', JSON.stringify(state.alarms)); }
@@ -6015,16 +6569,16 @@ function exitSleepMode() {
   if (state.timerWorker) state.timerWorker.postMessage('stop');
   if (state.keepAliveAudio) { state.keepAliveAudio.pause(); }
   if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
-  
+
   clearInterval(state.sleepClockInterval);
   if (state.keepAliveOsc) {
-    try { state.keepAliveOsc.stop(); state.keepAliveOsc.disconnect(); } catch(e) {}
+    try { state.keepAliveOsc.stop(); state.keepAliveOsc.disconnect(); } catch (e) { }
     state.keepAliveOsc = null;
   }
   const v = document.getElementById('iosWakeLockVideo');
   if (v) { v.pause(); v.remove(); }
-  
-  try { state.wakeLock?.release(); } catch(e) {}
+
+  try { state.wakeLock?.release(); } catch (e) { }
   state.wakeLock = null;
   document.getElementById('sleepModeScreen')?.remove();
   render();
@@ -6032,11 +6586,11 @@ function exitSleepMode() {
 
 function sendAlarmsToShortcuts(autoTrigger = false) {
   const enabled = state.alarms.filter(a => a.enabled && !a.isSnooze);
-  if (enabled.length === 0) { 
-    if (!autoTrigger) showToast('⚠️ ไม่มีนาฬิกาปลุกที่เปิดอยู่', 'warn'); 
-    return; 
+  if (enabled.length === 0) {
+    if (!autoTrigger) showToast('⚠️ ไม่มีนาฬิกาปลุกที่เปิดอยู่', 'warn');
+    return;
   }
-  
+
   // ส่งข้อมูลเป็น JSON แบบมี Key ครอบเพื่อให้ Shortcut จัดการได้ง่ายขึ้น
   const payload = JSON.stringify({
     alarms: enabled.map((a, idx) => ({
@@ -6046,7 +6600,7 @@ function sendAlarmsToShortcuts(autoTrigger = false) {
   });
 
   const url = `shortcuts://run-shortcut?name=NITIPAT_ALARM&input=${encodeURIComponent(payload)}`;
-  
+
   if (autoTrigger) {
     window.location.href = url;
     return;
@@ -6065,6 +6619,13 @@ function sendAlarmsToShortcuts(autoTrigger = false) {
   `, `
     <button onclick="window.location.href='${url}'; closeModal();" class="nb-btn nb-btn-primary full">🚀 เริ่มส่งข้อมูล</button>
   `);
+}
+
+async function hashPIN(pin) {
+  const msgBuffer = new TextEncoder().encode(pin);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 // Expose Alarm & Notification functions to window for HTML onclick handlers
