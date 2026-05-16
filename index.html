@@ -21,22 +21,26 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <!-- Google APIs -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://apis.google.com/js/api.js"></script>
+
   <!-- API Proxy for GAS -->
   <script>
-    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwrHhlu-hEvp6IHS-1RXC4wRBXuNV54nRXa-jh-cibzAhqCTIvTEG5BGb0C_vghip-t/exec"; // <-- เอา URL ของ Web App จากหน้า Deploy มาวางตรงนี้
+    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwrHhlu-hEvp6IHS-1RXC4wRBXuNV54nRXa-jh-cibzAhqCTIvTEG5BGb0C_vghip-t/exec"; 
 
     window.google = {
       script: {
         run: new Proxy({}, {
-          get: function(target, prop) {
+          get: function (target, prop) {
             if (['withSuccessHandler', 'withFailureHandler'].includes(prop)) {
-              return function(handler) {
+              return function (handler) {
                 const context = { success: null, failure: null };
                 context[prop === 'withSuccessHandler' ? 'success' : 'failure'] = handler;
                 return createChain(context);
               };
             }
-            return function(...args) {
+            return function (...args) {
               executeRpc(prop, args, { success: null, failure: null });
             };
           }
@@ -46,14 +50,14 @@
 
     function createChain(context) {
       return new Proxy({}, {
-        get: function(target, prop) {
+        get: function (target, prop) {
           if (['withSuccessHandler', 'withFailureHandler'].includes(prop)) {
-            return function(handler) {
+            return function (handler) {
               context[prop === 'withSuccessHandler' ? 'success' : 'failure'] = handler;
               return createChain(context);
             };
           }
-          return function(...args) {
+          return function (...args) {
             executeRpc(prop, args, context);
           };
         }
@@ -61,29 +65,24 @@
     }
 
     function executeRpc(method, args, context) {
-      if (GAS_WEB_APP_URL === "https://script.google.com/macros/s/AKfycbwrHhlu-hEvp6IHS-1RXC4wRBXuNV54nRXa-jh-cibzAhqCTIvTEG5BGb0C_vghip-t/exec" && false) {
-        console.warn("Please replace YOUR_WEB_APP_URL_HERE with the actual GAS Web App URL");
-        if (context.failure) context.failure("GAS_WEB_APP_URL not configured");
-        return;
-      }
       fetch(GAS_WEB_APP_URL, {
         method: 'POST',
         body: JSON.stringify({ action: method, args: args }),
         headers: { 'Content-Type': 'text/plain;charset=utf-8' }
       })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          if (context.success) context.success(data.result);
-        } else {
-          if (context.failure) context.failure(data.error);
-          else console.error("GAS Error:", data.error);
-        }
-      })
-      .catch(err => {
-        if (context.failure) context.failure(err.toString());
-        else console.error("Network Error:", err);
-      });
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            if (context.success) context.success(data.result);
+          } else {
+            if (context.failure) context.failure(data.error);
+            else console.error("GAS Error:", data.error);
+          }
+        })
+        .catch(err => {
+          if (context.failure) context.failure(err.toString());
+          else console.error("Network Error:", err);
+        });
     }
   </script>
 
@@ -93,19 +92,22 @@
 </head>
 
 <body>
-  <div id="app">
-    <div
-      style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;background:linear-gradient(135deg,#e8eeff,#f0f4ff);">
-      <div
-        style="font-size:52px;width:72px;height:72px;background:linear-gradient(135deg,#4f46e5,#7c3aed);border-radius:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(79,70,229,0.35);">
-        ⚗</div>
-      <div
-        style="font-family:'JetBrains Mono',monospace;color:#4f46e5;font-size:16px;letter-spacing:2px;font-weight:600;">
-        NITIPAT MANAGER</div>
-      <div style="color:#8a8aaa;font-family:Kanit;font-size:13px;">กำลังโหลดระบบ...</div>
+  <!-- Login Gate Overlay -->
+  <div id="login-gate" class="gate-overlay active">
+    <div class="gate-content">
+      <div class="gate-logo">⚗</div>
+      <div class="gate-title">NITIPAT MANAGER</div>
+      <div id="gate-status" class="gate-status">Connecting to Secure Vault...</div>
+      <div id="pin-container" class="pin-container hidden">
+        <!-- PIN Pad will be rendered here -->
+      </div>
     </div>
   </div>
 
+  <div id="app"></div>
+
+  <!-- Student ID Card Template (Hidden) -->
+  <div id="id-card-portal" class="id-card-portal hidden"></div>
 </body>
 
 </html>
