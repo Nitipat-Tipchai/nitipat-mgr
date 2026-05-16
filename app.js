@@ -106,21 +106,7 @@ const LoginGate = {
 
 window.LoginGate = LoginGate;
 
-// Entry Point
-window.onload = () => {
-  const unlocked = sessionStorage.getItem('unlocked');
-  const unlockedAt = sessionStorage.getItem('unlocked_at');
-  const isTimeout = unlockedAt && Date.now() - parseInt(unlockedAt) > 1800000; // 30 mins
-
-  if (unlocked === 'true' && !isTimeout) {
-    document.getElementById('login-gate').classList.add('inactive');
-    startAppCore();
-  } else {
-    sessionStorage.removeItem('unlocked');
-    sessionStorage.removeItem('unlocked_at');
-    LoginGate.init();
-  }
-};
+// Entry point unified into DOMContentLoaded
 
 async function startAppCore() {
   try {
@@ -330,99 +316,6 @@ const STUDENT = {
   },
   photoUrl: localStorage.getItem('student_photo') || "https://img2.pic.in.th/pic/Student_Photo_Placeholder.png"
 };
-
-/**
- * 🪪 STUDENT ID CARD CONTROLLER
- */
-const StudentID = {
-  portal: null,
-
-  init() {
-    this.portal = document.getElementById('id-card-portal');
-    this.portal.addEventListener('click', (e) => {
-      if (e.target === this.portal) this.hide();
-    });
-  },
-
-  show() {
-    this.portal.classList.remove('hidden');
-    this.render();
-  },
-
-  hide() {
-    this.portal.classList.add('hidden');
-  },
-
-  render() {
-    this.portal.innerHTML = `
-      <div class="id-card-wrap">
-        <div class="id-card-inner">
-          <div class="id-card-header">
-            <div class="id-logo">NITIPAT</div>
-            <div class="id-faculty">${STUDENT.faculty}</div>
-          </div>
-          <img src="${STUDENT.photoUrl}" class="id-photo" id="id-photo-display">
-          <div class="id-info">
-            <div class="id-name">${STUDENT.nameTh}</div>
-            <div class="id-id">${STUDENT.id}</div>
-          </div>
-          <div class="id-barcode-wrap">
-            <svg id="barcode"></svg>
-          </div>
-          <div style="margin-top:20px; display:flex; gap:10px;">
-            <button class="nb-btn sm" onclick="StudentID.uploadPhoto()">Update Photo</button>
-            <button class="nb-btn sm" onclick="StudentID.download()">Download</button>
-          </div>
-        </div>
-      </div>
-    `;
-    JsBarcode("#barcode", STUDENT.id, {
-      format: "CODE128",
-      width: 2,
-      height: 40,
-      displayValue: false,
-      background: "transparent"
-    });
-  },
-
-  async uploadPhoto() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      
-      const reader = new FileReader();
-      reader.onload = async (re) => {
-        const base64 = re.target.result;
-        showToast("Uploading to Drive...", "wait");
-        google.script.run.withSuccessHandler((res) => {
-          if (res.success) {
-            STUDENT.photoUrl = res.fileUrl;
-            localStorage.setItem('student_photo', res.fileUrl);
-            this.render();
-            showToast("Photo Updated!", "ok");
-          }
-        }).uploadIDPhotoToDrive(base64);
-      };
-      reader.readAsDataURL(file);
-    };
-    input.click();
-  },
-
-  download() {
-    const wrap = document.querySelector('.id-card-inner');
-    html2canvas(wrap).then(canvas => {
-      const link = document.createElement('a');
-      link.download = `Student_ID_${STUDENT.id}.png`;
-      link.href = canvas.toDataURL();
-      link.click();
-    });
-  }
-};
-
-window.StudentID = StudentID;
 
 // ══════════════════════════════════════════════════
 // STATE
@@ -5062,17 +4955,15 @@ function syncDataToBackend() {
     .filter(function (e) { return new Date(e.date).toDateString() === todayStr; })
     .reduce(function (sum, e) { return sum + (e.amount || 0); }, 0);
 
+  // Payload is now minimal as backend fetches core data from Firestore
   const payload = {
-    semesters: state.semesters || [],
     projectedGPA,
     dailyExp: todayExp,
     alarms: (state.alarms || []).filter(a => a.enabled && !a.isSnooze)
       .map(a => ({ id: a.id, time: a.time, label: a.label, repeat: a.repeat || [] })),
-    courses: state.courses || {},
-    assignments: state.assignments || {},
-    exams: state.exams || {},
     gpaGoal: parseFloat(state.gpaGoal) || 3.5,
-    budget: parseFloat(state.dailyBudget) || 200
+    budget: parseFloat(state.dailyBudget) || 200,
+    timestamp: Date.now()
   };
 
   google.script.run
@@ -5613,8 +5504,24 @@ window.addEventListener('DOMContentLoaded', async () => {
   try {
     document.documentElement.setAttribute('data-theme', state.darkMode ? 'dark' : 'light');
     loadFromLocalStorage();
+    
+    // Check initial unlock state
+    const unlocked = sessionStorage.getItem('unlocked');
+    const unlockedAt = sessionStorage.getItem('unlocked_at');
+    const isTimeout = unlockedAt && Date.now() - parseInt(unlockedAt) > 1800000;
+
+    if (unlocked === 'true' && !isTimeout) {
+      state.isLocked = false;
+      document.getElementById('login-gate')?.classList.add('inactive');
+      await startAppCore();
+    } else {
+      state.isLocked = true;
+      sessionStorage.removeItem('unlocked');
+      sessionStorage.removeItem('unlocked_at');
+      LoginGate.init(); // Fallback to classic gate for initialization
+    }
+
     render();
-    // loadAll() and startHyperNotifications() are now called by startApp() once ready
 
     if (typeof Radio !== 'undefined') {
       Radio.init();
