@@ -724,44 +724,7 @@ const Radio = new RadioController();
 // ADVANCED LOGIC: GEOLOCATION & HAVERSINE
 // ══════════════════════════════════════════════════
 // ══════════════════════════════════════════════════
-// 📁 DRIVE MANAGER (GOOGLE PICKER API)
-// ══════════════════════════════════════════════════
-const DriveManager = {
-  pickerApiLoaded: false,
-  oauthToken: null,
 
-  async init() {
-    gapi.load('picker', { 'callback': () => { this.pickerApiLoaded = true; } });
-    this.oauthToken = await new Promise(res => google.script.run.withSuccessHandler(res).getPickerToken());
-  },
-
-  openPicker(courseId, folderId, onSelect) {
-    if (!this.pickerApiLoaded || !this.oauthToken) {
-      showToast("Drive API not ready", "err");
-      return;
-    }
-
-    const view = new google.picker.DocsView(google.picker.ViewId.DOCS);
-    if (folderId) view.setParent(folderId);
-
-    const picker = new google.picker.PickerBuilder()
-      .enableFeature(google.picker.Feature.NAV_HIDDEN)
-      .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
-      .setAppId("NITIPAT-MGR")
-      .setOAuthToken(this.oauthToken)
-      .addView(view)
-      .addView(new google.picker.DocsUploadView().setParent(folderId))
-      .setCallback((data) => {
-        if (data.action === google.picker.Action.PICKED) {
-          onSelect(data.docs);
-        }
-      })
-      .build();
-    picker.setVisible(true);
-  }
-};
-
-window.DriveManager = DriveManager;
 
 // ══════════════════════════════════════════════════
 // 📝 NOTION SYNC ENGINE (2-WAY)
@@ -5766,6 +5729,8 @@ const DriveManager = {
     picker.setVisible(true);
   }
 };
+
+window.DriveManager = DriveManager;
 
 /**
  * SMART COURSE HUB: DRIVE EXPLORER
