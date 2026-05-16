@@ -2806,6 +2806,7 @@ function renderExplorerUI(courseId) {
   if (!key) return '<div class="empty-sm">ยังไม่ได้เชื่อมต่อ Google Drive</div>';
   const data = state.courseFiles[key];
 
+  const breadcrumbs = `
     <div class="drive-breadcrumbs" style="margin-bottom:15px; font-size:13px; font-weight:600; color:var(--c-accent); display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
       <div style="display:flex; gap:5px; flex-wrap:wrap; flex:1;">
         ${state.driveBreadcrumbs.map((b, i) => `
@@ -2815,6 +2816,7 @@ function renderExplorerUI(courseId) {
       </div>
       ${c.notionUrl ? `<a href="${c.notionUrl}" target="_blank" style="text-decoration:none; background:#000; color:#fff; width:22px; height:22px; display:flex; align-items:center; justify-content:center; border-radius:4px; font-size:11px; font-weight:800;" title="Open in Notion">N</a>` : ''}
     </div>
+  `;
 
   if (!data) return breadcrumbs + '<div class="drive-loader" style="text-align:center; padding:20px;"><div class="spinner"></div><p>กำลังโหลดไฟล์...</p></div>';
 
