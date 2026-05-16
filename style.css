@@ -43,6 +43,8 @@
       --c-black: #ffffff;
     }
 
+    .hidden { display: none !important; }
+
     /* ══ LOGIN GATE ══ */
     /* 🔐 PREMIUM LOGIN GATE */
     .gate-overlay {
