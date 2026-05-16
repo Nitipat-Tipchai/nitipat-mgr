@@ -22,14 +22,7 @@ const LoginGate = {
     
     this.statusEl.textContent = "ESTABLISHING SECURE CONNECTION...";
     try {
-      const config = await this.getSecurityConfig();
-      // Use PIN from backend (plaintext or hash)
-      if (config.pin && config.pin.length > 20) {
-        this.correctPinHash = config.pin;
-      } else {
-        this.correctPinHash = await hashPIN(config.pin || "111111");
-      }
-      
+      await this.sync(false);
       this.statusEl.textContent = "IDENTITY VERIFICATION REQUIRED";
       this.renderPinPad();
     } catch (e) {
@@ -37,6 +30,17 @@ const LoginGate = {
       this.statusEl.textContent = "CONNECTION FAILURE. RETRYING...";
       setTimeout(() => this.init(), 3000);
     }
+  },
+
+  async sync(showToastMsg = true) {
+    if (showToastMsg) this.statusEl.textContent = "SYNCING SECURITY VAULT...";
+    const config = await this.getSecurityConfig();
+    if (config.pin && config.pin.length > 20) {
+      this.correctPinHash = config.pin;
+    } else {
+      this.correctPinHash = await hashPIN(config.pin || "111111");
+    }
+    if (showToastMsg) this.statusEl.textContent = "VAULT SYNCED. TRY AGAIN.";
   },
 
   getSecurityConfig() {
@@ -61,7 +65,52 @@ const LoginGate = {
         <button class="pin-btn" onclick="LoginGate.press('0')">0</button>
         <button class="pin-btn" onclick="LoginGate.press('DEL')" style="font-size:20px; opacity:0.6;">⌫</button>
       </div>
+      <div class="gate-actions" style="margin-top:20px; display:flex; gap:10px; justify-content:center;">
+        <button class="btn-glass sm" onclick="LoginGate.sync()"><span style="margin-right:5px;">🔄</span>Sync PIN</button>
+        <button class="btn-glass sm" onclick="LoginGate.showIdCard()"><span style="margin-right:5px;">🪪</span>ดูบัตร</button>
+      </div>
     `;
+  },
+
+  showIdCard() {
+    const photo = state.idCardPhoto || "https://img2.pic.in.th/pic/Student_Photo_Placeholder.png";
+    const studentId = "20067105527480";
+    
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'card-overlay';
+    overlay.innerHTML = `
+      <div class="card-modal">
+        <button class="card-close" onclick="this.parentElement.parentElement.remove()">✕</button>
+        <div class="card-title">STUDENT IDENTIFICATION</div>
+        <div class="card-body">
+          <img src="${photo}" class="card-photo" onerror="this.src='https://img2.pic.in.th/pic/Student_Photo_Placeholder.png'">
+          <div class="card-info">
+            <div class="card-name">${STUDENT.nameTh}</div>
+            <div class="card-id">${studentId}</div>
+            <div class="card-major">${STUDENT.major}</div>
+          </div>
+          <div class="barcode-container">
+            <svg id="barcode"></svg>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    
+    // Generate Barcode
+    setTimeout(() => {
+      JsBarcode("#barcode", studentId, {
+        format: "CODE128",
+        width: 2,
+        height: 60,
+        displayValue: true,
+        fontSize: 16,
+        font: "JetBrains Mono",
+        background: "transparent",
+        lineColor: "#000"
+      });
+    }, 100);
   },
 
   press(val) {
@@ -90,7 +139,7 @@ const LoginGate = {
   },
 
   async verify() {
-    const hashedInput = await hashPIN(this.inputPin);
+    let hashedInput = await hashPIN(this.inputPin);
     if (hashedInput === this.correctPinHash) {
       this.statusEl.textContent = "ACCESS GRANTED. SYNCING DATA...";
       sessionStorage.setItem('unlocked', 'true');
@@ -99,6 +148,16 @@ const LoginGate = {
       this.el.classList.add('inactive');
       await startAppCore();
     } else {
+      // Problem 5: Auto-sync once on failure
+      this.statusEl.textContent = "VERIFYING WITH REMOTE VAULT...";
+      await this.sync(false);
+      hashedInput = await hashPIN(this.inputPin);
+      
+      if (hashedInput === this.correctPinHash) {
+        this.verify(); // Success after sync
+        return;
+      }
+
       this.statusEl.textContent = "INCORRECT PIN. ACCESS DENIED.";
       this.inputPin = "";
       this.updateDots();
@@ -141,6 +200,7 @@ async function startAppCore() {
 
     await loadAll();
     startHyperNotifications();
+    scheduleAllNotifications();
     if ('serviceWorker' in navigator && !navigator.serviceWorker.controller) {
       initWebPush();
     }
@@ -393,7 +453,10 @@ let state = {
   hyperAlarmInterval: null,
   hyperNotifInterval: null,
   hyperSyncInterval: null,
-  notificationsGranted: Notification.permission === 'granted'
+  notificationsGranted: Notification.permission === 'granted',
+  notifiedEvents: new Set(),
+  notificationTimeouts: [],
+  idCardPhoto: localStorage.getItem('id_card_photo') || null
 };
 
 const FOCUS_PRESETS = [
@@ -748,9 +811,17 @@ const GPSManager = {
     if (!curClass) return;
 
     const coords = await this.getCurrentPosition();
-    const distance = getDistance(coords.lat, coords.lng, curClass.lat || 14.065, curClass.lng || 100.606); // KU Sample
+    let targetLat = 14.065, targetLng = 100.606; // Default KU
+    if (curClass.targetCoords) {
+      const [lat, lng] = curClass.targetCoords.split(',').map(Number);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        targetLat = lat;
+        targetLng = lng;
+      }
+    }
+    const distance = getDistance(coords.lat, coords.lng, targetLat, targetLng);
 
-    if (distance < 0.2) { // 200m
+    if (distance <= 200) { // 200m
       this.showCheckInPrompt(curClass, true);
     } else {
       this.showCheckInPrompt(curClass, false); // Suggest Online
@@ -1429,6 +1500,7 @@ async function loadAll() {
     saveToLocalStorage();
     await autoArchiveCourses();
     state.isInitializing = false;
+    scheduleAllNotifications();
     if (!state.modal) render();
   } catch (e) {
     state.isInitializing = false;
@@ -4353,6 +4425,19 @@ function renderSettings() {
         <button class="btn-glass sm" id="saveBudgetBtn">💾</button>
       </div>
     </div>
+
+    <div class="glass-card settings-block">
+      <div class="setting-title">🪪 บัตรประจำตัวนักเรียน</div>
+      <div style="font-size:11px; color:var(--c-muted); margin-bottom:12px;">อัปโหลดรูปหน้าบัตรเพื่อใช้แสดงในหน้าล็อกและตรวจสอบข้อมูล</div>
+      <div class="setting-row" style="flex-direction:column; align-items:flex-start; gap:10px;">
+        <div style="display:flex; gap:10px; width:100%; align-items:center;">
+          <input type="file" id="idCardUpload" accept="image/*" style="display:none;" onchange="handleIdCardUpload(this)">
+          <button class="btn-glass-primary full sm" onclick="document.getElementById('idCardUpload').click()">📤 อัปโหลดรูปบัตร</button>
+          ${state.idCardPhoto ? `<button class="btn-glass danger sm" onclick="removeIdCard()">🗑</button>` : ''}
+        </div>
+        ${state.idCardPhoto ? `<img src="${state.idCardPhoto}" style="width:100%; border-radius:8px; border:1px solid var(--c-border); margin-top:5px;">` : ''}
+      </div>
+    </div>
     <div class="glass-card settings-block">
       <div class="setting-title">📤 ข้อมูล</div>
       <div class="setting-row"><button class="btn-glass" id="exportAllBtn">📥 Export JSON</button></div>
@@ -4398,6 +4483,45 @@ const styleBlock = `
         grid-template-columns: 1fr;
       }
     }
+
+    /* Student ID Card CSS */
+    .card-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8); backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center; z-index: 10000;
+      animation: fadeIn 0.3s ease;
+    }
+    .card-modal {
+      background: white; width: 90%; max-width: 400px; border-radius: 20px;
+      overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+      position: relative; animation: slideUp 0.3s ease;
+    }
+    .card-close {
+      position: absolute; top: 15px; right: 15px; background: rgba(0,0,0,0.1);
+      border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+    }
+    .card-title {
+      background: #003366; color: white; padding: 15px; text-align: center;
+      font-weight: 700; font-family: Kanit; letter-spacing: 1px;
+    }
+    .card-body {
+      padding: 20px; text-align: center;
+    }
+    .card-photo {
+      width: 150px; height: 200px; object-fit: cover; border-radius: 10px;
+      border: 3px solid #eee; margin-bottom: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    .card-info {
+      margin-bottom: 20px; font-family: Kanit;
+    }
+    .card-name { font-size: 18px; font-weight: 700; color: #333; }
+    .card-id { font-size: 16px; font-weight: 600; color: #666; font-family: 'JetBrains Mono'; }
+    .card-major { font-size: 13px; color: #888; }
+    .barcode-container {
+      background: #f9f9f9; padding: 15px; border-radius: 10px;
+      display: flex; justify-content: center; border: 1px dashed #ccc;
+    }
+    #barcode { width: 100%; height: auto; }
     </style>`;
 document.head.insertAdjacentHTML('beforeend', styleBlock);
 
@@ -5836,20 +5960,28 @@ function pushNotif(title, body, delay = 0) {
   if (delay <= 0) {
     new Notification(title, { body, icon: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png" });
   } else {
-    setTimeout(() => {
+    const tid = setTimeout(() => {
       new Notification(title, { body, icon: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png" });
     }, delay);
+    state.notificationTimeouts.push(tid);
   }
+}
+
+function clearAllNotificationTimeouts() {
+  state.notificationTimeouts.forEach(clearTimeout);
+  state.notificationTimeouts = [];
 }
 
 function scheduleAllNotifications() {
   if (!state.notificationsGranted) return;
+  clearAllNotificationTimeouts();
 
   function delayUntil(hour, min = 0) {
     const now = new Date();
     const t = new Date(now);
     t.setHours(hour, min, 0, 0);
-    return Math.max(0, t.getTime() - now.getTime());
+    if (t < now) t.setDate(t.getDate() + 1);
+    return t.getTime() - now.getTime();
   }
 
   // งานวันนี้ (d===0) — แจ้งทุกชั่วโมง
@@ -5906,6 +6038,7 @@ function startHyperNotifications() {
   if (state.hyperNotifInterval) clearInterval(state.hyperNotifInterval);
   if (state.hyperSyncInterval) clearInterval(state.hyperSyncInterval);
   if (state.hyperAlarmInterval) clearInterval(state.hyperAlarmInterval);
+  if (state.assignmentNagInterval) clearInterval(state.assignmentNagInterval);
 
   state.hyperNotifInterval = setInterval(() => {
     const now = new Date();
@@ -5920,13 +6053,21 @@ function startHyperNotifications() {
         const endMin = (s.endHour || s.startHour + 3) * 60;
         const diff = startMin - nowMin;
 
-        if (diff === 5) {
-          pushNotif(`⏰ อีก 5 นาที!! ${c.nameTh}`, `เข้าห้อง ${c.room || ''} ได้เลย!`);
+        // 5-minute warning (Problem 3 range check)
+        const eventKey5 = `warn5_${c.id}_${todayKey}`;
+        if (diff > 0 && diff <= 5 && !state.notifiedEvents.has(eventKey5)) {
+          pushNotif(`⏰ อีกประมาณ 5 นาที!! ${c.nameTh}`, `เข้าห้อง ${c.room || ''} ได้เลย!`);
+          state.notifiedEvents.add(eventKey5);
         }
-        if (diff === 0) {
+
+        // Start time warning
+        const eventKeyStart = `start_${c.id}_${todayKey}`;
+        if (diff <= 0 && diff > -2 && !state.notifiedEvents.has(eventKeyStart)) {
           pushNotif(`📍 ถึงเวลาเรียน ${c.nameTh}`, `เช็คชื่อในแอปด้วยนะ!`);
           showCheckinBanner(c);
+          state.notifiedEvents.add(eventKeyStart);
         }
+
         if (diff <= 0 && nowMin < endMin) {
           const attended = state.attendanceHistory?.[c.id]?.[todayKey];
           if (!attended) showCheckinBanner(c);
@@ -5935,11 +6076,16 @@ function startHyperNotifications() {
         if (nowMin >= endMin) hideCheckinBanner();
       });
     });
+
+    // Cleanup notifiedEvents (reset daily)
+    if (now.getHours() === 0 && now.getMinutes() === 0) {
+      state.notifiedEvents.clear();
+    }
   }, 60000);
 
   state.hyperAlarmInterval = setInterval(() => checkAlarms(), 30000);
 
-  setInterval(() => {
+  state.assignmentNagInterval = setInterval(() => {
     if (!state.notificationsGranted) return;
     Object.values(state.assignments).flat()
       .filter(a => !a.submitted && getDaysUntil(a.dueDate) === 0)
@@ -6568,6 +6714,28 @@ window.dismissAlarm = dismissAlarm;
 window.snoozeAlarm = snoozeAlarm;
 window.exitSleepMode = exitSleepMode;
 window.hideCheckinBanner = hideCheckinBanner;
+
+window.handleIdCardUpload = (input) => {
+  const file = input.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = (re) => {
+      state.idCardPhoto = re.target.result;
+      localStorage.setItem('id_card_photo', state.idCardPhoto);
+      showToast('✅ อัปโหลดรูปบัตรแล้ว');
+      render();
+    };
+    reader.readAsDataURL(file);
+  }
+};
+
+window.removeIdCard = () => {
+  if (confirm('ลบรูปบัตรใช่หรือไม่?')) {
+    state.idCardPhoto = null;
+    localStorage.removeItem('id_card_photo');
+    render();
+  }
+};
 
 // Inject Pulse Animation
 if (!document.getElementById('mgr-animations')) {
