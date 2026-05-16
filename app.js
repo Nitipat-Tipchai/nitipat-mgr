@@ -448,6 +448,13 @@ let state = {
   links: JSON.parse(localStorage.getItem('course_links') || '{}'), // courseId -> [{name, url}]
   alarms: JSON.parse(localStorage.getItem('alarms') || '[]'),
   sleepMode: false,
+  notifiedEvents: new Set(),
+  hyperNotifInterval: null,
+  hyperSyncInterval: null,
+  hyperAlarmInterval: null,
+  assignmentNagInterval: null,
+  notificationTimeouts: [],
+  notificationsGranted: Notification.permission === 'granted',
   alarmRinging: false,
   currentAlarmId: null,
   wakeLock: null,
@@ -957,7 +964,7 @@ function renderTopicMastery(courseId, parentId = null) {
                 <button class="mastery-btn ${t.level === 'review' ? 'active' : ''}" style="background:var(--c-rust);" title="Review" onclick="setTopicLevel('${courseId}', '${t.id}', 'review')">❓ ทวน</button>
                 <button class="mastery-btn ${t.level === 'ok' ? 'active' : ''}" style="background:var(--c-indigo);" title="OK" onclick="setTopicLevel('${courseId}', '${t.id}', 'ok')">📖 พอได้</button>
                 <button class="mastery-btn ${t.level === 'mastered' ? 'active' : ''}" style="background:var(--c-lime);" title="Mastered" onclick="setTopicLevel('${courseId}', '${t.id}', 'mastered')">⭐ แม่น</button>
-                <button class="tool-btn sm" style="font-size:10px; width:auto; padding:0 8px; border:1px solid black; border-radius:6px;" title="Link File" onclick="DriveManager.openPicker('${courseId}', null, (docs) => linkFilesToTopic('${courseId}', '${t.id}', docs))">🔗</button>
+                <button class="tool-btn sm" style="font-size:10px; width:auto; padding:0 8px; border:1px solid black; border-radius:6px;" title="Link File" onclick="PickerManager.openPicker('${courseId}', null, (docs) => linkFilesToTopic('${courseId}', '${t.id}', docs))">🔗</button>
                 <button class="tool-btn sm" style="font-size:10px; width:auto; padding:0 8px; border:1px solid black; border-radius:6px;" title="เพิ่มหัวข้อย่อย" onclick="addTopic('${courseId}', '${t.id}')">➕ ย่อย</button>
                 <button class="btn-text-danger" style="font-size:14px; font-weight:800;" onclick="deleteTopic('${courseId}', '${t.id}')">✕</button>
               </div>
@@ -2527,10 +2534,10 @@ function renderMiniDrive(c) {
         <div class="drive-container" style="padding: 0 20px;">
           <div class="drive-toolbar" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
             <div class="drive-breadcrumbs" style="font-weight:600; font-size:18px; color:#1e293b;">
-              <span class="breadcrumb-item" onclick="navigateToFolder('${c.id}', '${c.driveId}', 'Root')" style="cursor:pointer; display:flex; align-items:center;">Home</span>
+              <span class="breadcrumb-item" onclick="gotoFolder('${c.id}', '${c.driveId}', 'Root')" style="cursor:pointer; display:flex; align-items:center;">Home</span>
               ${state.folderPath.map((p, idx) => `
                 <span class="breadcrumb-sep" style="margin:0 5px; opacity:0.5;">/</span>
-                <span class="breadcrumb-item" style="cursor:pointer;" onclick="navigateToFolder('${c.id}', '${p.id}', '${p.name}', ${idx})">${p.name}</span>
+                <span class="breadcrumb-item" style="cursor:pointer;" onclick="gotoFolder('${c.id}', '${p.id}', '${p.name}', ${idx})">${p.name}</span>
               `).join('')}
             </div>
             <div class="drive-tools" style="display:flex; gap:12px; font-size:16px; color:#64748b;">
@@ -2541,7 +2548,7 @@ function renderMiniDrive(c) {
                 <button class="icon-btn-minimal" style="color:#ef4444;" onclick="deleteSelectedItems()" title="Delete" ${gasDisabled}>🗑</button>
                 <div style="width:1px; height:20px; background:#cbd5e1; margin: 0 5px;"></div>
               ` : ''}
-              <button class="icon-btn-minimal" onclick="DriveManager.openPicker('${c.id}', '${c.driveId}', (docs) => handleLinkedFiles(docs, '${c.id}'))" title="Link Study Materials" ${gasDisabled}>➕🔗</button>
+              <button class="icon-btn-minimal" onclick="PickerManager.openPicker('${c.id}', '${c.driveId}', (docs) => handleLinkedFiles(docs, '${c.id}'))" title="Link Study Materials" ${gasDisabled}>➕🔗</button>
               <button class="icon-btn-minimal" onclick="state.driveViewMode = state.driveViewMode === 'list' ? 'grid' : 'list'; render();" title="Toggle View">${state.driveViewMode === 'list' ? '⊞' : '☰'}</button>
               <button class="icon-btn-minimal" onclick="handleCreateFolder('${c.id}', '${state.currentFolderId || c.driveId}')" title="New Folder" ${gasDisabled}>📁+</button>
               <button class="icon-btn-minimal" onclick="handleFileUpload('${c.id}', '${state.currentFolderId || c.driveId}')" title="Upload" ${gasDisabled}>↑</button>
@@ -2779,24 +2786,7 @@ window.saveReflection = async (courseId) => {
   }
 };
 
-async function navigateToFolder(courseId, folderId, folderName, pathIdx = -1) {
-  if (folderName === 'Root') {
-    state.folderPath = [];
-    state.currentFolderId = folderId;
-  } else if (pathIdx !== -1) {
-    state.folderPath = state.folderPath.slice(0, pathIdx + 1);
-    state.currentFolderId = folderId;
-  } else {
-    state.folderPath.push({ name: folderName, id: folderId });
-    state.currentFolderId = folderId;
-  }
-  state.selectedItems.clear();
 
-  const exp = document.getElementById('driveExplorer');
-  if (exp) exp.innerHTML = '<div class="drive-loader" style="text-align:center; padding:40px;"><div class="spinner"></div><p>กำลังเปิดโฟลเดอร์...</p></div>';
-
-  refreshDriveFiles(courseId, folderId, false);
-}
 
 function renderExplorerUI(courseId) {
   state.courseFiles = state.courseFiles || {};
@@ -2809,7 +2799,7 @@ function renderExplorerUI(courseId) {
   const breadcrumbs = `
     <div class="drive-breadcrumbs" style="margin-bottom:15px; font-size:13px; font-weight:600; color:var(--c-accent); display:flex; gap:5px; flex-wrap:wrap;">
       ${state.driveBreadcrumbs.map((b, i) => `
-        <span class="bc-item" onclick="navigateToFolder('${courseId}', '${b.id}', '${b.name}')" style="cursor:pointer; ${i === state.driveBreadcrumbs.length - 1 ? 'opacity:0.5; pointer-events:none;' : ''}">${b.name}</span>
+        <span class="bc-item" onclick="gotoFolder('${courseId}', '${b.id}', '${b.name}')" style="cursor:pointer; ${i === state.driveBreadcrumbs.length - 1 ? 'opacity:0.5; pointer-events:none;' : ''}">${b.name}</span>
         ${i < state.driveBreadcrumbs.length - 1 ? '<span style="opacity:0.3">/</span>' : ''}
       `).join('')}
     </div>
@@ -2830,7 +2820,7 @@ function renderExplorerUI(courseId) {
     const isSel = state.selectedItems.has(item.id);
     const icon = item.isFolder ? '📁' : getFileIcon(item.mimeType);
     return `
-              <div class="file-item ${isSel ? 'selected' : ''}" style="${state.driveViewMode === 'list' ? 'display:flex; align-items:center; justify-content:flex-start; margin-bottom:5px; padding:10px;' : 'position:relative;'}" onclick="${item.isFolder ? `navigateToFolder('${courseId}', '${item.id}', '${item.name}')` : `previewFile('${item.id}', '${item.name}', '${item.url}', '${item.mimeType}')`}">
+              <div class="file-item ${isSel ? 'selected' : ''}" style="${state.driveViewMode === 'list' ? 'display:flex; align-items:center; justify-content:flex-start; margin-bottom:5px; padding:10px;' : 'position:relative;'}" onclick="${item.isFolder ? `gotoFolder('${courseId}', '${item.id}', '${item.name}')` : `previewFile('${item.id}', '${item.name}', '${item.url}', '${item.mimeType}')`}">
                 <div class="file-icon" style="${state.driveViewMode === 'list' ? 'margin-bottom:0; margin-right:15px;' : ''}">${icon}</div>
                 <div class="file-name" style="${state.driveViewMode === 'list' ? 'flex:1; text-align:left; margin-bottom:0;' : ''}" title="${item.name}">${item.name}</div>
                 <div style="font-size:9px; opacity:0.5; ${state.driveViewMode === 'list' ? 'margin-right:40px;' : ''}">${item.isFolder ? 'Folder' : formatSize(item.size)}</div>
@@ -5052,9 +5042,89 @@ window.renderCourseHubUI_Original = (courseId) => {
   };
 }
 
+function startHyperNotifications() {
+  if (state.hyperNotifInterval) clearInterval(state.hyperNotifInterval);
+  state.notifiedEvents = state.notifiedEvents || new Set();
+  
+  state.hyperNotifInterval = setInterval(() => {
+    const now = new Date();
+    const todayIdx = (now.getDay() + 6) % 7; // Mon=0
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const todayKey = now.toLocaleDateString('en-CA');
+
+    // 1. Academic Events (Courses)
+    Object.values(state.courses).flat().forEach(c => {
+      (c.schedules || []).forEach(s => {
+        if (s.day !== todayIdx) return;
+        const startMin = Math.floor(s.startHour * 60);
+        const endMin = Math.floor((s.endHour || s.startHour + 3) * 60);
+        const diff = startMin - nowMin;
+
+        // 30-minute warning
+        if (diff === 30) {
+          pushNotif(`📅 อีก 30 นาทีเรียน: ${c.nameTh}`, `📍 ห้อง ${c.room || 'ไม่ระบุ'}`);
+        }
+        // 10-minute urgent
+        if (diff === 10) {
+          pushNotif(`⚡ ด่วน! อีก 10 นาทีเข้าเรียน: ${c.nameTh}`, `เตรียมตัวให้พร้อมนะครับ`);
+        }
+        // Start time
+        const eventKeyStart = `start_${c.id}_${todayKey}`;
+        if (diff === 0 && !state.notifiedEvents.has(eventKeyStart)) {
+          pushNotif(`📍 ถึงเวลาเรียน ${c.nameTh}`, `เปิดแอปเพื่อเช็คชื่อ (Smart Check-in)`);
+          showCheckinBanner(c);
+          state.notifiedEvents.add(eventKeyStart);
+        }
+
+        // Mid-class Reflection Preparation (10 min before end)
+        if (nowMin === endMin - 10) {
+          pushNotif(`📝 เตรียม Reflection: ${c.nameTh}`, `อีก 10 นาทีหมดคาบ สรุปสิ่งที่ได้เรียนรู้กันครับ`);
+        }
+
+        // Class Ended
+        const eventKeyEnd = `end_${c.id}_${todayKey}`;
+        if (nowMin === endMin && !state.notifiedEvents.has(eventKeyEnd)) {
+          pushNotif(`✅ จบการเรียน: ${c.nameTh}`, `อย่าลืมบันทึก Reflection เพื่อเก็บคะแนน Topic Mastery`);
+          state.notifiedEvents.add(eventKeyEnd);
+        }
+
+        // Persistent Reminder (30 min after end if no reflection)
+        if (nowMin === endMin + 30) {
+          const refl = state.reflections[c.id];
+          if (!refl) {
+            pushNotif(`⚠️ ยังไม่ได้บันทึก Reflection: ${c.nameTh}`, `รีบบันทึกตอนนี้ก่อนจะลืมเนื้อหานะครับ`);
+          }
+        }
+
+        // Auto-Check-in Banner
+        if (diff <= 0 && nowMin < endMin) {
+          const attended = state.attendanceHistory?.[c.id]?.[todayKey];
+          if (!attended) showCheckinBanner(c);
+        }
+      });
+    });
+
+    // 2. High Frequency Day-0 Reminders
+    if (now.getMinutes() % 20 === 0) { // Every 20 mins
+      Object.values(state.exams).flat()
+        .filter(e => getDaysUntil(e.date) === 0)
+        .forEach(e => {
+          const [h, m] = (e.time || '23:59').split(':').map(Number);
+          if (nowMin < (h * 60 + m)) {
+            pushNotif(`⏰ สอบวันนี้! ${e.name}`, `เวลา ${e.time} น. เตรียมตัวให้พร้อม`);
+          }
+        });
+    }
+  }, 60000); // Check every minute
+
+  if (state.hyperAlarmInterval) clearInterval(state.hyperAlarmInterval);
+  state.hyperAlarmInterval = setInterval(() => checkAlarms(), 30000);
+
+  if (state.hyperSyncInterval) clearInterval(state.hyperSyncInterval);
+  state.hyperSyncInterval = setInterval(() => syncDataToBackend(), 1800000);
+}
 
 function syncDataToBackend() {
-  // คำนวณ projected GPA
   let projectedGPA = 0;
   let totalCredits = 0;
   let totalPoints = 0;
@@ -5069,13 +5139,11 @@ function syncDataToBackend() {
   });
   if (totalCredits > 0) projectedGPA = totalPoints / totalCredits;
 
-  // คำนวณค่าใช้จ่ายวันนี้
   const todayStr = new Date().toDateString();
   const todayExp = (state.expenses || [])
     .filter(function (e) { return new Date(e.date).toDateString() === todayStr; })
     .reduce(function (sum, e) { return sum + (e.amount || 0); }, 0);
 
-  // Payload is now minimal as backend fetches core data from Firestore
   const payload = {
     projectedGPA,
     dailyExp: todayExp,
@@ -5086,9 +5154,11 @@ function syncDataToBackend() {
     timestamp: Date.now()
   };
 
-  google.script.run
-    .withFailureHandler(function (e) { console.warn('sync failed:', e); })
-    .syncAcademicData(payload);
+  if (typeof google !== 'undefined' && google.script) {
+    google.script.run
+      .withFailureHandler(function (e) { console.warn('sync failed:', e); })
+      .syncAcademicData(payload);
+  }
 }
 
 function attachAllEvents() {
@@ -5115,7 +5185,6 @@ function attachAllEvents() {
 
   document.getElementById('modalX')?.addEventListener('click', closeModal);
   document.getElementById('modalBd')?.addEventListener('click', e => { if (e.target.id === 'modalBd') closeModal(); });
-
   document.getElementById('darkToggle')?.addEventListener('click', () => {
     state.darkMode = !state.darkMode; localStorage.setItem('darkMode', state.darkMode);
     document.documentElement.setAttribute('data-theme', state.darkMode ? 'dark' : 'light'); render();
@@ -5583,7 +5652,7 @@ window.Radio = Radio;
 window.previewFile = previewFile;
 window.toggleItemSelection = toggleItemSelection;
 window.automateDriveFolder = automateDriveFolder;
-window.navigateToFolder = navigateToFolder;
+window.gotoFolder = gotoFolder;
 window.shareSelectedItems = shareSelectedItems;
 window.printSelectedItems = printSelectedItems;
 window.renameSelectedItem = renameSelectedItem;
@@ -5668,7 +5737,7 @@ document.addEventListener('visibilitychange', () => {
  * ══════════════════════════════════════════════════
  */
 
-const DriveManager = {
+const PickerManager = {
   gapiLoaded: false,
   pickerLoaded: false,
 
@@ -5730,7 +5799,7 @@ const DriveManager = {
   }
 };
 
-window.DriveManager = DriveManager;
+window.PickerManager = PickerManager;
 
 /**
  * SMART COURSE HUB: DRIVE EXPLORER
@@ -5766,13 +5835,13 @@ async function refreshDriveFiles(courseId, folderId, force = false) {
 }
 
 async function handleFileUpload(courseId, folderId) {
-  DriveManager.openPicker(courseId, folderId, (docs) => {
+  PickerManager.openPicker(courseId, folderId, (docs) => {
     showToast(`✅ อัปโหลด ${docs.length} รายการสำเร็จ (Direct to Drive)`);
     refreshDriveFiles(courseId, folderId, true);
   });
 }
 
-function navigateToFolder(courseId, folderId, folderName) {
+function gotoFolder(courseId, folderId, folderName) {
   const existingIdx = state.driveBreadcrumbs.findIndex(b => b.id === folderId);
   if (existingIdx !== -1) {
     state.driveBreadcrumbs = state.driveBreadcrumbs.slice(0, existingIdx + 1);
@@ -6018,89 +6087,7 @@ function scheduleAllNotifications() {
   });
 }
 
-function startHyperNotifications() {
-  if (state.hyperNotifInterval) clearInterval(state.hyperNotifInterval);
-  if (state.hyperSyncInterval) clearInterval(state.hyperSyncInterval);
-  if (state.hyperAlarmInterval) clearInterval(state.hyperAlarmInterval);
-  if (state.assignmentNagInterval) clearInterval(state.assignmentNagInterval);
 
-  state.hyperNotifInterval = setInterval(() => {
-    const now = new Date();
-    const todayIdx = (now.getDay() + 6) % 7; // Mon=0
-    const nowMin = now.getHours() * 60 + now.getMinutes();
-    const todayKey = now.toLocaleDateString('en-CA');
-
-    // 1. Class Notifications
-    Object.values(state.courses).flat().forEach(c => {
-      (c.schedules || c.schedule || []).forEach(s => {
-        if (s.day !== todayIdx) return;
-        const startMin = s.startHour * 60;
-        const endMin = (s.endHour || s.startHour + 3) * 60;
-        const diff = startMin - nowMin;
-
-        // 30-minute warning
-        if (diff === 30) {
-          pushNotif(`📅 อีก 30 นาทีเรียน: ${c.nameTh}`, `ห้อง ${c.room || 'ไม่ระบุ'}`);
-        }
-        // 10-minute urgent
-        if (diff === 10) {
-          pushNotif(`⚡ อีก 10 นาที!! ${c.nameTh}`, `เตรียมตัวเข้าห้องเรียนด่วน!`);
-        }
-        // Start time
-        const eventKeyStart = `start_${c.id}_${todayKey}`;
-        if (diff === 0 && !state.notifiedEvents.has(eventKeyStart)) {
-          pushNotif(`📍 ถึงเวลาเรียน ${c.nameTh}`, `เช็คชื่อในแอปได้เลย!`);
-          showCheckinBanner(c);
-          state.notifiedEvents.add(eventKeyStart);
-        }
-
-        // Reflection Reminders
-        if (nowMin === Math.floor(endMin - 10)) {
-          pushNotif(`📝 อีก 10 นาทีหมดคาบ: ${c.nameTh}`, `อย่าลืมเตรียมเขียน Reflection นะ`);
-        }
-        if (nowMin === Math.floor(endMin + 5)) {
-          pushNotif(`✅ เลิกเรียนแล้ว: ${c.nameTh}`, `บันทึก Reflection สรุปความรู้กัน!`);
-        }
-
-        if (diff <= 0 && nowMin < endMin) {
-          const attended = state.attendanceHistory?.[c.id]?.[todayKey];
-          if (!attended) showCheckinBanner(c);
-          else hideCheckinBanner();
-        }
-        if (nowMin >= endMin) hideCheckinBanner();
-      });
-    });
-
-    // 2. High Frequency Day-0 / Day-1 Notifications
-    if (now.getMinutes() % 20 === 0) { // Every 20 mins
-      Object.values(state.exams).flat()
-        .filter(e => getDaysUntil(e.date) === 0)
-        .forEach(e => {
-          const [h, m] = (e.time || '23:59').split(':').map(Number);
-          if (nowMin < (h * 60 + m)) {
-            pushNotif(`🚨 วันนี้สอบ!!: ${e.title}`, `เวลา ${e.time} สู้ๆ นะ! (แจ้งทุก 20 นาที)`);
-          }
-        });
-    }
-
-    if (now.getMinutes() % 30 === 0) { // Every 30 mins
-      Object.values(state.assignments).flat()
-        .filter(a => !a.submitted && getDaysUntil(a.dueDate) === 0)
-        .forEach(a => {
-          pushNotif(`🔥 งานส่งวันนี้!!: ${a.title}`, `ยังไม่เสร็จต้องรีบแล้ว! (แจ้งทุก 30 นาที)`);
-        });
-    }
-
-    // Cleanup notifiedEvents (reset daily)
-    if (now.getHours() === 0 && now.getMinutes() === 0) {
-      state.notifiedEvents.clear();
-    }
-  }, 60000);
-
-  state.hyperAlarmInterval = setInterval(() => checkAlarms(), 30000);
-  state.hyperSyncInterval = setInterval(() => syncDataToBackend(), 1800000);
-  syncDataToBackend();
-}
 
 function showCheckinBanner(course) {
   let banner = document.getElementById('checkinBanner');
