@@ -4390,6 +4390,15 @@ function renderSettings() {
       <button class="btn-glass sm" onclick="NotionHub.sync(true)">⚡ ซิงก์ตอนนี้</button>
       <button class="btn-glass sm" onclick="NotionHub.setupTrigger()">⏰ เปิด Auto-Sync</button>
     </div>
+    
+    <div id="notionSetupArea" style="margin-top:15px; padding:10px; background:var(--c-accent)11; border-radius:8px; display:${state.notionConnected ? 'none' : 'block'};">
+      <div style="font-size:11px; margin-bottom:8px; font-weight:600;">✨ ยังไม่เคยตั้งค่า? ใส่ Token เพื่อสร้างระบบอัตโนมัติ</div>
+      <div style="display:flex; gap:8px;">
+        <input type="password" id="notionTokenInput" class="glass-input sm" placeholder="secret_..." style="flex:1;">
+        <button class="btn-glass-primary sm" onclick="NotionHub.runSetupWizard()">🚀 เริ่มตั้งค่า</button>
+      </div>
+    </div>
+
     <div style="margin-top:12px; font-size:11px; color:var(--c-muted);">
       Last Sync: ${state.lastNotionSync ? new Date(state.lastNotionSync).toLocaleString() : 'Never'}
     </div>
@@ -6834,6 +6843,25 @@ const NotionHub = {
     } finally {
       state.notionSyncing = false;
       render();
+    }
+  },
+
+  async runSetupWizard() {
+    const token = document.getElementById('notionTokenInput')?.value.trim();
+    if (!token) return showToast('⚠️ กรุณาใส่ Token', 'err');
+    
+    showToast('⏳ กำลังเนรมิตฐานข้อมูล Notion...');
+    try {
+      const res = await new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).initializeNotionWorkspace(token));
+      if (res.success) {
+        showToast(`✨ ${res.message}`);
+        state.notionConnected = true;
+        this.sync(true); // Run initial sync
+      } else {
+        showToast(`❌ ${res.error}`, 'err');
+      }
+    } catch (e) {
+      showToast('❌ การตั้งค่าล้มเหลว', 'err');
     }
   },
 
