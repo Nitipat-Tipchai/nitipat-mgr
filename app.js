@@ -144,7 +144,7 @@ async function startAppCore() {
     if ('serviceWorker' in navigator && !navigator.serviceWorker.controller) {
       initWebPush();
     }
-    renderUI();
+    render();
   } catch (err) {
     console.error("App initialization failed:", err);
   }
@@ -795,7 +795,7 @@ const GPSManager = {
     localStorage.setItem('attendance_history', JSON.stringify(state.attendanceHistory));
     showToast(`เช็คชื่อ ${mode} สำเร็จ!`, "ok");
     closeModal();
-    renderUI();
+    render();
   }
 };
 
