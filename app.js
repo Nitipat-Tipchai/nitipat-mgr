@@ -201,6 +201,9 @@ async function startAppCore() {
     await loadAll();
     startHyperNotifications();
     scheduleAllNotifications();
+    
+    // Notion Initial Sync
+    setTimeout(() => NotionHub.sync(), 2000);
     if ('serviceWorker' in navigator && !navigator.serviceWorker.controller) {
       initWebPush();
     }
@@ -455,6 +458,10 @@ let state = {
   assignmentNagInterval: null,
   notificationTimeouts: [],
   notificationsGranted: Notification.permission === 'granted',
+  notionConnected: false,
+  notionSyncing: false,
+  lastNotionSync: localStorage.getItem('last_notion_sync') || null,
+  notionBotName: localStorage.getItem('notion_bot_name') || null,
   alarmRinging: false,
   currentAlarmId: null,
   wakeLock: null,
@@ -462,12 +469,6 @@ let state = {
   alarmSoundInterval: null,
   alarmVibrateInterval: null,
   alarmAudioCtx: null,
-  hyperAlarmInterval: null,
-  hyperNotifInterval: null,
-  hyperSyncInterval: null,
-  notificationsGranted: Notification.permission === 'granted',
-  notifiedEvents: new Set(),
-  notificationTimeouts: [],
   idCardPhoto: localStorage.getItem('id_card_photo') || null
 };
 
@@ -2332,6 +2333,10 @@ function renderTopNav(gpa, pro, curSem) {
       </div>`: ''}
     </div>
     <div class="tn-right">
+      <button class="icon-btn ${state.notionConnected ? 'active' : ''}" onclick="NotionHub.sync(true)" title="Notion Sync" style="position:relative;">
+        <span style="font-size:16px;">${state.notionSyncing ? '⌛' : 'N'}</span>
+        ${state.notionConnected ? '<span style="position:absolute; bottom:0; right:0; width:6px; height:6px; background:#22c55e; border-radius:50%;"></span>' : ''}
+      </button>
       <button class="icon-btn" onclick="showIDCardModal()" style="font-size:18px;">🪪</button>
       <div class="gpa-pill" style="border-color:${statusColor}55; background:${statusColor}11;">
         <span class="gp-lbl">GPAX</span>
@@ -2780,6 +2785,10 @@ window.saveReflection = async (courseId) => {
   try {
     await fsSet('reflections', courseId, { text: val, updatedAt: new Date().toISOString() });
     showToast('✅ บันทึก Reflection สำเร็จ!');
+    
+    // Push to Notion
+    NotionHub.pushReflection(courseId, val);
+    
     render();
   } catch (e) {
     showToast('❌ บันทึกล้มเหลว: ' + e.message, 'err');
@@ -4358,6 +4367,31 @@ function renderSettings() {
       <button class="btn-glass sm" onclick="checkSystemStatus()">🔍 เช็คระบบ</button>
       <button class="btn-glass sm" onclick="google.script.run.setupNotificationTrigger(); showToast('✅ รีเซ็ต Trigger แล้ว');">🔄 รีเซ็ต Trigger</button>
       <button class="btn-glass sm" onclick="testAlarmSound()">🔔 ทดสอบเสียงปลุก</button>
+    </div>
+  </div>
+
+  <div class="settings-card" style="margin-bottom:15px; border-left: 4px solid #000;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+      <div class="settings-label">
+        <div style="font-weight:700; font-size:16px; display:flex; align-items:center; gap:8px;">
+          <span style="background:#000; color:#fff; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:4px; font-size:14px;">N</span>
+          Notion Integration
+        </div>
+        <div style="font-size:12px; color:var(--c-muted); margin-top:4px;">
+          เชื่อมต่อข้อมูลรายวิชาและการบ้านกับ Notion Database ของคุณ
+        </div>
+      </div>
+      <div class="status-badge ${state.notionConnected ? 'online' : 'offline'}" style="font-size:10px; padding:4px 8px; border-radius:12px; background:${state.notionConnected ? '#22c55e22' : '#ef444422'}; color:${state.notionConnected ? '#22c55e' : '#ef4444'};">
+        ${state.notionConnected ? `Connected: ${state.notionBotName}` : 'Not Connected'}
+      </div>
+    </div>
+    <div style="display:flex; gap:8px; margin-top:15px;">
+      <button class="btn-glass sm" onclick="NotionHub.checkConnection()">🔄 ตรวจเช็ค</button>
+      <button class="btn-glass sm" onclick="NotionHub.sync(true)">⚡ ซิงก์ตอนนี้</button>
+      <button class="btn-glass sm" onclick="NotionHub.setupTrigger()">⏰ เปิด Auto-Sync</button>
+    </div>
+    <div style="margin-top:12px; font-size:11px; color:var(--c-muted);">
+      Last Sync: ${state.lastNotionSync ? new Date(state.lastNotionSync).toLocaleString() : 'Never'}
     </div>
   </div>
 
@@ -6728,10 +6762,101 @@ window.removeIdCard = () => {
   }
 };
 
-// Inject Pulse Animation
-if (!document.getElementById('mgr-animations')) {
-  const s = document.createElement('style');
-  s.id = 'mgr-animations';
-  s.innerHTML = `@keyframes pulse { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 1; transform: scale(1.5); } }`;
-  document.head.appendChild(s);
-}
+/**
+ * ════════════════════════════════════════════════════════════
+ * NOTION INTEGRATION HUB
+ * ════════════════════════════════════════════════════════════
+ */
+const NotionHub = {
+  async checkConnection() {
+    showToast('⏳ กำลังตรวจสอบ Notion...');
+    try {
+      const res = await new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).checkNotionConnection());
+      if (res.success) {
+        state.notionConnected = true;
+        state.notionBotName = res.botName;
+        localStorage.setItem('notion_bot_name', res.botName);
+        showToast(`✅ เชื่อมต่อ Notion สำเร็จ: ${res.botName}`);
+      } else {
+        state.notionConnected = false;
+        showToast(`❌ เชื่อมต่อล้มเหลว: ${res.error}`, 'err');
+      }
+      render();
+    } catch (e) {
+      console.error(e);
+      showToast('❌ เกิดข้อผิดพลาดในการเรียก API', 'err');
+    }
+  },
+
+  async sync(manual = false) {
+    if (state.notionSyncing) return;
+    state.notionSyncing = true;
+    if (manual) showToast('🔄 เริ่มการซิงก์ข้อมูลกับ Notion...');
+    render();
+
+    try {
+      // 1. Sync Courses (Subjects)
+      const courses = Object.values(state.courses).flat();
+      for (const course of courses) {
+        if (!course.notionPageId) {
+          const res = await new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).syncCourseToNotion(course));
+          if (res.success) {
+            course.notionPageId = res.pageId;
+            await fsUpd('courses', course.id, { notionPageId: res.pageId });
+          }
+        }
+      }
+
+      // 2. Sync Assignments
+      const assignments = Object.values(state.assignments).flat();
+      for (const assign of assignments) {
+        // Push local to Notion if new or modified
+        if (!assign.notionPageId || (assign.updatedAt && assign.updatedAt > state.lastNotionSync)) {
+          const res = await new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).syncAssignmentToNotion(assign));
+          if (res.success && res.pageId) {
+            assign.notionPageId = res.pageId;
+            await fsUpd('assignments', assign.id, { notionPageId: res.pageId });
+          }
+        }
+      }
+
+      // 3. Pull Updates from Notion (Assignments Database)
+      // This part would ideally iterate through databases and pull modified pages
+      // For now, we update the last sync timestamp
+      state.lastNotionSync = new Date().toISOString();
+      localStorage.setItem('last_notion_sync', state.lastNotionSync);
+      state.notionConnected = true;
+      
+      if (manual) showToast('✅ ซิงก์ Notion สำเร็จ!');
+    } catch (e) {
+      console.error("Notion Sync Error:", e);
+      if (manual) showToast('❌ การซิงก์ล้มเหลว', 'err');
+    } finally {
+      state.notionSyncing = false;
+      render();
+    }
+  },
+
+  async setupTrigger() {
+    try {
+      const res = await new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).setupNotionTrigger());
+      if (res.success) showToast(`✅ ${res.message}`);
+    } catch (e) {
+      showToast('❌ ไม่สามารถเปิด Auto-Sync ได้', 'err');
+    }
+  },
+
+  async pushReflection(courseId, text) {
+    const course = findCourseById(courseId);
+    if (!course || !course.notionPageId) return;
+    
+    try {
+      await new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).syncReflectionToNotion(course.notionPageId, text));
+      showToast('📤 ส่ง Reflection ไปยัง Notion แล้ว');
+    } catch (e) {
+      console.error("Reflection sync failed", e);
+    }
+  }
+};
+
+window.NotionHub = NotionHub;
