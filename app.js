@@ -2480,6 +2480,7 @@ function renderCourseHubPage() {
                    `<button class="nb-btn sm" style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; font-size:12px; border:2px solid black; background:#ecfdf5; color:#059669;" onclick="LiveClassHub.start('${c.id}')"><span>🚀</span> เริ่มจดเลคเชอร์</button>`
                  }
                  <a href="${c.folderUrl || '#'}" target="_blank" class="nb-btn sm" style="flex:1; text-align:center; background:#fff; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:8px; font-size:12px; border:2px solid black;"><span>📁</span> Drive</a>
+                  ${c.notionUrl ? `<a href="${c.notionUrl}" target="_blank" class="nb-btn sm" style="flex:1; text-align:center; background:#000; color:#fff; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:8px; font-size:12px; border:2px solid black;"><span>N</span> Notion</a>` : ''}
               </div>
             </div>
           </div>
@@ -2805,14 +2806,15 @@ function renderExplorerUI(courseId) {
   if (!key) return '<div class="empty-sm">ยังไม่ได้เชื่อมต่อ Google Drive</div>';
   const data = state.courseFiles[key];
 
-  const breadcrumbs = `
-    <div class="drive-breadcrumbs" style="margin-bottom:15px; font-size:13px; font-weight:600; color:var(--c-accent); display:flex; gap:5px; flex-wrap:wrap;">
-      ${state.driveBreadcrumbs.map((b, i) => `
-        <span class="bc-item" onclick="gotoFolder('${courseId}', '${b.id}', '${b.name}')" style="cursor:pointer; ${i === state.driveBreadcrumbs.length - 1 ? 'opacity:0.5; pointer-events:none;' : ''}">${b.name}</span>
-        ${i < state.driveBreadcrumbs.length - 1 ? '<span style="opacity:0.3">/</span>' : ''}
-      `).join('')}
+    <div class="drive-breadcrumbs" style="margin-bottom:15px; font-size:13px; font-weight:600; color:var(--c-accent); display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+      <div style="display:flex; gap:5px; flex-wrap:wrap; flex:1;">
+        ${state.driveBreadcrumbs.map((b, i) => `
+          <span class="bc-item" onclick="gotoFolder('${courseId}', '${b.id}', '${b.name}')" style="cursor:pointer; ${i === state.driveBreadcrumbs.length - 1 ? 'opacity:0.5; pointer-events:none;' : ''}">${b.name}</span>
+          ${i < state.driveBreadcrumbs.length - 1 ? '<span style="opacity:0.3">/</span>' : ''}
+        `).join('')}
+      </div>
+      ${c.notionUrl ? `<a href="${c.notionUrl}" target="_blank" style="text-decoration:none; background:#000; color:#fff; width:22px; height:22px; display:flex; align-items:center; justify-content:center; border-radius:4px; font-size:11px; font-weight:800;" title="Open in Notion">N</a>` : ''}
     </div>
-  `;
 
   if (!data) return breadcrumbs + '<div class="drive-loader" style="text-align:center; padding:20px;"><div class="spinner"></div><p>กำลังโหลดไฟล์...</p></div>';
 
@@ -6807,11 +6809,12 @@ const NotionHub = {
       // 1. Sync Courses (Subjects)
       const courses = Object.values(state.courses).flat();
       for (const course of courses) {
-        if (!course.notionPageId) {
+        if (!course.notionPageId || !course.notionUrl) {
           const res = await new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).syncCourseToNotion(course));
           if (res.success) {
             course.notionPageId = res.pageId;
-            await fsUpd('courses', course.id, { notionPageId: res.pageId });
+            course.notionUrl = res.url;
+            await fsUpd('courses', course.id, { notionPageId: res.pageId, notionUrl: res.url });
           }
         }
       }
