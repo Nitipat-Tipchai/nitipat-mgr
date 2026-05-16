@@ -95,6 +95,7 @@ const LoginGate = {
       this.statusEl.textContent = "ACCESS GRANTED. SYNCING DATA...";
       sessionStorage.setItem('unlocked', 'true');
       sessionStorage.setItem('unlocked_at', Date.now().toString());
+      state.isLocked = false;
       this.el.classList.add('inactive');
       await startAppCore();
     } else {
@@ -2025,8 +2026,12 @@ function render() {
   document.body.classList.toggle('is-focus-immersive', state.isImmersiveFocus && state.pomodoroActive);
 
   if (state.isLocked) {
-    app.innerHTML = renderLockScreen() + (state.modal ? renderModal() : '');
-    attachLockScreenEvents();
+    const gate = document.getElementById('login-gate');
+    if (gate && gate.classList.contains('inactive')) {
+      gate.classList.remove('inactive');
+      LoginGate.init();
+    }
+    app.innerHTML = '<div style="height:100vh; background:var(--bg);"></div>'; 
     return;
   }
 
