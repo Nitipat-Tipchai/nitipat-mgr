@@ -5980,58 +5980,49 @@ function scheduleAllNotifications() {
     const now = new Date();
     const t = new Date(now);
     t.setHours(hour, min, 0, 0);
-    if (t < now) t.setDate(t.getDate() + 1);
+    if (t < now) return -1; // Already past for today
     return t.getTime() - now.getTime();
   }
 
-  // งานวันนี้ (d===0) — แจ้งทุกชั่วโมง
-  Object.values(state.assignments).flat()
-    .filter(a => !a.submitted && getDaysUntil(a.dueDate) === 0)
-    .forEach(a => {
-      for (let hr = 8; hr <= 21; hr++) {
-        pushNotif(
-          `🔥 งานส่งวันนี้: ${a.title}`,
-          `ยังไม่ส่งเหรอ! กดเปิดแอปทำตอนนี้เลย`,
-          delayUntil(hr)
-        );
-      }
-    });
+  const assignments = Object.values(state.assignments).flat().filter(a => !a.submitted);
+  const exams = Object.values(state.exams).flat();
 
-  // สอบวันนี้ (d===0) — แจ้งทุก 30 นาทีจนถึงเวลาสอบ
-  Object.values(state.exams).flat()
-    .filter(e => getDaysUntil(e.date) === 0)
-    .forEach(e => {
-      const [examH, examM] = (e.time || '23:59').split(':').map(Number);
-      for (let hr = 5; hr <= examH; hr++) {
-        for (let mn of [0, 30]) {
-          if (hr === examH && mn >= examM) break;
-          const delay = delayUntil(hr, mn);
-          if (delay >= 0) pushNotif(
-            `🚨 สอบวันนี้: ${e.title}`,
-            `เวลา ${e.time} ห้อง ${e.room || 'ไม่ระบุ'}`,
-            delay
-          );
-        }
-      }
-    });
-
-  // งาน d===1 — แจ้ง 7 ครั้ง
-  Object.values(state.assignments).flat()
-    .filter(a => !a.submitted && getDaysUntil(a.dueDate) === 1)
-    .forEach(a => {
-      [6, 8, 10, 12, 15, 18, 21].forEach((hr, i) => {
-        const msgs = [
-          'ตื่นมาแล้วเริ่มทำได้เลย!',
-          'เช้านี้คือโอกาสสุดท้าย',
-          'ทำไปถึงไหนแล้ว?',
-          'พักกินข้าวแล้วกลับมาทำต่อ',
-          'เหลืออีกไม่กี่ชั่วโมง!',
-          'คืนนี้ต้องส่ง!!',
-          'ก่อนนอนต้องส่งให้ได้!'
-        ];
-        pushNotif(`🔴 งานพรุ่งนี้: ${a.title}`, msgs[i], delayUntil(hr));
+  assignments.forEach(a => {
+    const days = getDaysUntil(a.dueDate);
+    if (days === 7) {
+      [8, 19].forEach(hr => {
+        const d = delayUntil(hr);
+        if (d >= 0) pushNotif(`⏳ อีก 7 วันส่ง: ${a.title}`, `เช้า/เย็นอย่าลืมวางแผนทำนะ!`, d);
       });
-    });
+    } else if (days === 3) {
+      [8, 12, 16, 20].forEach(hr => {
+        const d = delayUntil(hr);
+        if (d >= 0) pushNotif(`⚠️ อีก 3 วันส่ง!! ${a.title}`, `ต้องเริ่มลงมือทำจริงจังแล้วนะ`, d);
+      });
+    } else if (days === 1) {
+      const msgs = ['เริ่มเช้าวันใหม่กับงาน!', 'โอกาสสุดท้ายของเช้านี้', 'ช่วงบ่ายต้องคืบหน้า', 'เย็นนี้ต้องใกล้เสร็จ', 'ค่ำคืนแห่งการปั่นงาน', '2 ชั่วโมงสุดท้ายก่อนเที่ยงคืน?', 'ยังไม่นอนใช่ไหม? ปั่นต่อ!'];
+      [7, 10, 13, 16, 19, 21, 23].forEach((hr, i) => {
+        const d = delayUntil(hr);
+        if (d >= 0) pushNotif(`🚨 พรุ่งนี้ต้องส่งแล้ว!!: ${a.title}`, msgs[i], d);
+      });
+    }
+  });
+
+  exams.forEach(e => {
+    const days = getDaysUntil(e.date);
+    const tips = ["ทบทวน Mind Map", "ทำโจทย์ย้อนหลัง 3 ปี", "สรุปประเด็นสำคัญใน 1 หน้า"];
+    if (days === 5) {
+      [9, 14, 19].forEach((hr, i) => {
+        const d = delayUntil(hr);
+        if (d >= 0) pushNotif(`📖 อีก 5 วันสอบ: ${e.title}`, `Study Tip: ${tips[i]}`, d);
+      });
+    } else if (days === 1) {
+      for (let hr = 8; hr <= 22; hr += 2) {
+        const d = delayUntil(hr);
+        if (d >= 0) pushNotif(`🔥 พรุ่งนี้สอบ!!: ${e.title}`, `Priority สูงสุด! ทบทวนโค้งสุดท้าย`, d);
+      }
+    }
+  });
 }
 
 function startHyperNotifications() {
@@ -6046,6 +6037,7 @@ function startHyperNotifications() {
     const nowMin = now.getHours() * 60 + now.getMinutes();
     const todayKey = now.toLocaleDateString('en-CA');
 
+    // 1. Class Notifications
     Object.values(state.courses).flat().forEach(c => {
       (c.schedules || c.schedule || []).forEach(s => {
         if (s.day !== todayIdx) return;
@@ -6053,19 +6045,28 @@ function startHyperNotifications() {
         const endMin = (s.endHour || s.startHour + 3) * 60;
         const diff = startMin - nowMin;
 
-        // 5-minute warning (Problem 3 range check)
-        const eventKey5 = `warn5_${c.id}_${todayKey}`;
-        if (diff > 0 && diff <= 5 && !state.notifiedEvents.has(eventKey5)) {
-          pushNotif(`⏰ อีกประมาณ 5 นาที!! ${c.nameTh}`, `เข้าห้อง ${c.room || ''} ได้เลย!`);
-          state.notifiedEvents.add(eventKey5);
+        // 30-minute warning
+        if (diff === 30) {
+          pushNotif(`📅 อีก 30 นาทีเรียน: ${c.nameTh}`, `ห้อง ${c.room || 'ไม่ระบุ'}`);
         }
-
-        // Start time warning
+        // 10-minute urgent
+        if (diff === 10) {
+          pushNotif(`⚡ อีก 10 นาที!! ${c.nameTh}`, `เตรียมตัวเข้าห้องเรียนด่วน!`);
+        }
+        // Start time
         const eventKeyStart = `start_${c.id}_${todayKey}`;
-        if (diff <= 0 && diff > -2 && !state.notifiedEvents.has(eventKeyStart)) {
-          pushNotif(`📍 ถึงเวลาเรียน ${c.nameTh}`, `เช็คชื่อในแอปด้วยนะ!`);
+        if (diff === 0 && !state.notifiedEvents.has(eventKeyStart)) {
+          pushNotif(`📍 ถึงเวลาเรียน ${c.nameTh}`, `เช็คชื่อในแอปได้เลย!`);
           showCheckinBanner(c);
           state.notifiedEvents.add(eventKeyStart);
+        }
+
+        // Reflection Reminders
+        if (nowMin === Math.floor(endMin - 10)) {
+          pushNotif(`📝 อีก 10 นาทีหมดคาบ: ${c.nameTh}`, `อย่าลืมเตรียมเขียน Reflection นะ`);
+        }
+        if (nowMin === Math.floor(endMin + 5)) {
+          pushNotif(`✅ เลิกเรียนแล้ว: ${c.nameTh}`, `บันทึก Reflection สรุปความรู้กัน!`);
         }
 
         if (diff <= 0 && nowMin < endMin) {
@@ -6077,6 +6078,26 @@ function startHyperNotifications() {
       });
     });
 
+    // 2. High Frequency Day-0 / Day-1 Notifications
+    if (now.getMinutes() % 20 === 0) { // Every 20 mins
+      Object.values(state.exams).flat()
+        .filter(e => getDaysUntil(e.date) === 0)
+        .forEach(e => {
+          const [h, m] = (e.time || '23:59').split(':').map(Number);
+          if (nowMin < (h * 60 + m)) {
+            pushNotif(`🚨 วันนี้สอบ!!: ${e.title}`, `เวลา ${e.time} สู้ๆ นะ! (แจ้งทุก 20 นาที)`);
+          }
+        });
+    }
+
+    if (now.getMinutes() % 30 === 0) { // Every 30 mins
+      Object.values(state.assignments).flat()
+        .filter(a => !a.submitted && getDaysUntil(a.dueDate) === 0)
+        .forEach(a => {
+          pushNotif(`🔥 งานส่งวันนี้!!: ${a.title}`, `ยังไม่เสร็จต้องรีบแล้ว! (แจ้งทุก 30 นาที)`);
+        });
+    }
+
     // Cleanup notifiedEvents (reset daily)
     if (now.getHours() === 0 && now.getMinutes() === 0) {
       state.notifiedEvents.clear();
@@ -6084,16 +6105,6 @@ function startHyperNotifications() {
   }, 60000);
 
   state.hyperAlarmInterval = setInterval(() => checkAlarms(), 30000);
-
-  state.assignmentNagInterval = setInterval(() => {
-    if (!state.notificationsGranted) return;
-    Object.values(state.assignments).flat()
-      .filter(a => !a.submitted && getDaysUntil(a.dueDate) === 0)
-      .forEach(a => {
-        pushNotif(`🔥 ยังไม่ส่ง: ${a.title}`, `วันนี้หมดเขต ทำเดี๋ยวนี้เลย!`);
-      });
-  }, 300000);
-
   state.hyperSyncInterval = setInterval(() => syncDataToBackend(), 1800000);
   syncDataToBackend();
 }
