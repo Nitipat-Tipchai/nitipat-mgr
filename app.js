@@ -40,12 +40,17 @@ const LoginGate = {
   },
 
   getSecurityConfig() {
+    if (typeof google === 'undefined' || !google.script) {
+      console.warn("Using local security fallback");
+      return Promise.resolve({ pin: "111111" });
+    }
     return new Promise((res, rej) => {
       google.script.run.withSuccessHandler(res).withFailureHandler(rej).getAppConfig();
     });
   },
 
   renderPinPad() {
+    if (this.pinContainer) this.pinContainer.classList.remove('hidden');
     this.pinContainer.innerHTML = `
       <div class="pin-display">
         ${[1, 2, 3, 4, 5, 6].map(i => `<div class="pin-dot" id="dot-${i}"></div>`).join('')}
