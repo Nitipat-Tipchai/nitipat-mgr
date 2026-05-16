@@ -428,6 +428,11 @@ let state = {
   targetGPA: parseFloat(localStorage.getItem('target_gpax') || '2.00'),
   isReflectionMandatory: true,
   lastReflectionCheck: null,
+  driveBreadcrumbs: [],
+  courseFiles: {},
+  courseFilesCache: {},
+  driveViewMode: localStorage.getItem('drive_view_mode') || 'grid',
+  drivePickerConfig: null,
   topicMastery: JSON.parse(localStorage.getItem('topic_mastery') || '{}'),
   attendanceHistory: JSON.parse(localStorage.getItem('attendance_history') || '{}'),
   pomodoroTimeRemaining: 0,
@@ -2837,16 +2842,26 @@ function renderExplorerUI(courseId) {
   const key = state.currentFolderId || c.driveId;
   if (!key) return '<div class="empty-sm">ยังไม่ได้เชื่อมต่อ Google Drive</div>';
   const data = state.courseFiles[key];
-  if (!data) return '<div class="drive-loader">กำลังโหลด...</div>';
+
+  const breadcrumbs = `
+    <div class="drive-breadcrumbs" style="margin-bottom:15px; font-size:13px; font-weight:600; color:var(--c-accent); display:flex; gap:5px; flex-wrap:wrap;">
+      ${state.driveBreadcrumbs.map((b, i) => `
+        <span class="bc-item" onclick="navigateToFolder('${courseId}', '${b.id}', '${b.name}')" style="cursor:pointer; ${i === state.driveBreadcrumbs.length - 1 ? 'opacity:0.5; pointer-events:none;' : ''}">${b.name}</span>
+        ${i < state.driveBreadcrumbs.length - 1 ? '<span style="opacity:0.3">/</span>' : ''}
+      `).join('')}
+    </div>
+  `;
+
+  if (!data) return breadcrumbs + '<div class="drive-loader" style="text-align:center; padding:20px;"><div class="spinner"></div><p>กำลังโหลดไฟล์...</p></div>';
 
   const allItems = [
     ...data.folders.map(f => ({ ...f, isFolder: true })),
     ...data.files.map(f => ({ ...f, isFolder: false }))
   ];
 
-  if (allItems.length === 0) return '<div class="empty-hero" style="min-height:200px;"><div class="empty-icon">📂</div><h3>ยังไม่มีไฟล์</h3></div>';
+  if (allItems.length === 0) return breadcrumbs + '<div class="empty-hero" style="min-height:200px;"><div class="empty-icon">📂</div><h3>ยังไม่มีไฟล์ในโฟลเดอร์นี้</h3></div>';
 
-  return `
+  return breadcrumbs + `
         <div class="explorer-${state.driveViewMode || 'grid'}" style="display:${state.driveViewMode === 'list' ? 'block' : 'grid'}; gap:15px;">
           ${allItems.map(item => {
     const isSel = state.selectedItems.has(item.id);
@@ -2968,38 +2983,39 @@ function printSelectedItems() {
   });
 }
 
-function previewFile(id, name, url, mimeType = '') {
+async function previewFile(id, name, url, mimeType = '') {
   const isImage = /\.(jpg|jpeg|png|gif)$/i.test(name) || mimeType.includes('image');
   const isPDF = name.toLowerCase().endsWith('.pdf') || mimeType.includes('pdf');
-  const isOffice = /\.(doc|docx|xls|xlsx|ppt|pptx)$/i.test(name) || mimeType.includes('word') || mimeType.includes('sheet') || mimeType.includes('presentation');
 
-  let body = '';
+  let body = `<div class="preview-loading"><div class="spinner"></div><p>กำลังเตรียมไฟล์แบบ Native...</p></div>`;
+  
+  openModal(name, `<div id="preview-container">${body}</div>`, `
+    <div style="display:flex; gap:10px; width:100%;">
+      <button class="nb-btn sm" style="flex:1;" onclick="window.open('https://drive.google.com/uc?export=download&id=${id}', '_blank')">⬇ Download</button>
+      <button class="nb-btn sm" style="flex:1;" onclick="window.open('https://drive.google.com/file/d/${id}/view', '_blank')">🖨 Print / Full View</button>
+    </div>
+  `);
+
   if (isImage) {
-    body = `<img src="https://drive.google.com/uc?id=${id}" style="width:100%; border-radius:12px;">`;
-  } else if (isPDF || isOffice) {
-    const iframeSrc = isPDF
-      ? `https://drive.google.com/file/d/${id}/preview`
-      : `https://docs.google.com/viewer?srcid=${id}&pid=explorer&efh=false&a=v&chrome=false&embedded=true`;
-
-    body = `
-          <div style="position:relative; width:100%; height:60vh;">
-            <div id="iframeLoader-${id}" style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(255,255,255,0.8); border-radius:12px; z-index:10;">
-              <div class="spinner"></div>
-              <p style="margin-top:10px; font-weight:600;">กำลังดึงเอกสาร...</p>
-            </div>
-            <iframe src="${iframeSrc}" class="preview-frame" style="width:100%; height:100%; border:none; border-radius:12px; position:relative; z-index:5;" onload="document.getElementById('iframeLoader-${id}').style.display='none';"></iframe>
-          </div>
-        `;
+    google.script.run.withSuccessHandler(res => {
+      if (res.success) {
+        document.getElementById('preview-container').innerHTML = `<img src="${res.base64}" style="width:100%; border-radius:12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">`;
+      } else {
+        document.getElementById('preview-container').innerHTML = `<p>โหลดรูปไม่สำเร็จ: ${res.error}</p>`;
+      }
+    }).getFileDataBase64(id);
+  } else if (isPDF) {
+    // PDF Native preview logic (Directly opening the view is often better on mobile than iframes)
+    document.getElementById('preview-container').innerHTML = `
+      <div class="empty-hero" style="min-height:300px;">
+        <div style="font-size:50px;">📄</div>
+        <h3>PDF Preview</h3>
+        <p>เอกสารพร้อมสำหรับการดาวน์โหลดหรือพิมพ์</p>
+        <button class="nb-btn-primary" onclick="window.open('https://drive.google.com/file/d/${id}/view', '_blank')">เปิดเอกสารต้นฉบับ</button>
+      </div>`;
   } else {
-    body = `<div class="empty-hero"><h3>ไฟล์นี้ไม่รองรับการพรีวิว</h3><p>กรุณาเปิดผ่าน Google Drive</p><a href="${url || `https://drive.google.com/open?id=${id}`}" target="_blank" class="nb-btn-primary">เปิดไฟล์</a></div>`;
+    document.getElementById('preview-container').innerHTML = `<div class="empty-hero"><h3>ไม่รองรับการพรีวิวแบบ Native</h3><p>กรุณาเปิดผ่าน Google Drive</p><a href="${url || `https://drive.google.com/open?id=${id}`}" target="_blank" class="nb-btn-primary">เปิดไฟล์</a></div>`;
   }
-
-  openModal(name, body, `
-        <div style="display:flex; gap:10px; width:100%;">
-          <a href="https://drive.google.com/uc?export=download&id=${id}" class="nb-btn sm" style="flex:1; display:flex; align-items:center; justify-content:center;">⬇ Download</a>
-          <button class="nb-btn sm" style="flex:1;" onclick="window.open('https://drive.google.com/file/d/${id}/view', '_blank')">🖨 Print / Open</button>
-        </div>
-      `);
 }
 
 async function automateDriveFolder(courseId) {
@@ -4746,8 +4762,15 @@ function openAddCourseForm(existing = null) {
       showToast('📂 กำลังสร้างโครงสร้างโฟลเดอร์ใน Google Drive...');
       google.script.run.withSuccessHandler(res => {
         if (res && res.success) {
-          showToast('✅ สร้างโฟลเดอร์ Drive สำเร็จ');
-          fsUpd('courses', data.id, { driveUrl: res.folderUrl });
+          showToast('✅ สร้างโครงสร้าง Drive สำเร็จ');
+          fsUpd('courses', data.id, { 
+            driveId: res.rootId, 
+            driveUrl: res.folderUrl,
+            driveLectures: res.lecturesId,
+            driveAssignments: res.assignmentsId,
+            driveExams: res.examsId,
+            driveResources: res.resourcesId
+          });
         } else {
           showToast('❌ สร้างโฟลเดอร์ล้มเหลว: ' + (res?.error || 'Unknown error'), 'err');
         }
@@ -5677,116 +5700,121 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 /**
+ * ══════════════════════════════════════════════════
+ * SMART DRIVE SYSTEM (Google Picker API Integration)
+ * ══════════════════════════════════════════════════
+ */
+
+const DriveManager = {
+  gapiLoaded: false,
+  pickerLoaded: false,
+
+  async init() {
+    if (this.gapiLoaded && this.pickerLoaded) return;
+    
+    await new Promise((res) => gapi.load('client:picker', res));
+    this.gapiLoaded = true;
+    this.pickerLoaded = true;
+    
+    // Fetch Picker Config (DeveloperKey, AppId) from backend
+    if (!state.drivePickerConfig) {
+      state.drivePickerConfig = await new Promise((res) => {
+        google.script.run.withSuccessHandler(res).getPickerConfig();
+      });
+    }
+  },
+
+  async getAccessToken() {
+    return new Promise((res) => {
+      google.script.run.withSuccessHandler(res).getPickerToken();
+    });
+  },
+
+  async openPicker(courseId, parentId, onSelect) {
+    await this.init();
+    const token = await this.getAccessToken();
+    const config = state.drivePickerConfig;
+
+    if (!token || !config?.developerKey) {
+      showToast('❌ ไม่สามารถเข้าถึงสิทธิ์ Google Drive ได้', 'err');
+      return;
+    }
+
+    const view = new google.picker.DocsView(google.picker.ViewId.DOCS)
+      .setParent(parentId)
+      .setIncludeFolders(true)
+      .setSelectFolderEnabled(true);
+
+    const uploadView = new google.picker.DocsUploadView()
+      .setParent(parentId);
+
+    const picker = new google.picker.PickerBuilder()
+      .enableFeature(google.picker.Feature.NAV_HIDDEN)
+      .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
+      .setAppId(config.appId)
+      .setOAuthToken(token)
+      .setDeveloperKey(config.developerKey)
+      .addView(view)
+      .addView(uploadView)
+      .setCallback((data) => {
+        if (data.action === google.picker.Action.PICKED) {
+          onSelect(data.docs);
+        }
+      })
+      .build();
+    
+    picker.setVisible(true);
+  }
+};
+
+/**
  * SMART COURSE HUB: DRIVE EXPLORER
  */
 async function refreshDriveFiles(courseId, folderId, force = false) {
   if (!folderId) return;
-  state.courseFilesCache = state.courseFilesCache || {};
+  
+  const c = findCourseById(courseId);
+  if (!c) return;
 
-  if (!force && state.courseFilesCache[folderId]) {
-    if (Date.now() - state.courseFilesCache[folderId].ts < 30000) {
-      state.courseFiles = state.courseFiles || {};
-      state.courseFiles[folderId] = state.courseFilesCache[folderId].data;
-      refreshExplorerOnly(courseId);
-      return;
-    }
+  // Initialize breadcrumbs if at root
+  if (folderId === c.driveId && state.driveBreadcrumbs.length === 0) {
+    state.driveBreadcrumbs = [{ id: folderId, name: 'Root' }];
   }
+  state.currentFolderId = folderId;
 
   state.courseFiles = state.courseFiles || {};
-  const prevData = state.courseFiles[folderId];
-  state.courseFiles[folderId] = null;
   state.selectedItems.clear();
   refreshExplorerOnly(courseId);
 
-  let timeoutId;
-  const timeoutPromise = new Promise((_, rej) => {
-    timeoutId = setTimeout(() => rej(new Error('เซิร์ฟเวอร์ตอบกลับช้าเกินไป (Timeout)')), 15000);
-  });
-
-  const fetchPromise = new Promise((res, rej) => {
-    google.script.run
-      .withSuccessHandler(response => {
-        clearTimeout(timeoutId);
-        if (response.success) res(response);
-        else rej(new Error(response.error || 'โหลดไฟล์ไม่สำเร็จ'));
-      })
-      .withFailureHandler(err => {
-        clearTimeout(timeoutId);
-        rej(err);
-      })
-      .listFilesInFolder(folderId);
-  });
-
-  try {
-    const res = await Promise.race([fetchPromise, timeoutPromise]);
-    state.courseFilesCache[folderId] = { data: res.data, ts: Date.now() };
-    state.courseFiles[folderId] = res.data;
-    refreshExplorerOnly(courseId);
-  } catch (err) {
-    state.courseFiles[folderId] = prevData;
-    const exp = document.getElementById('driveExplorer');
-    if (exp) {
-      exp.innerHTML = `
-            <div style="text-align:center; padding:40px;">
-              <div style="font-size:40px; margin-bottom:10px;">⚠️</div>
-              <p style="color:var(--c-rust); margin-bottom:15px;">โหลดไฟล์ไม่สำเร็จ (${err.message})</p>
-              <button class="nb-btn sm" onclick="refreshDriveFiles('${courseId}', '${folderId}', true)">🔄 ลองใหม่</button>
-            </div>
-          `;
-    }
-  }
+  google.script.run
+    .withSuccessHandler(files => {
+      state.courseFiles[folderId] = {
+        folders: files.filter(f => f.isFolder),
+        files: files.filter(f => !f.isFolder)
+      };
+      refreshExplorerOnly(courseId);
+    })
+    .withFailureHandler(err => {
+      showToast(`❌ โหลดไฟล์ล้มเหลว: ${err.message}`, 'err');
+    })
+    .listDriveFiles(folderId);
 }
 
 async function handleFileUpload(courseId, folderId) {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.multiple = true;
-  input.onchange = async e => {
-    const files = Array.from(e.target.files);
-    if (files.length === 0) return;
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (file.size > 5 * 1024 * 1024) {
-        showToast(`⚠️ ไฟล์ ${file.name} ใหญ่เกิน 5MB ระบบไม่รองรับ (ข้าม)`, 'err');
-        continue;
-      }
-      await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = async () => {
-          showToast(`📤 อัปโหลด (${i + 1}/${files.length}): ${file.name}...`);
-
-          let timeoutId;
-          const timeoutPromise = new Promise((_, rej) => {
-            timeoutId = setTimeout(() => rej(new Error('Timeout 30s')), 30000);
-          });
-
-          const uploadPromise = new Promise((res, rej) => {
-            google.script.run
-              .withSuccessHandler(response => {
-                clearTimeout(timeoutId);
-                if (response.success) { showToast(`✅ ${file.name} สำเร็จ!`); res(); }
-                else rej(new Error(response.error || 'ล้มเหลว'));
-              })
-              .withFailureHandler(err => { clearTimeout(timeoutId); rej(err); })
-              .uploadFileToDrive(reader.result, file.name, folderId);
-          });
-
-          try {
-            await Promise.race([uploadPromise, timeoutPromise]);
-          } catch (err) {
-            showToast(`❌ ${file.name} ล้มเหลว: ${err.message}`, 'err');
-          }
-          resolve();
-        };
-        reader.readAsDataURL(file);
-      });
-    }
-
-    if (state.courseFilesCache && state.courseFilesCache[folderId]) delete state.courseFilesCache[folderId];
+  DriveManager.openPicker(courseId, folderId, (docs) => {
+    showToast(`✅ อัปโหลด ${docs.length} รายการสำเร็จ (Direct to Drive)`);
     refreshDriveFiles(courseId, folderId, true);
-  };
-  input.click();
+  });
+}
+
+function navigateToFolder(courseId, folderId, folderName) {
+  const existingIdx = state.driveBreadcrumbs.findIndex(b => b.id === folderId);
+  if (existingIdx !== -1) {
+    state.driveBreadcrumbs = state.driveBreadcrumbs.slice(0, existingIdx + 1);
+  } else {
+    state.driveBreadcrumbs.push({ id: folderId, name: folderName });
+  }
+  refreshDriveFiles(courseId, folderId);
 }
 
 window.saveCourseCoords = async (courseId) => {
