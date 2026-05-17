@@ -5236,42 +5236,57 @@ function renderMoneyPod() {
           const lines = text.split('\n');
           let parsedAmounts = [];
           
-          const priceRegex = /([0-9]{1,3}(,[0-9]{3})*(\.[0-9]{2})?|[0-9]+\.[0-9]{2})/g;
-          const totalKeywords = ['total', 'net', 'sum', 'ยอด', 'สุทธิ', 'รวม', 'ราคา', 'amount', 'pay', 'cash', 'เงินทอน', 'บิล', 'baht', 'บาท', 'b'];
-
           lines.forEach(line => {
             const lowerLine = line.toLowerCase();
-            const hasKeyword = totalKeywords.some(kw => lowerLine.includes(kw));
-            const matches = line.match(priceRegex);
+            const cleanLine = lowerLine.replace(/\s+/g, '');
+            
+            // Check for total keywords with OCR misspelling tolerances
+            const isTotal = ['total', 'net', 'sum', 'ยอด', 'สุทธิ', 'รวม', 'ราคา', 'amount', 'baht', 'บาท', 'ฑธ', 'ขั้น', 'สุทธ'].some(kw => cleanLine.includes(kw));
+            const isReceived = ['cash', 'เงินสด', 'รับเงิน', 'จ่าย', 'receive', 'pay', 'เสต'].some(kw => cleanLine.includes(kw));
+            const isChange = ['ทอน', 'change'].some(kw => cleanLine.includes(kw));
+
+            // 1. Decimal numbers with strict word boundaries to avoid tax ID collisions (e.g. 71.50, 5.50)
+            const decimalRegex = /\b([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})\b/g;
+            const matches = line.match(decimalRegex);
             
             if (matches) {
               matches.forEach(m => {
                 const val = parseFloat(m.replace(/,/g, ''));
                 if (!isNaN(val) && val > 0) {
-                  if (hasKeyword) {
-                    parsedAmounts.push({ val: val, priority: 2 });
-                  } else {
-                    parsedAmounts.push({ val: val, priority: 1 });
-                  }
+                  let priority = 1;
+                  if (isTotal) priority = 4;        // Highest priority for Net Total decimal candidates
+                  else if (isReceived) priority = 2; // Cash Received (e.g. 100.00)
+                  else if (isChange) priority = 1;   // Change (e.g. 28.50)
+                  
+                  parsedAmounts.push({ val: val, priority: priority, isDecimal: true });
                 }
               });
+            } else {
+              // 2. Fallback to standalone integers with strict word boundaries to avoid long ID collisions (e.g. 71)
+              const intRegex = /\b([0-9]{1,4})\b/g;
+              const intMatches = line.match(intRegex);
+              if (intMatches) {
+                intMatches.forEach(m => {
+                  const val = parseFloat(m);
+                  if (!isNaN(val) && val > 0) {
+                    let priority = 0; // Standalone integer is lower priority than decimal
+                    if (isTotal) priority = 3;
+                    
+                    parsedAmounts.push({ val: val, priority: priority, isDecimal: false });
+                  }
+                });
+              }
             }
           });
 
           if (parsedAmounts.length > 0) {
+            // Sort by priority first (highest to lowest), then prefer decimals, then sort values descending to find the correct Net Total on the total line
             parsedAmounts.sort((a, b) => {
               if (b.priority !== a.priority) return b.priority - a.priority;
+              if (b.isDecimal !== a.isDecimal) return b.isDecimal ? 1 : -1;
               return b.val - a.val;
             });
             amount = parsedAmounts[0].val;
-          } else {
-            const allNumbers = text.match(/[0-9]+(\.[0-9]{2})?/g);
-            if (allNumbers) {
-              const numbers = allNumbers.map(n => parseFloat(n)).filter(n => !isNaN(n) && n > 0 && n < 100000);
-              if (numbers.length > 0) {
-                amount = Math.max(...numbers);
-              }
-            }
           }
 
           if (amount === 0) amount = 150;
