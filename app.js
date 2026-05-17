@@ -142,7 +142,10 @@ const LoginGate = {
   },
 
   async verify() {
-    const isValid = await verifyPIN(this.inputPin, this.correctPinHash, this.correctPinSalt || 'NITIPAT_SALT_DEFAULT');
+    const activeHash = state.pin || this.correctPinHash;
+    const activeSalt = state.pinSalt || this.correctPinSalt || 'NITIPAT_SALT_DEFAULT';
+
+    const isValid = await verifyPIN(this.inputPin, activeHash, activeSalt);
     if (isValid) {
       this.statusEl.textContent = "ACCESS GRANTED. SYNCING DATA...";
       sessionStorage.setItem('unlocked', 'true');
@@ -154,7 +157,10 @@ const LoginGate = {
       // Problem 5: Auto-sync once on failure
       this.statusEl.textContent = "VERIFYING WITH REMOTE VAULT...";
       await this.sync(false);
-      const isValidRetry = await verifyPIN(this.inputPin, this.correctPinHash, this.correctPinSalt || 'NITIPAT_SALT_DEFAULT');
+      const activeHashRetry = state.pin || this.correctPinHash;
+      const activeSaltRetry = state.pinSalt || this.correctPinSalt || 'NITIPAT_SALT_DEFAULT';
+      
+      const isValidRetry = await verifyPIN(this.inputPin, activeHashRetry, activeSaltRetry);
       
       if (isValidRetry) {
         this.verify(); // Success after sync
@@ -1405,11 +1411,21 @@ async function loadAll() {
       if (profData.idCardPhoto) {
         state.idCardPhoto = profData.idCardPhoto;
         localStorage.setItem('id_card_photo', state.idCardPhoto);
+      } else if (state.idCardPhoto) {
+        fsSet('app_settings', 'profile', {
+          idCardPhoto: state.idCardPhoto,
+          studentPhoto: STUDENT.photoUrl
+        });
       }
       if (profData.studentPhoto) {
         STUDENT.photoUrl = profData.studentPhoto;
         localStorage.setItem('student_photo', STUDENT.photoUrl);
       }
+    } else if (state.idCardPhoto) {
+      fsSet('app_settings', 'profile', {
+        idCardPhoto: state.idCardPhoto,
+        studentPhoto: STUDENT.photoUrl
+      });
     }
 
     state.semesters = sSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.order - b.order);
@@ -3737,16 +3753,25 @@ function renderSchedule() {
 }
 
 function renderIDCardPreview() {
+  const photo = state.idCardPhoto || "https://img2.pic.in.th/pic/Student_Photo_Placeholder.png";
   return `
-      <div class="glass-card nb-card" style="padding:30px; text-align:center; background:white; border:2px solid black;">
-        <div style="font-weight:900; font-size:18px; margin-bottom:20px; letter-spacing:1px; color:#1e293b;">STUDENT IDENTITY</div>
-        <div style="margin: 0 auto 20px; width:fit-content; background:white; padding:10px; border:1.5px solid #eee; border-radius:8px;">
+      <div class="glass-card nb-card" style="padding:20px; text-align:center; background:white; border:2px solid #ccc; max-width: 320px; margin: 0 auto; border-radius: 16px;">
+        <div style="font-weight:900; font-size:16px; margin-bottom:15px; letter-spacing:1px; color:#1e293b; font-family:Kanit;">STUDENT IDENTIFICATION</div>
+        
+        <div style="margin-bottom:15px;">
+          <img src="${photo}" style="width:120px; height:160px; object-fit:cover; border-radius:8px; border:2.5px solid #eee; box-shadow:0 4px 10px rgba(0,0,0,0.1);" onerror="this.src='https://img2.pic.in.th/pic/Student_Photo_Placeholder.png'">
+        </div>
+
+        <div style="font-size:16px; font-weight:700; color:#333; margin-bottom:4px; font-family:Kanit;">${STUDENT.nameTh}</div>
+        <div style="font-size:12px; color:#666; margin-bottom:15px; font-family:Kanit;">${STUDENT.major}</div>
+
+        <div style="margin: 0 auto 10px; width:fit-content; background:white; padding:5px; border:1px solid #eee; border-radius:6px;">
            <svg id="idBarcodePreview"></svg>
         </div>
-        <div style="font-family:'JetBrains Mono', monospace; font-size:24px; font-weight:800; letter-spacing:4px; color:#1e293b;">
+        <div style="font-family:'JetBrains Mono', monospace; font-size:18px; font-weight:800; letter-spacing:3px; color:#1e293b;">
           ${STUDENT.id}
         </div>
-        <div style="margin-top:15px; font-size:12px; font-weight:700; opacity:0.5; text-transform:uppercase;">
+        <div style="margin-top:10px; font-size:10px; font-weight:700; opacity:0.5; text-transform:uppercase;">
           Kasetsart University | Materials Engineering
         </div>
       </div>`;
@@ -4694,6 +4719,12 @@ function renderSettings() {
           </div>
         </div>
       `).join('') || '<div class="setting-row"><span class="muted">ไม่มีข้อมูลเทอม</span></div>'}
+    </div>
+    <div class="glass-card settings-block" style="border: 1.5px solid rgba(239, 68, 68, 0.25); background: rgba(239, 68, 68, 0.04); box-shadow: 0 4px 15px rgba(239,68,68,0.05);">
+      <div class="setting-title" style="color: #ef4444; font-weight:700;">🚪 บัญชีผู้ใช้งาน</div>
+      <div class="setting-row" style="margin-top: 5px;">
+        <button class="btn-glass danger full" onclick="logoutApp()" style="font-weight:700; width:100%; border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.1); color: #ef4444; text-shadow:none;">🚪 ออกจากระบบ (ล็อกแอป)</button>
+      </div>
     </div>
     <div class="glass-card settings-block">
       <div class="setting-title">ℹ️ เกี่ยวกับระบบ</div>
@@ -5956,6 +5987,16 @@ window.deleteTopic = deleteTopic;
 window.setAttendanceStatus = setAttendanceStatus;
 window.promptAbsenceReason = promptAbsenceReason;
 window.renderCourseHub = renderCourseHub;
+window.logoutApp = () => {
+  if (confirm('ต้องการออกจากระบบ (ล็อกแอป) ใช่หรือไม่?')) {
+    sessionStorage.removeItem('unlocked');
+    sessionStorage.removeItem('unlocked_at');
+    state.isLocked = true;
+    showToast('🔒 ออกจากระบบและล็อกแอปสำเร็จ');
+    render();
+  }
+};
+
 window.showIDCardModal = showIDCardModal;
 window.closeModal = closeModal;
 window.setupGradeStructure = setupGradeStructure;
@@ -7227,7 +7268,7 @@ const NotionHub = {
       const coursePromises = courses.map(async (course) => {
         if (!course.notionPageId || !course.notionUrl || manual) {
           try {
-            const sem = state.semesters.find(s => s.id === course.semId);
+            const sem = state.semesters.find(s => String(s.id) === String(course.semId));
             const courseWithSem = {
               ...course,
               semesterName: sem ? sem.name : 'Unknown Semester'
@@ -7262,7 +7303,14 @@ const NotionHub = {
       });
       await Promise.all(assignmentPromises);
 
-      // 3. Pull Updates from Notion (Assignments Database)
+      // 3. Sync Notebooks (Notion -> Google Drive)
+      try {
+        await new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).syncNotebooksWithNotion());
+      } catch (err) {
+        console.error("Error syncing notebooks with Notion:", err);
+      }
+
+      // 4. Pull Updates from Notion (Assignments Database)
       state.lastNotionSync = new Date().toISOString();
       localStorage.setItem('last_notion_sync', state.lastNotionSync);
       state.notionConnected = true;
