@@ -4637,6 +4637,80 @@ window.mpSearchTags = function() {
   openModal('🔍 ผลลัพธ์สำหรับแท็ก ' + q, html || '<div style="padding: 30px; text-align: center; color: #94a3b8;">ไม่พบประวัติสำหรับแท็กนี้</div>');
 };
 
+window.mpOpenWalletEditor = function() {
+  let bodyHtml = `
+    <div style="display:flex; flex-direction:column; gap:16px; max-height: 400px; overflow-y: auto; padding-right: 5px;">
+      <p style="font-size:12px; color:#64748b; margin:0 0 8px 0; line-height:1.5;">คุณสามารถปรับเปลี่ยนชื่อกระเป๋าเงิน ยอดเงินคงเหลือปัจจุบัน หรือขีดจำกัดวงเงินเครดิตสำหรับการบันทึกหนี้สิน/ผ่อนชำระ (SPayLater & SEasyCash)</p>
+  `;
+  
+  state.moneyWallets.forEach((w, index) => {
+    const isDebt = w.type === 'debt';
+    bodyHtml += `
+      <div style="background: rgba(0,0,0,0.02); padding: 14px; border-radius: 14px; border: 1px solid rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-size: 13px; font-weight: 900; color: var(--primary);">${w.type === 'debt' ? '💳 บัญชีวงเงินสินเชื่อ (หนี้สิน)' : '💰 บัญชีเงินเก็บ (สินทรัพย์)'}</span>
+          <span style="font-size: 11px; font-weight: 700; color: #94a3b8;">ID: ${w.id.toUpperCase()}</span>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div>
+            <label style="font-size: 10px; font-weight: 800; color: #64748b; display: block; margin-bottom: 4px;">ชื่อบัญชี</label>
+            <input type="text" class="glass-input sm" id="editWalletName_${index}" value="${w.name}" style="width: 100%; border-radius: 10px; padding: 6px 10px;">
+          </div>
+          <div>
+            <label style="font-size: 10px; font-weight: 800; color: #64748b; display: block; margin-bottom: 4px;">
+              ${isDebt ? 'ยอดใช้ไปแล้ว (บาท)' : 'ยอดเงินคงเหลือ (บาท)'}
+            </label>
+            <input type="number" class="glass-input sm" id="editWalletBalance_${index}" value="${w.balance}" style="width: 100%; border-radius: 10px; padding: 6px 10px;">
+          </div>
+        </div>
+        
+        ${isDebt ? `
+        <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
+          <div>
+            <label style="font-size: 10px; font-weight: 800; color: #64748b; display: block; margin-bottom: 4px;">วงเงินสูงสุด (บาท)</label>
+            <input type="number" class="glass-input sm" id="editWalletLimit_${index}" value="${w.limit || 0}" style="width: 100%; border-radius: 10px; padding: 6px 10px;">
+          </div>
+        </div>
+        ` : ''}
+      </div>
+    `;
+  });
+  
+  bodyHtml += `</div>`;
+  
+  const footerHtml = `
+    <div style="display:flex; gap:10px; justify-content:flex-end; width:100%;">
+      <button class="btn-glass-pastel" onclick="closeModal()" style="padding: 8px 16px; border-radius:10px; font-size:12px;">ยกเลิก</button>
+      <button class="btn-pastel-primary" onclick="mpSaveWallets()" style="padding: 8px 20px; border-radius:10px; font-size:12px;">💾 บันทึกข้อมูล</button>
+    </div>
+  `;
+  
+  openModal('✏️ ปรับแต่งกระเป๋าเงิน & วงเงิน', bodyHtml, footerHtml);
+};
+
+window.mpSaveWallets = function() {
+  try {
+    state.moneyWallets.forEach((w, index) => {
+      const nameInput = document.getElementById(`editWalletName_${index}`);
+      const balanceInput = document.getElementById(`editWalletBalance_${index}`);
+      const limitInput = document.getElementById(`editWalletLimit_${index}`);
+      
+      if (nameInput) w.name = nameInput.value.trim() || w.name;
+      if (balanceInput) w.balance = parseFloat(balanceInput.value) || 0;
+      if (w.type === 'debt' && limitInput) w.limit = parseFloat(limitInput.value) || 0;
+    });
+    
+    saveMoneyPod();
+    render();
+    closeModal();
+    showToast('💾 ปรับแต่งกระเป๋าเงินและวงเงินเรียบร้อยแล้ว!', 'success');
+  } catch (e) {
+    console.error("Failed to save wallets:", e);
+    showToast('❌ เกิดข้อผิดพลาดในการบันทึกกระเป๋าเงิน', 'err');
+  }
+};
+
 // ══════════════════════════════════════════════════
 // MONEYPOD (PERSONAL FINANCE HUB)
 // ══════════════════════════════════════════════════
@@ -5081,48 +5155,192 @@ function renderMoneyPod() {
       }
     };
 
-    window.mpScanReceiptStart = function() {
+    window.mpScanMockFallback = function(type, win, detailsEl) {
+      if (win) win.classList.remove('scanning');
+      
+      let amount = 187;
+      let desc = '7-Eleven อาหารมื้อเบา';
+      let cat = '🍔 อาหาร & เครื่องดื่ม';
+      let tags = '#seven #snacks';
+      
+      if (type === 'starbucks') {
+        amount = 340;
+        desc = 'Starbucks Coffee มื้อสาย';
+        cat = '🍔 อาหาร & เครื่องดื่ม';
+        tags = '#coffee #starbucks';
+      } else if (type === 'shabu') {
+        amount = 499;
+        desc = 'ชาบูบุฟเฟต์มื้อเย็นฉลองหลังสอบ';
+        cat = '🍔 อาหาร & เครื่องดื่ม';
+        tags = '#shabu #buffet';
+      }
+      
+      if (detailsEl) detailsEl.innerHTML = `📄 ดึงข้อมูลสำเร็จ: ${desc} — ยอด ฿${amount.toLocaleString()}`;
+      
+      state.moneySubView = 'overview';
+      render();
+      
+      setTimeout(() => {
+        if(document.getElementById('txType')) document.getElementById('txType').value = 'expense';
+        if(document.getElementById('txAmount')) document.getElementById('txAmount').value = amount;
+        if(document.getElementById('txCategory')) document.getElementById('txCategory').value = cat;
+        if(document.getElementById('txNotes')) document.getElementById('txNotes').value = desc;
+        if(document.getElementById('txTags')) document.getElementById('txTags').value = tags;
+        if(document.getElementById('txWallet')) document.getElementById('txWallet').value = 'cash';
+        
+        triggerConfetti();
+        showToast('✨ AI ดึงข้อมูลใบเสร็จและจำแนกอัตโนมัติสำเร็จแล้ว!');
+      }, 120);
+    };
+
+    window.mpScanReceiptStart = async function() {
       const type = state.mpSelectedMockReceiptType || 'seven';
       const win = document.getElementById('scannerWin');
       if (!win) return;
-      win.classList.add('scanning');
       
-      showToast('⌛ กำลังใช้ AI สแกนวิเคราะห์ใบเสร็จ...');
-      setTimeout(() => {
-        win.classList.remove('scanning');
-        
-        let amount = 187;
-        let desc = '7-Eleven อาหารมื้อเบา';
-        let cat = '🍔 อาหาร & เครื่องดื่ม';
-        let tags = '#seven #snacks';
-        
-        if (type === 'starbucks') {
-          amount = 340;
-          desc = 'Starbucks Coffee มื้อสาย';
-          cat = '🍔 อาหาร & เครื่องดื่ม';
-          tags = '#coffee #starbucks';
-        } else if (type === 'shabu') {
-          amount = 499;
-          desc = 'ชาบูบุฟเฟต์มื้อเย็นฉลองหลังสอบ';
-          cat = '🍔 อาหาร & เครื่องดื่ม';
-          tags = '#shabu #buffet';
-        }
-        
-        state.moneySubView = 'overview';
-        render();
-        
-        setTimeout(() => {
-          if(document.getElementById('txType')) document.getElementById('txType').value = 'expense';
-          if(document.getElementById('txAmount')) document.getElementById('txAmount').value = amount;
-          if(document.getElementById('txCategory')) document.getElementById('txCategory').value = cat;
-          if(document.getElementById('txNotes')) document.getElementById('txNotes').value = desc;
-          if(document.getElementById('txTags')) document.getElementById('txTags').value = tags;
-          if(document.getElementById('txWallet')) document.getElementById('txWallet').value = 'cash';
+      win.classList.add('scanning');
+      const detailsEl = document.getElementById('mockReceiptDetails');
+      if (detailsEl) detailsEl.innerHTML = '⌛ AI กำลังเตรียมโมเดลและปรับแต่งภาพ...';
+      showToast('⌛ กำลังวิเคราะห์ใบเสร็จด้วย AI OCR...');
+
+      if (type === 'custom_uploaded' && typeof Tesseract !== 'undefined') {
+        try {
+          const fileInput = document.getElementById('aiPhotoUpload');
+          const file = fileInput?.files?.[0];
+          if (!file) {
+            win.classList.remove('scanning');
+            showToast('⚠️ ไม่พบรูปภาพใบเสร็จ กรุณาอัปโหลดรูปภาพใหม่อีกครั้ง', 'err');
+            return;
+          }
+
+          const result = await Tesseract.recognize(
+            file,
+            'eng+tha',
+            { 
+              logger: m => {
+                if (m.status === 'recognizing' && detailsEl) {
+                  detailsEl.innerHTML = `⌛ AI กำลังจำแนกตัวอักษร... (${Math.round(m.progress * 100)}%)`;
+                }
+              }
+            }
+          );
+
+          const text = result.data.text;
+          console.log("OCR Extracted Text:\n", text);
+
+          let amount = 0;
+          let desc = 'ใบเสร็จสแกนผ่าน AI';
+          let cat = '🍔 อาหาร & เครื่องดื่ม';
+          let tags = '#ocr #receipt';
+
+          const lines = text.split('\n');
+          let parsedAmounts = [];
           
-          triggerConfetti();
-          showToast('✨ AI ดึงข้อมูลใบเสร็จและจำแนกอัตโนมัติสำเร็จแล้ว!');
-        }, 120);
-      }, 1800);
+          const priceRegex = /([0-9]{1,3}(,[0-9]{3})*(\.[0-9]{2})?|[0-9]+\.[0-9]{2})/g;
+          const totalKeywords = ['total', 'net', 'sum', 'ยอด', 'สุทธิ', 'รวม', 'ราคา', 'amount', 'pay', 'cash', 'เงินทอน', 'บิล', 'baht', 'บาท', 'b'];
+
+          lines.forEach(line => {
+            const lowerLine = line.toLowerCase();
+            const hasKeyword = totalKeywords.some(kw => lowerLine.includes(kw));
+            const matches = line.match(priceRegex);
+            
+            if (matches) {
+              matches.forEach(m => {
+                const val = parseFloat(m.replace(/,/g, ''));
+                if (!isNaN(val) && val > 0) {
+                  if (hasKeyword) {
+                    parsedAmounts.push({ val: val, priority: 2 });
+                  } else {
+                    parsedAmounts.push({ val: val, priority: 1 });
+                  }
+                }
+              });
+            }
+          });
+
+          if (parsedAmounts.length > 0) {
+            parsedAmounts.sort((a, b) => {
+              if (b.priority !== a.priority) return b.priority - a.priority;
+              return b.val - a.val;
+            });
+            amount = parsedAmounts[0].val;
+          } else {
+            const allNumbers = text.match(/[0-9]+(\.[0-9]{2})?/g);
+            if (allNumbers) {
+              const numbers = allNumbers.map(n => parseFloat(n)).filter(n => !isNaN(n) && n > 0 && n < 100000);
+              if (numbers.length > 0) {
+                amount = Math.max(...numbers);
+              }
+            }
+          }
+
+          if (amount === 0) amount = 150;
+
+          const lowerText = text.toLowerCase();
+          if (lowerText.includes('seven') || lowerText.includes('7-eleven') || lowerText.includes('7-11')) {
+            desc = 'ร้านสะดวกซื้อ 7-Eleven';
+            tags += ' #seven #convenience';
+          } else if (lowerText.includes('starbucks')) {
+            desc = 'Starbucks Coffee';
+            tags += ' #coffee #starbucks';
+          } else if (lowerText.includes('shabu') || lowerText.includes('ชาบู') || lowerText.includes('buffet')) {
+            desc = 'ร้านชาบูบุฟเฟ่ต์';
+            tags += ' #shabu #buffet';
+          } else if (lowerText.includes('lotus') || lowerText.includes('โลตัส')) {
+            desc = 'Lotus Supermarket';
+            tags += ' #lotus #grocery';
+          } else if (lowerText.includes('big c') || lowerText.includes('บิ๊กซี')) {
+            desc = 'Big C Supercenter';
+            tags += ' #bigc #grocery';
+          } else {
+            const firstLine = lines.map(l => l.trim()).find(l => l.length > 3 && !/[0-9]/.test(l));
+            if (firstLine) {
+              desc = firstLine.substring(0, 30);
+            }
+          }
+
+          if (lowerText.match(/(food|eat|restaurant|shabu|buffet|coffee|cafe|tea|ชาบู|อาหาร|กาแฟ|น้ำดื่ม|อร่อย)/)) {
+            cat = '🍔 อาหาร & เครื่องดื่ม';
+            tags += ' #food';
+          } else if (lowerText.match(/(taxi|bts|mrt|gas|fuel|oil|รถไฟฟ้า|เดินทาง|น้ำมัน|รถเมล์)/)) {
+            cat = '🚗 เดินทาง';
+            tags += ' #travel';
+          } else if (lowerText.match(/(clothes|shoes|shopping|mall|ห้าง|เสื้อผ้า|รองเท้า|ช็อปปิ้ง)/)) {
+            cat = '🛍️ ช็อปปิ้ง';
+            tags += ' #shopping';
+          } else {
+            cat = '🍔 อาหาร & เครื่องดื่ม';
+          }
+
+          win.classList.remove('scanning');
+          if (detailsEl) detailsEl.innerHTML = `📄 ดึงข้อมูลสำเร็จ: ${desc} — ยอด ฿${amount.toLocaleString()}`;
+          
+          state.moneySubView = 'overview';
+          render();
+          
+          setTimeout(() => {
+            if(document.getElementById('txType')) document.getElementById('txType').value = 'expense';
+            if(document.getElementById('txAmount')) document.getElementById('txAmount').value = amount;
+            if(document.getElementById('txCategory')) document.getElementById('txCategory').value = cat;
+            if(document.getElementById('txNotes')) document.getElementById('txNotes').value = desc;
+            if(document.getElementById('txTags')) document.getElementById('txTags').value = tags;
+            if(document.getElementById('txWallet')) document.getElementById('txWallet').value = 'cash';
+            
+            triggerConfetti();
+            showToast('✨ AI วิเคราะห์และสแกนใบเสร็จจริงสำเร็จแล้ว!');
+          }, 120);
+
+        } catch (e) {
+          console.error("AI OCR parsing error:", e);
+          win.classList.remove('scanning');
+          showToast('⚠️ การวิเคราะห์ OCR ล้มเหลว จะใช้ค่าจำลองแทน', 'err');
+          mpScanMockFallback(type, win, detailsEl);
+        }
+      } else {
+        setTimeout(() => {
+          mpScanMockFallback(type, win, detailsEl);
+        }, 1800);
+      }
     };
 
     window.mpAddTransaction = function() {
@@ -5420,7 +5638,10 @@ function renderMoneyPod() {
             </div>
           </div>
           
-          <h3 style="font-size:14px; font-weight:800; color:#64748b; margin-bottom:12px; letter-spacing:0.5px;">👛 กระเป๋าเงินของฉัน</h3>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h3 style="font-size:14px; font-weight:800; color:#64748b; margin:0; letter-spacing:0.5px;">👛 กระเป๋าเงินของฉัน</h3>
+            <button class="btn-glass-pastel" onclick="mpOpenWalletEditor()" style="padding:4px 10px; font-size:10px;">✏️ แก้ไขกระเป๋า & วงเงิน</button>
+          </div>
           <div class="wallets-grid">
             ${state.moneyWallets.map(w => {
               const isActive = selectedWalletId === w.id;
@@ -5653,22 +5874,36 @@ function renderMoneyPod() {
           <div class="mp-card">
             <h3 style="margin-top:0; font-size:14px; font-weight:850; color:#64748b;">🛍️ สรุปขีดจำกัดสินเชื่อ (Credit Limits)</h3>
             <div style="margin-top:15px;">
-              <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:750; color:#475569; margin-bottom:4px;">
-                <span>SPayLater 🛍️</span>
-                <span>฿${state.moneyWallets.find(w => w.id === 'spaylater').balance.toLocaleString()} / ฿15,000</span>
-              </div>
-              <div class="goal-progress-bar">
-                <div class="goal-progress-fill" style="width: ${(state.moneyWallets.find(w => w.id === 'spaylater').balance / 15000) * 100}%; background:#ea580c;"></div>
-              </div>
+              ${(() => {
+                const w = state.moneyWallets.find(x => x.id === 'spaylater');
+                const limitVal = w.limit || 15000;
+                const pct = Math.min(100, Math.max(0, (w.balance / (limitVal || 1)) * 100));
+                return `
+                  <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:750; color:#475569; margin-bottom:4px;">
+                    <span>${w.name}</span>
+                    <span>฿${w.balance.toLocaleString()} / ฿${limitVal.toLocaleString()}</span>
+                  </div>
+                  <div class="goal-progress-bar">
+                    <div class="goal-progress-fill" style="width: ${pct}%; background:#ea580c;"></div>
+                  </div>
+                `;
+              })()}
             </div>
             <div style="margin-top:15px;">
-              <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:750; color:#475569; margin-bottom:4px;">
-                <span>S EasyCash 💸</span>
-                <span>฿${state.moneyWallets.find(w => w.id === 'seasycash').balance.toLocaleString()} / ฿20,000</span>
-              </div>
-              <div class="goal-progress-bar">
-                <div class="goal-progress-fill" style="width: ${(state.moneyWallets.find(w => w.id === 'seasycash').balance / 20000) * 100}%; background:#ef4444;"></div>
-              </div>
+              ${(() => {
+                const w = state.moneyWallets.find(x => x.id === 'seasycash');
+                const limitVal = w.limit || 20000;
+                const pct = Math.min(100, Math.max(0, (w.balance / (limitVal || 1)) * 100));
+                return `
+                  <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:750; color:#475569; margin-bottom:4px;">
+                    <span>${w.name}</span>
+                    <span>฿${w.balance.toLocaleString()} / ฿${limitVal.toLocaleString()}</span>
+                  </div>
+                  <div class="goal-progress-bar">
+                    <div class="goal-progress-fill" style="width: ${pct}%; background:#ef4444;"></div>
+                  </div>
+                `;
+              })()}
             </div>
           </div>
           
