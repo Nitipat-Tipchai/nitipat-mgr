@@ -45,7 +45,7 @@ const LoginGate = {
   },
 
   getSecurityConfig() {
-    if (typeof google === 'undefined' || !google.script) {
+    if (typeof google === 'undefined' || !google.script || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
       console.warn("Using local security fallback");
       return Promise.resolve({ pin: "111111" });
     }
@@ -184,9 +184,22 @@ window.LoginGate = LoginGate;
 
 async function startAppCore() {
   try {
-    const firebaseConfig = await new Promise((res, rej) => {
-      google.script.run.withSuccessHandler(res).withFailureHandler(rej).getFirebaseConfig();
-    });
+    let firebaseConfig;
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      console.warn("Using local mock Firebase config");
+      firebaseConfig = {
+        apiKey: "LOCAL_MOCK_KEY",
+        authDomain: "local-mock.firebaseapp.com",
+        projectId: "local-mock",
+        storageBucket: "local-mock.appspot.com",
+        messagingSenderId: "123456",
+        appId: "1:123456:web:123456"
+      };
+    } else {
+      firebaseConfig = await new Promise((res, rej) => {
+        google.script.run.withSuccessHandler(res).withFailureHandler(rej).getFirebaseConfig();
+      });
+    }
 
     if (!firebaseConfig.apiKey) {
       console.error("Firebase API Key is missing.");
@@ -345,6 +358,15 @@ let state = {
   pomodoroBreak: parseInt(localStorage.getItem('pomodoroBreak') || '5'),
   pomodoroActive: false, pomodoroEndTime: null, pomodoroTimer: null, pomodoroPhase: 'work',
   pomodoroCount: 0,
+
+  // MoneyPod State
+  moneyWallets: JSON.parse(localStorage.getItem('moneyWallets') || '[{"id":"cash","name":"เงินสด 💵","type":"cash","balance":1500},{"id":"bank","name":"บัญชีธนาคาร 🏦","type":"bank","balance":8500},{"id":"savings","name":"กระปุกออมเงิน 🐷","type":"savings","balance":5000},{"id":"spaylater","name":"SPayLater 🛍️","type":"debt","balance":0,"limit":15000},{"id":"seasycash","name":"SEasyCash 💸","type":"debt","balance":0,"limit":20000}]'),
+  moneyTransactions: JSON.parse(localStorage.getItem('moneyTransactions') || '[]'),
+  moneyBudgets: JSON.parse(localStorage.getItem('moneyBudgets') || '{"food":5000,"shopping":3000,"travel":2000}'),
+  moneyGoals: JSON.parse(localStorage.getItem('moneyGoals') || '[{"id":"g1","name":"เที่ยวญี่ปุ่น 🇯🇵","target":45000,"saved":5000},{"id":"g2","name":"ซื้อ iPad Pro 📱","target":32000,"saved":8000}]'),
+  moneyInstallments: JSON.parse(localStorage.getItem('moneyInstallments') || '[]'),
+  moneyTheme: localStorage.getItem('moneyTheme') || 'theme-mint',
+  moneyDailyBudget: parseFloat(localStorage.getItem('moneyDailyBudget') || '300'),
 
   modal: null,
   selectedSemester: null,
@@ -1277,6 +1299,10 @@ function hideLoadingBlocker() {
 }
 
 async function fsSet(col, id, data) {
+  saveToLocalStorage();
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return;
+  }
   try {
     const plainData = JSON.parse(JSON.stringify(data));
     setDoc(doc(db, col, id), { ...plainData, _t: serverTimestamp() })
@@ -1294,18 +1320,24 @@ async function fsSet(col, id, data) {
   } catch (e) {
     handleFirebaseError(e, 'fsSet');
   }
-  saveToLocalStorage();
 }
 async function fsDel(col, id) {
+  saveToLocalStorage();
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return;
+  }
   try {
     deleteDoc(doc(db, col, id))
       .catch(e => handleFirebaseError(e, 'fsDel'));
   } catch (e) {
     handleFirebaseError(e, 'fsDel');
   }
-  saveToLocalStorage();
 }
 async function fsUpd(col, id, data) {
+  saveToLocalStorage();
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return;
+  }
   try {
     const plainData = JSON.parse(JSON.stringify(data));
     updateDoc(doc(db, col, id), plainData)
@@ -1329,7 +1361,6 @@ async function fsUpd(col, id, data) {
   } catch (e) {
     handleFirebaseError(e, 'fsUpd');
   }
-  saveToLocalStorage();
 }
 
 function handleFirebaseError(e, source) {
@@ -1373,6 +1404,36 @@ function saveToLocalStorage() {
   } catch (e) { console.warn('localStorage save error:', e); }
 }
 
+function saveMoneyPod() {
+  try {
+    localStorage.setItem('moneyWallets', JSON.stringify(state.moneyWallets));
+    localStorage.setItem('moneyTransactions', JSON.stringify(state.moneyTransactions));
+    localStorage.setItem('moneyBudgets', JSON.stringify(state.moneyBudgets));
+    localStorage.setItem('moneyGoals', JSON.stringify(state.moneyGoals));
+    localStorage.setItem('moneyInstallments', JSON.stringify(state.moneyInstallments));
+    localStorage.setItem('moneyTheme', state.moneyTheme);
+    localStorage.setItem('moneyDailyBudget', state.moneyDailyBudget.toString());
+    
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return;
+    }
+    
+    if (db) {
+      setDoc(doc(db, "app_settings", "money_pod"), {
+        wallets: state.moneyWallets,
+        transactions: state.moneyTransactions,
+        budgets: state.moneyBudgets,
+        goals: state.moneyGoals,
+        installments: state.moneyInstallments,
+        theme: state.moneyTheme,
+        dailyBudget: state.moneyDailyBudget
+      }).catch(e => console.warn("MoneyPod Firestore save error:", e));
+    }
+  } catch (e) {
+    console.warn("MoneyPod save error:", e);
+  }
+}
+
 async function loadAll() {
   state.isInitializing = true;
   loadFromLocalStorage();
@@ -1385,6 +1446,13 @@ async function loadAll() {
     localStorage.setItem('last_score_reset', today);
   }
   render();
+
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    console.warn("Local offline mode: Bypassing Firebase Sync");
+    state.isInitializing = false;
+    if (!state.modal) render();
+    return;
+  }
 
   try {
     const [sSnap, cSnap, aSnap, eSnap, secSnap, mastSnap, structSnap, reflSnap, profSnap] = await Promise.all([
@@ -1481,6 +1549,30 @@ async function loadAll() {
         if (state.activeHubTab === 'Attendance') render();
       }
     });
+
+    try {
+      const mpSnap = await getDoc(doc(db, "app_settings", "money_pod"));
+      if (mpSnap.exists()) {
+        const mpData = mpSnap.data();
+        if (mpData.wallets) state.moneyWallets = mpData.wallets;
+        if (mpData.transactions) state.moneyTransactions = mpData.transactions;
+        if (mpData.budgets) state.moneyBudgets = mpData.budgets;
+        if (mpData.goals) state.moneyGoals = mpData.goals;
+        if (mpData.installments) state.moneyInstallments = mpData.installments;
+        if (mpData.theme) state.moneyTheme = mpData.theme;
+        if (mpData.dailyBudget) state.moneyDailyBudget = mpData.dailyBudget;
+        
+        localStorage.setItem('moneyWallets', JSON.stringify(state.moneyWallets));
+        localStorage.setItem('moneyTransactions', JSON.stringify(state.moneyTransactions));
+        localStorage.setItem('moneyBudgets', JSON.stringify(state.moneyBudgets));
+        localStorage.setItem('moneyGoals', JSON.stringify(state.moneyGoals));
+        localStorage.setItem('moneyInstallments', JSON.stringify(state.moneyInstallments));
+        localStorage.setItem('moneyTheme', state.moneyTheme);
+        localStorage.setItem('moneyDailyBudget', state.moneyDailyBudget.toString());
+      }
+    } catch (err) {
+      console.warn("Error loading MoneyPod data from Firestore:", err);
+    }
 
     saveToLocalStorage();
     await autoArchiveCourses();
@@ -2394,7 +2486,8 @@ function renderTopNav(gpa, pro, curSem) {
       { id: 'assignments', icon: '📋', label: 'การบ้าน' }, { id: 'exams', icon: '📝', label: 'ตารางสอบ' },
       { id: 'grades', icon: '🎓', label: 'เกรด & GPA' }, { id: 'roadmap', icon: '🗺', label: 'Roadmap 4 ปี' },
       { id: 'focus', icon: '🍅', label: 'Focus Mode' }, { id: 'club', icon: '🏛', label: 'งานชุมนุม' },
-      { id: 'daily', icon: '🌅', label: 'ชีวิตประจำวัน' }, { id: 'calendar', icon: '🗓', label: 'ปฏิทินการศึกษา' },
+      { id: 'calendar', icon: '🗓', label: 'ปฏิทินการศึกษา' },
+      { id: 'money-pod', icon: '🐽', label: 'MoneyPod' },
       { id: 'settings', icon: '⚙️', label: 'ตั้งค่า' }
     ].map(n => `<button class="fm-item ${state.view === n.id ? 'active' : ''}" data-nav="${n.id}">
         <span class="fm-ic">${n.icon}</span><span class="fm-lbl">${n.label}</span>
@@ -2406,7 +2499,7 @@ function renderTopNav(gpa, pro, curSem) {
 function renderFloatingNav() {
   const items = [
     { id: 'dashboard', icon: '◈' }, { id: 'courses', icon: '📚' },
-    { id: 'assignments', icon: '📋' }, { id: 'alarm', icon: '⏰' }, { id: 'focus', icon: '🍅' }, { id: 'daily', icon: '🌅' }
+    { id: 'assignments', icon: '📋' }, { id: 'money-pod', icon: '🐽' }, { id: 'focus', icon: '🍅' }
   ];
   return `<nav class="floating-dock glass">
     ${items.map(n => `<button class="dock-item ${state.view === n.id ? 'active' : ''}" data-nav="${n.id}">
@@ -2455,7 +2548,7 @@ function renderPage(gpa, pro, curSem) {
     case 'roadmap': return renderRoadmap();
     case 'focus': return renderFocus();
     case 'club': return renderClub();
-    case 'daily': return renderDaily();
+    case 'money-pod': return renderMoneyPod();
     case 'calendar': return renderCalendar();
     case 'settings': return renderSettings();
     case 'course-hub': return renderCourseHubPage();
@@ -4532,76 +4625,1252 @@ function renderClub() {
 }
 
 // ══════════════════════════════════════════════════
-// DAILY LIFE
+// MONEYPOD STATE PERSISTENCE
 // ══════════════════════════════════════════════════
-function renderDaily() {
+window.saveMoneyPod = saveMoneyPod;
+
+window.mpSearchTags = function() {
+  const q = document.getElementById('reportTagSearch')?.value.trim();
+  if (!q) return;
+  const matches = state.moneyTransactions.filter(t => t.tags && t.tags.includes(q));
+  const html = matches.map(t => `<div style="padding: 10px; border-bottom: 1px solid rgba(0,0,0,0.05); display: flex; justify-content: space-between;"><span>${t.notes} (${t.date})</span><b style="color: #ef4444;">฿${t.amount}</b></div>`).join('');
+  openModal('🔍 ผลลัพธ์สำหรับแท็ก ' + q, html || '<div style="padding: 30px; text-align: center; color: #94a3b8;">ไม่พบประวัติสำหรับแท็กนี้</div>');
+};
+
+// ══════════════════════════════════════════════════
+// MONEYPOD (PERSONAL FINANCE HUB)
+// ══════════════════════════════════════════════════
+function renderMoneyPod() {
+  const subView = state.moneySubView || 'overview';
+  const selectedWalletId = state.moneySelectedWalletId || null;
+  const themeClass = state.moneyTheme || 'theme-mint';
+  
+  const scopedStyle = `
+    <style>
+      .mp-wrap {
+        --primary: #10b981;
+        --accent: #6ee7b7;
+        --bg-grad: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        --card-bg: rgba(255, 255, 255, 0.7);
+        font-family: 'Outfit', 'Inter', 'Kanit', sans-serif;
+        padding: 24px;
+        border-radius: 28px;
+        color: #1e293b;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.03);
+        margin-bottom: 90px;
+        position: relative;
+        overflow: hidden;
+      }
+      
+      .mp-wrap.theme-mint {
+        --primary: #10b981;
+        --accent: #6ee7b7;
+        --bg-grad: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        --card-bg: rgba(255, 255, 255, 0.75);
+      }
+      .mp-wrap.theme-peach {
+        --primary: #f97316;
+        --accent: #fdba74;
+        --bg-grad: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+        --card-bg: rgba(255, 255, 255, 0.8);
+      }
+      .mp-wrap.theme-pink {
+        --primary: #ec4899;
+        --accent: #fbcfe8;
+        --bg-grad: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);
+        --card-bg: rgba(255, 255, 255, 0.8);
+      }
+      .mp-wrap.theme-lavender {
+        --primary: #a855f7;
+        --accent: #e9d5ff;
+        --bg-grad: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+        --card-bg: rgba(255, 255, 255, 0.75);
+      }
+      
+      .mp-wrap {
+        background: var(--bg-grad);
+      }
+      
+      .mp-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 25px;
+        flex-wrap: wrap;
+        gap: 15px;
+      }
+      
+      .mp-title-section h1 {
+        font-size: 28px;
+        font-weight: 900;
+        background: linear-gradient(120deg, var(--primary), #1e293b);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      
+      .mp-theme-picker {
+        display: flex;
+        gap: 8px;
+        background: rgba(255,255,255,0.6);
+        padding: 6px;
+        border-radius: 20px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.02);
+      }
+      
+      .theme-dot {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: 2px solid white;
+        cursor: pointer;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        transition: transform 0.2s ease;
+      }
+      .theme-dot:hover {
+        transform: scale(1.2);
+      }
+      .theme-dot.mint { background: #10b981; }
+      .theme-dot.peach { background: #f97316; }
+      .theme-dot.pink { background: #ec4899; }
+      .theme-dot.lavender { background: #a855f7; }
+      
+      .mp-subview-tabs {
+        display: flex;
+        background: rgba(0,0,0,0.03);
+        padding: 5px;
+        border-radius: 18px;
+        margin-bottom: 25px;
+        gap: 4px;
+        overflow-x: auto;
+      }
+      
+      .mp-tab-btn {
+        flex: 1;
+        padding: 10px 16px;
+        border: none;
+        background: none;
+        font-size: 13px;
+        font-weight: 700;
+        color: #64748b;
+        border-radius: 14px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+      
+      .mp-tab-btn.active {
+        background: white;
+        color: var(--primary);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+      }
+      
+      .mp-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+      @media(min-width: 768px) {
+        .mp-grid {
+          grid-template-columns: 350px 1fr;
+        }
+      }
+      
+      .mp-card {
+        background: var(--card-bg);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255,255,255,0.4);
+        border-radius: 24px;
+        padding: 22px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.01);
+        margin-bottom: 20px;
+        position: relative;
+      }
+      
+      .networth-box {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.5) 100%);
+      }
+      
+      .nw-val {
+        font-size: 34px;
+        font-weight: 950;
+        color: var(--primary);
+        margin: 6px 0;
+        letter-spacing: -0.5px;
+      }
+      
+      .circle-progress-wrap {
+        position: relative;
+        width: 110px;
+        height: 110px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .circle-progress-svg {
+        transform: rotate(-90deg);
+        width: 110px;
+        height: 110px;
+      }
+      .circle-bg {
+        fill: none;
+        stroke: rgba(0,0,0,0.04);
+        stroke-width: 8;
+      }
+      .circle-fg {
+        fill: none;
+        stroke: var(--primary);
+        stroke-width: 8;
+        stroke-linecap: round;
+        transition: stroke-dashoffset 0.6s ease;
+      }
+      .circle-text {
+        position: absolute;
+        font-size: 13px;
+        font-weight: 850;
+        color: #1e293b;
+        text-align: center;
+      }
+      
+      .wallets-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+      }
+      .wallet-card {
+        padding: 14px;
+        border-radius: 16px;
+        background: white;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.01);
+        border: 2px solid transparent;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        height: 95px;
+        cursor: pointer;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .wallet-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 18px rgba(0,0,0,0.03);
+      }
+      .wallet-card.active {
+        border-color: var(--primary);
+        background: rgba(255, 255, 255, 0.95);
+      }
+      .wallet-name {
+        font-size: 12px;
+        font-weight: 800;
+        color: #64748b;
+      }
+      .wallet-bal {
+        font-size: 16px;
+        font-weight: 900;
+        color: #1e293b;
+      }
+      .wallet-limit {
+        font-size: 9px;
+        color: #94a3b8;
+        margin-top: 1px;
+      }
+      
+      .scanner-window {
+        position: relative;
+        border: 2px dashed var(--primary);
+        border-radius: 20px;
+        height: 220px;
+        background: rgba(255,255,255,0.4);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        margin-bottom: 15px;
+      }
+      .scanner-window img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        border-radius: 10px;
+      }
+      .scan-laser {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 6px;
+        background: linear-gradient(90deg, transparent, rgba(239, 68, 68, 0.8), transparent);
+        box-shadow: 0 0 12px rgba(239, 68, 68, 0.9);
+        display: none;
+      }
+      .scanner-window.scanning .scan-laser {
+        display: block;
+        animation: laserScan 1.5s infinite ease-in-out;
+      }
+      @keyframes laserScan {
+        0% { top: 0%; }
+        50% { top: 100%; }
+        100% { top: 0%; }
+      }
+      
+      .goal-progress-bar {
+        height: 8px;
+        background: rgba(0,0,0,0.05);
+        border-radius: 4px;
+        overflow: hidden;
+        margin: 8px 0;
+      }
+      .goal-progress-fill {
+        height: 100%;
+        background: var(--primary);
+        border-radius: 4px;
+        transition: width 0.5s ease;
+      }
+      
+      .tx-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        background: white;
+        border-radius: 16px;
+        margin-bottom: 10px;
+        border: 1px solid rgba(0,0,0,0.02);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.01);
+        transition: all 0.2s ease;
+      }
+      .tx-row:hover {
+        transform: scale(1.01);
+      }
+      .tx-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .tx-icon {
+        font-size: 20px;
+        background: rgba(0,0,0,0.03);
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 14px;
+      }
+      .tx-details {
+        display: flex;
+        flex-direction: column;
+      }
+      .tx-desc {
+        font-size: 13px;
+        font-weight: 700;
+        color: #1e293b;
+      }
+      .tx-sub {
+        font-size: 10px;
+        color: #94a3b8;
+        margin-top: 2px;
+      }
+      .tx-amount {
+        font-weight: 900;
+        font-size: 14px;
+      }
+      .tx-amount.income { color: #10b981; }
+      .tx-amount.expense { color: #ef4444; }
+      .tx-amount.transfer { color: #3b82f6; }
+      
+      .pill-badge {
+        font-size: 9px;
+        padding: 2px 6px;
+        border-radius: 8px;
+        font-weight: 700;
+        margin-right: 4px;
+        display: inline-block;
+      }
+      
+      .btn-glass-pastel {
+        background: white;
+        border: 1px solid rgba(0,0,0,0.04);
+        border-radius: 14px;
+        padding: 10px 14px;
+        font-weight: 700;
+        font-size: 12px;
+        color: #1e293b;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        transition: all 0.2s ease;
+      }
+      .btn-glass-pastel:hover {
+        background: rgba(255,255,255,0.8);
+        transform: translateY(-1px);
+      }
+    </style>
+  `;
+
+  // Bind the global MoneyPod event and action handlers once on window
+  if (!window.mpHandlersInitialized) {
+    window.mpSetView = function(view) {
+      state.moneySubView = view;
+      render();
+    };
+
+    window.mpSetTheme = function(theme) {
+      state.moneyTheme = theme;
+      saveMoneyPod();
+      render();
+    };
+
+    window.mpSetSelectedWallet = function(walletId) {
+      state.moneySelectedWalletId = state.moneySelectedWalletId === walletId ? null : walletId;
+      render();
+    };
+
+    window.mpEditDailyBudget = function() {
+      const bStr = prompt("💸 ตั้งค่างบประมาณใช้จ่ายรายวัน (บาท):", state.moneyDailyBudget);
+      const budget = parseFloat(bStr);
+      if (!isNaN(budget) && budget >= 0) {
+        state.moneyDailyBudget = budget;
+        saveMoneyPod();
+        render();
+        showToast("💰 อัปเดตงบประมาณรายวันเรียบร้อยแล้ว");
+      }
+    };
+
+    window.mpHandlePhotoUpload = function(input) {
+      const file = input.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          state.mpUploadedPhoto = e.target.result;
+          document.getElementById('txPhotoPreview').innerHTML = `<img src="${state.mpUploadedPhoto}" style="width:40px; height:40px; border-radius:8px; object-fit:cover; border:1px solid #ddd;">`;
+          showToast('📸 แนบรูปใบเสร็จ/สลิปเรียบร้อย');
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+
+    window.mpSelectMockReceipt = function(type) {
+      state.mpSelectedMockReceiptType = type;
+      const mockImage = document.getElementById('receiptPreviewImage');
+      const details = document.getElementById('mockReceiptDetails');
+      if (type === 'seven') {
+        mockImage.src = 'https://images.unsplash.com/photo-1554415707-6e8cfc93fe23?auto=format&fit=crop&w=400&q=80';
+        details.innerHTML = '📄 ใบเสร็จ 7-Eleven (ข้าวผัด + น้ำดื่ม) — ยอด ฿187';
+      } else if (type === 'starbucks') {
+        mockImage.src = 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=400&q=80';
+        details.innerHTML = '☕ ใบเสร็จ Starbucks (Latte + Croissant) — ยอด ฿340';
+      } else if (type === 'shabu') {
+        mockImage.src = 'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&w=400&q=80';
+        details.innerHTML = '🍲 บิลร้านชาบูบุฟเฟต์ — ยอด ฿499';
+      }
+    };
+
+    window.mpScanReceiptStart = function() {
+      const type = state.mpSelectedMockReceiptType || 'seven';
+      const win = document.getElementById('scannerWin');
+      if (!win) return;
+      win.classList.add('scanning');
+      
+      showToast('⌛ กำลังใช้ AI สแกนวิเคราะห์ใบเสร็จ...');
+      setTimeout(() => {
+        win.classList.remove('scanning');
+        
+        let amount = 187;
+        let desc = '7-Eleven อาหารมื้อเบา';
+        let cat = '🍔 อาหาร & เครื่องดื่ม';
+        let tags = '#seven #snacks';
+        
+        if (type === 'starbucks') {
+          amount = 340;
+          desc = 'Starbucks Coffee มื้อสาย';
+          cat = '🍔 อาหาร & เครื่องดื่ม';
+          tags = '#coffee #starbucks';
+        } else if (type === 'shabu') {
+          amount = 499;
+          desc = 'ชาบูบุฟเฟต์มื้อเย็นฉลองหลังสอบ';
+          cat = '🍔 อาหาร & เครื่องดื่ม';
+          tags = '#shabu #buffet';
+        }
+        
+        state.moneySubView = 'overview';
+        render();
+        
+        setTimeout(() => {
+          if(document.getElementById('txType')) document.getElementById('txType').value = 'expense';
+          if(document.getElementById('txAmount')) document.getElementById('txAmount').value = amount;
+          if(document.getElementById('txCategory')) document.getElementById('txCategory').value = cat;
+          if(document.getElementById('txNotes')) document.getElementById('txNotes').value = desc;
+          if(document.getElementById('txTags')) document.getElementById('txTags').value = tags;
+          if(document.getElementById('txWallet')) document.getElementById('txWallet').value = 'cash';
+          
+          triggerConfetti();
+          showToast('✨ AI ดึงข้อมูลใบเสร็จและจำแนกอัตโนมัติสำเร็จแล้ว!');
+        }, 120);
+      }, 1800);
+    };
+
+    window.mpAddTransaction = function() {
+      const type = document.getElementById('txType').value;
+      const amount = parseFloat(document.getElementById('txAmount').value);
+      const category = document.getElementById('txCategory').value;
+      const walletId = document.getElementById('txWallet')?.value;
+      const fromWalletId = document.getElementById('txFromWallet')?.value;
+      const toWalletId = document.getElementById('txToWallet')?.value;
+      const notes = document.getElementById('txNotes').value;
+      const tags = document.getElementById('txTags').value;
+      const photo = state.mpUploadedPhoto || null;
+      const isInstallment = document.getElementById('txIsInstallment')?.checked || false;
+      const instMonths = parseInt(document.getElementById('txInstMonths')?.value || '3');
+      const instInterest = parseFloat(document.getElementById('txInstInterest')?.value || '1.2');
+
+      if (isNaN(amount) || amount <= 0) {
+        showToast('⚠️ กรุณากรอกจำนวนเงินให้ถูกต้อง', 'err');
+        return;
+      }
+
+      const newTx = {
+        id: 'tx_' + Date.now(),
+        type,
+        amount,
+        category,
+        walletId,
+        fromWalletId,
+        toWalletId,
+        notes: notes || (type === 'transfer' ? 'โอนเงินข้ามบัญชี' : category),
+        tags: tags || '',
+        photo,
+        date: new Date().toISOString().split('T')[0],
+        timestamp: Date.now()
+      };
+
+      if (type === 'income') {
+        const w = state.moneyWallets.find(x => x.id === walletId);
+        if (w) w.balance += amount;
+      } else if (type === 'expense') {
+        const w = state.moneyWallets.find(x => x.id === walletId);
+        if (w) {
+          if (w.type === 'debt') w.balance += amount; // เพิ่มยอดหนี้
+          else w.balance -= amount; // หักสินทรัพย์
+        }
+        
+        // ผูกสัญญากับผ่อนชำระ
+        if (isInstallment && (walletId === 'spaylater' || walletId === 'seasycash')) {
+          const interestAmt = amount * (instInterest / 100) * instMonths;
+          const totalPayable = amount + interestAmt;
+          const monthlyPay = totalPayable / instMonths;
+          
+          state.moneyInstallments.push({
+            id: 'inst_' + Date.now(),
+            name: notes || `ผ่อนชำระ ${category}`,
+            walletId,
+            principal: amount,
+            interestRate: instInterest,
+            totalPayable,
+            monthlyPayment: monthlyPay,
+            remainingMonths: instMonths,
+            totalMonths: instMonths,
+            paidMonths: 0,
+            tags
+          });
+        }
+      } else if (type === 'transfer') {
+        const fromW = state.moneyWallets.find(x => x.id === fromWalletId);
+        const toW = state.moneyWallets.find(x => x.id === toWalletId);
+        if (fromW && toW) {
+          if (fromW.type === 'debt') fromW.balance += amount;
+          else fromW.balance -= amount;
+          
+          if (toW.type === 'debt') toW.balance -= amount;
+          else toW.balance += amount;
+        }
+      }
+
+      state.moneyTransactions.unshift(newTx);
+      state.mpUploadedPhoto = null;
+      saveMoneyPod();
+      render();
+      showToast('✅ บันทึกรายการลงกระเป๋าเงินสำเร็จ!');
+    };
+
+    window.mpDeleteTransaction = function(txId) {
+      if (confirm('ต้องการลบรายการนี้ใช่หรือไม่? (ยอดเงินจะไม่ได้รับการแก้ไขย้อนกลับ)')) {
+        state.moneyTransactions = state.moneyTransactions.filter(t => t.id !== txId);
+        saveMoneyPod();
+        render();
+        showToast('🗑 ลบรายการเรียบร้อยแล้ว');
+      }
+    };
+
+    window.mpPayInstallment = function(instId) {
+      const inst = state.moneyInstallments.find(i => i.id === instId);
+      if (!inst) return;
+      
+      if (confirm(`ชำระงวดประจำเดือนสำหรับ "${inst.name}" จำนวน ฿${inst.monthlyPayment.toFixed(2)} ใช่หรือไม่?\n(ยอดจะชำระจาก บัญชีธนาคาร 🏦)`)) {
+        const bank = state.moneyWallets.find(w => w.id === 'bank');
+        if (!bank || bank.balance < inst.monthlyPayment) {
+          showToast('⚠️ ยอดเงินในบัญชีธนาคารไม่เพียงพอ', 'err');
+          return;
+        }
+        
+        bank.balance -= inst.monthlyPayment;
+        const debtW = state.moneyWallets.find(w => w.id === inst.walletId);
+        if (debtW) {
+          const principalPayment = inst.principal / inst.totalMonths;
+          debtW.balance = Math.max(0, debtW.balance - principalPayment);
+        }
+        
+        state.moneyTransactions.unshift({
+          id: 'tx_' + Date.now(),
+          type: 'expense',
+          amount: inst.monthlyPayment,
+          category: '🐽 การเงิน & หนี้สิน',
+          walletId: 'bank',
+          notes: `ชำระงวด ${inst.name} (${inst.paidMonths + 1}/${inst.totalMonths})`,
+          tags: `#installment #payment ${inst.tags || ''}`,
+          date: new Date().toISOString().split('T')[0],
+          timestamp: Date.now()
+        });
+        
+        inst.paidMonths += 1;
+        inst.remainingMonths -= 1;
+        
+        if (inst.remainingMonths <= 0) {
+          state.moneyInstallments = state.moneyInstallments.filter(i => i.id !== instId);
+          showToast('🎉 ยอดผ่อนชำระรายการนี้ถูกจ่ายหมดสิ้นสมบูรณ์แล้ว!');
+        } else {
+          showToast(`✅ ชำระงวดประจำเดือนสำเร็จ ฿${inst.monthlyPayment.toFixed(2)}`);
+        }
+        
+        saveMoneyPod();
+        render();
+        triggerConfetti();
+      }
+    };
+
+    window.mpAddGoal = function() {
+      const name = document.getElementById('newGoalName').value;
+      const target = parseFloat(document.getElementById('newGoalTarget').value);
+      if (!name || isNaN(target) || target <= 0) {
+        showToast('⚠️ กรุณากรอกข้อมูลเป้าหมายให้ถูกต้อง', 'err');
+        return;
+      }
+      
+      state.moneyGoals.push({
+        id: 'goal_' + Date.now(),
+        name,
+        target,
+        saved: 0
+      });
+      
+      saveMoneyPod();
+      render();
+      showToast('🎯 สร้างเป้าหมายการออมใหม่เรียบร้อย!');
+    };
+
+    window.mpDepositGoal = function(goalId) {
+      const goal = state.moneyGoals.find(g => g.id === goalId);
+      if (!goal) return;
+      
+      const amtStr = prompt(`ฝากเงินเข้าเป้าหมาย "${goal.name}" (เป้าหมาย ฿${goal.target} | ออมแล้ว ฿${goal.saved})\nจำนวนเงินออม (บาท):`);
+      const amount = parseFloat(amtStr);
+      if (isNaN(amount) || amount <= 0) {
+        if (amtStr !== null) showToast('⚠️ กรุณากรอกจำนวนเงินให้ถูกต้อง', 'err');
+        return;
+      }
+      
+      const bank = state.moneyWallets.find(w => w.id === 'bank');
+      if (!bank || bank.balance < amount) {
+        showToast('⚠️ ยอดเงินในบัญชีธนาคารไม่เพียงพอต่อการออม', 'err');
+        return;
+      }
+      
+      bank.balance -= amount;
+      const savingsW = state.moneyWallets.find(w => w.id === 'savings');
+      if (savingsW) savingsW.balance += amount;
+      
+      goal.saved += amount;
+      
+      state.moneyTransactions.unshift({
+        id: 'tx_' + Date.now(),
+        type: 'transfer',
+        amount,
+        category: '🐷 ออมเงิน',
+        fromWalletId: 'bank',
+        toWalletId: 'savings',
+        notes: `ออมเงินสะสม: ${goal.name}`,
+        tags: '#savings #goal',
+        date: new Date().toISOString().split('T')[0],
+        timestamp: Date.now()
+      });
+      
+      saveMoneyPod();
+      render();
+      triggerConfetti();
+      showToast(`🎉 ออมเงินสะสม ฿${amount} เข้าเป้าหมาย "${goal.name}"!`);
+    };
+
+    window.mpExportCSV = function() {
+      if (state.moneyTransactions.length === 0) {
+        showToast('⚠️ ไม่มีประวัติบันทึกทางการเงินที่จะส่งออก', 'err');
+        return;
+      }
+      
+      let csv = "\uFEFF"; // UTF-8 BOM
+      csv += "วันที่,ประเภท,จำนวนเงิน(บาท),หมวดหมู่,จากกระเป๋า,ไปยังกระเป๋า,โน้ต,แท็ก\n";
+      
+      state.moneyTransactions.forEach(t => {
+        const fromW = t.fromWalletId ? (state.moneyWallets.find(w => w.id === t.fromWalletId)?.name || t.fromWalletId) : "";
+        const toW = t.toWalletId ? (state.moneyWallets.find(w => w.id === t.toWalletId)?.name || t.toWalletId) : "";
+        const wallet = t.walletId ? (state.moneyWallets.find(w => w.id === t.walletId)?.name || t.walletId) : "";
+        
+        const row = [
+          t.date,
+          t.type === 'income' ? 'รายรับ' : (t.type === 'expense' ? 'รายจ่าย' : 'โอนเงิน'),
+          t.amount,
+          t.category,
+          t.type === 'transfer' ? fromW : wallet,
+          t.type === 'transfer' ? toW : "",
+          `"${(t.notes || '').replace(/"/g, '""')}"`,
+          `"${(t.tags || '').replace(/"/g, '""')}"`
+        ].join(",");
+        csv += row + "\n";
+      });
+      
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `MoneyPod_Financial_Report_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('📥 ส่งออกไฟล์รายงาน CSV สู่เครื่องสำเร็จ');
+    };
+
+    window.mpHandlersInitialized = true;
+  }
+
+  // Calculate Net Worth values
+  const assets = state.moneyWallets.filter(w => w.type !== 'debt').reduce((s, w) => s + w.balance, 0);
+  const debts = state.moneyWallets.filter(w => w.type === 'debt').reduce((s, w) => s + w.balance, 0);
+  const netWorth = assets - debts;
+  
+  // Calculate Daily Spent
   const today = new Date().toISOString().split('T')[0];
-  const todayHabits = JSON.parse(localStorage.getItem('habits_' + today) || '{}');
-  const habitList = ['💧 ดื่มน้ำ', '🏃 ออกกำลังกาย', '📖 อ่านหนังสือ', '😴 นอนก่อนเที่ยงคืน', '🍎 กินผักผลไม้', '🧘 ทำสมาธิ'];
-  const moods = ['😊', '😐', '😟', '😴', '🤯', '💪'];
-  const todayMood = localStorage.getItem('mood_' + today) || '';
-  const expenses = JSON.parse(localStorage.getItem('expenses_' + today) || '[]');
-  const totalExp = expenses.reduce((s, e) => s + parseFloat(e.amount || 0), 0);
-  const budget = parseFloat(localStorage.getItem('daily_budget') || '200');
-  return `<div class="page-wrap">
-    <div class="page-header"><h1 class="page-title">🌅 ชีวิตประจำวัน</h1></div>
+  const spentToday = state.moneyTransactions
+    .filter(t => t.date === today && t.type === 'expense')
+    .reduce((s, t) => s + t.amount, 0);
+  
+  const dailyProgPercent = Math.min(100, (spentToday / state.moneyDailyBudget) * 100);
+  const strokeDash = 2 * Math.PI * 51;
+  const strokeOffset = strokeDash - (dailyProgPercent / 100) * strokeDash;
 
-    <div class="widget-grid">
-      <div class="glass-card mood-block">
-        <div class="mb-title">อารมณ์วันนี้เป็นยังไงบ้าง?</div>
-        <div class="mood-row">
-          ${moods.map(m => `<button class="mood-btn ${todayMood === m ? 'selected' : ''}" data-mood="${m}">${m}</button>`).join('')}
+  // Wallet filter logic
+  const filteredTxs = selectedWalletId 
+    ? state.moneyTransactions.filter(t => t.walletId === selectedWalletId || t.fromWalletId === selectedWalletId || t.toWalletId === selectedWalletId)
+    : state.moneyTransactions;
+
+  let mainContent = '';
+  
+  if (subView === 'overview') {
+    mainContent = `
+      <div class="mp-grid">
+        <!-- Left Side: Balances & Wallets -->
+        <div>
+          <div class="glass-card networth-box mp-card">
+            <span style="font-size:12px; font-weight:700; color:#64748b; letter-spacing:0.5px;">💰 ความมั่งคั่งสุทธิ (Net Worth)</span>
+            <div class="nw-val">฿${netWorth.toLocaleString()}</div>
+            <div style="display:flex; justify-content:space-between; width:100%; font-size:11px; margin-top:5px; border-top:1px solid rgba(0,0,0,0.05); padding-top:8px;">
+              <span style="color:#10b981; font-weight:750;">ทรัพย์สิน: ฿${assets.toLocaleString()}</span>
+              <span style="color:#ef4444; font-weight:750;">หนี้สิน: ฿${debts.toLocaleString()}</span>
+            </div>
+          </div>
+          
+          <div class="mp-card" style="display:flex; align-items:center; justify-content:space-between;">
+            <div class="circle-progress-wrap">
+              <svg class="circle-progress-svg">
+                <circle class="circle-bg" cx="55" cy="55" r="51"></circle>
+                <circle class="circle-fg" cx="55" cy="55" r="51" style="stroke-dasharray: ${strokeDash}; stroke-dashoffset: ${strokeOffset}; stroke: ${spentToday > state.moneyDailyBudget ? '#ef4444' : 'var(--primary)'}"></circle>
+              </svg>
+              <div class="circle-text">
+                <div style="font-size:10px; color:#64748b;">ใช้วันนี้</div>
+                <div style="font-size:14px; font-weight:900;">${Math.round(dailyProgPercent)}%</div>
+              </div>
+            </div>
+            <div style="flex:1; margin-left:20px; display:flex; flex-direction:column; justify-content:center;">
+              <span style="font-size:12px; font-weight:700; color:#64748b;">งบประมาณวันนี้</span>
+              <span style="font-size:18px; font-weight:950; color:#1e293b; margin:2px 0;">฿${spentToday} / ฿${state.moneyDailyBudget}</span>
+              <button class="btn-glass-pastel" onclick="mpEditDailyBudget()" style="margin-top:4px; padding:4px 10px; align-self:flex-start; font-size:10px;">⚙️ ปรับเปลี่ยนงบ</button>
+            </div>
+          </div>
+          
+          <h3 style="font-size:14px; font-weight:800; color:#64748b; margin-bottom:12px; letter-spacing:0.5px;">👛 กระเป๋าเงินของฉัน</h3>
+          <div class="wallets-grid">
+            ${state.moneyWallets.map(w => {
+              const isActive = selectedWalletId === w.id;
+              const displayVal = w.type === 'debt' ? `หนี้: ฿${w.balance.toLocaleString()}` : `฿${w.balance.toLocaleString()}`;
+              return `
+                <div class="wallet-card ${isActive ? 'active' : ''}" onclick="mpSetSelectedWallet('${w.id}')">
+                  <span class="wallet-name">${w.name}</span>
+                  <div class="wallet-bal">${displayVal}</div>
+                  ${w.type === 'debt' ? `<span class="wallet-limit">วงเงินคงเหลือ ฿${(w.limit - w.balance).toLocaleString()}</span>` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+        
+        <!-- Right Side: Quick Logger & Transactions Feed -->
+        <div>
+          <div class="mp-card">
+            <h3 style="margin-top:0; font-size:15px; font-weight:850; display:flex; align-items:center; gap:6px;"><span style="font-size:18px;">📝</span> บันทึกรายการใหม่</h3>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+              <div>
+                <label style="font-size:10px; font-weight:800; color:#64748b; display:block; margin-bottom:4px;">ประเภท</label>
+                <select class="glass-input sm" id="txType" onchange="
+                  const type = this.value;
+                  document.getElementById('txWWrap').style.display = type === 'transfer' ? 'none' : 'block';
+                  document.getElementById('txTWrap').style.display = type === 'transfer' ? 'grid' : 'none';
+                  document.getElementById('txInstToggleWrap').style.display = 'none';
+                " style="width:100%; border-radius:12px;">
+                  <option value="expense">รายจ่าย 💸</option>
+                  <option value="income">รายรับ 📈</option>
+                  <option value="transfer">โอนเงิน 🔄</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:10px; font-weight:800; color:#64748b; display:block; margin-bottom:4px;">จำนวนเงิน (บาท)</label>
+                <input type="number" class="glass-input sm" id="txAmount" placeholder="฿" style="width:100%; border-radius:12px;" min="0">
+              </div>
+            </div>
+            
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+              <div>
+                <label style="font-size:10px; font-weight:800; color:#64748b; display:block; margin-bottom:4px;">หมวดหมู่</label>
+                <select class="glass-input sm" id="txCategory" style="width:100%; border-radius:12px;">
+                  <option value="🍔 อาหาร & เครื่องดื่ม">🍔 อาหาร & เครื่องดื่ม</option>
+                  <option value="🛍️ ช้อปปิ้ง">🛍️ ช้อปปิ้ง</option>
+                  <option value="🚗 เดินทาง & รถยนต์">🚗 เดินทาง & รถยนต์</option>
+                  <option value="🏠 ที่พัก & ค่าเช่า">🏠 ที่พัก & ค่าเช่า</option>
+                  <option value="💡 ค่าสาธารณูปโภค">💡 ค่าสาธารณูปโภค</option>
+                  <option value="🎮 สันทนาการ & เกม">🎮 สันทนาการ & เกม</option>
+                  <option value="🎓 การศึกษา & ตราหนังสือ">🎓 การศึกษา & ตราหนังสือ</option>
+                  <option value="🐽 การเงิน & หนี้สิน">🐽 การเงิน & หนี้สิน</option>
+                  <option value="➕ อื่นๆ">➕ อื่นๆ</option>
+                </select>
+              </div>
+              <div id="txWWrap">
+                <label style="font-size:10px; font-weight:800; color:#64748b; display:block; margin-bottom:4px;">ใช้จากกระเป๋า</label>
+                <select class="glass-input sm" id="txWallet" onchange="
+                  const w = this.value;
+                  const isExp = document.getElementById('txType').value === 'expense';
+                  document.getElementById('txInstToggleWrap').style.display = (isExp && (w === 'spaylater' || w === 'seasycash')) ? 'block' : 'none';
+                " style="width:100%; border-radius:12px;">
+                  ${state.moneyWallets.map(w => `<option value="${w.id}">${w.name}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+            
+            <div id="txTWrap" style="display:none; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+              <div>
+                <label style="font-size:10px; font-weight:800; color:#64748b; display:block; margin-bottom:4px;">จากกระเป๋า</label>
+                <select class="glass-input sm" id="txFromWallet" style="width:100%; border-radius:12px;">
+                  ${state.moneyWallets.map(w => `<option value="${w.id}">${w.name}</option>`).join('')}
+                </select>
+              </div>
+              <div>
+                <label style="font-size:10px; font-weight:800; color:#64748b; display:block; margin-bottom:4px;">ไปยังกระเป๋า</label>
+                <select class="glass-input sm" id="txToWallet" style="width:100%; border-radius:12px;">
+                  ${state.moneyWallets.map(w => `<option value="${w.id}">${w.name}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+            
+            <div id="txInstToggleWrap" style="display:none; background:rgba(255,255,255,0.5); padding:10px; border-radius:12px; margin-bottom:10px; border:1px solid var(--accent);">
+              <label style="display:flex; align-items:center; gap:8px; font-size:11px; font-weight:750; color:#1e293b; cursor:pointer;">
+                <input type="checkbox" id="txIsInstallment" onchange="document.getElementById('txInstDetails').style.display = this.checked ? 'grid' : 'none';"> 
+                🛍️ ตั้งการผ่อนชำระรายเดือน (SPayLater/SEasyCash)
+              </label>
+              
+              <div id="txInstDetails" style="display:none; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
+                <div>
+                  <label style="font-size:9px; font-weight:750; color:#64748b; display:block; margin-bottom:2px;">จำนวนงวด (เดือน)</label>
+                  <select class="glass-input sm" id="txInstMonths" style="width:100%; font-size:10px;" onchange="
+                    const amt = parseFloat(document.getElementById('txAmount').value) || 0;
+                    const months = parseInt(this.value);
+                    const rate = parseFloat(document.getElementById('txInstInterest').value);
+                    const total = amt + (amt * (rate / 100) * months);
+                    document.getElementById('txInstPreview').innerText = 'ผ่อนงวดละ: ฿' + (total/months).toFixed(2);
+                  ">
+                    <option value="1">1 เดือน</option>
+                    <option value="3">3 เดือน</option>
+                    <option value="6">6 เดือน</option>
+                    <option value="12">12 เดือน</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size:9px; font-weight:750; color:#64748b; display:block; margin-bottom:2px;">ดอกเบี้ยต่อเดือน (%)</label>
+                  <input type="number" class="glass-input sm" id="txInstInterest" value="1.2" step="0.1" style="width:100%; font-size:10px;" oninput="
+                    const amt = parseFloat(document.getElementById('txAmount').value) || 0;
+                    const months = parseInt(document.getElementById('txInstMonths').value);
+                    const rate = parseFloat(this.value) || 0;
+                    const total = amt + (amt * (rate / 100) * months);
+                    document.getElementById('txInstPreview').innerText = 'ผ่อนงวดละ: ฿' + (total/months).toFixed(2);
+                  ">
+                </div>
+                <div style="grid-column: span 2; font-size:9.5px; font-weight:800; color:var(--primary); text-align:right;" id="txInstPreview">
+                  ผ่อนงวดละ: ฿0.00
+                </div>
+              </div>
+            </div>
+            
+            <div style="margin-bottom:12px;">
+              <label style="font-size:10px; font-weight:800; color:#64748b; display:block; margin-bottom:4px;">โน้ต / บันทึกความจำ</label>
+              <input type="text" class="glass-input sm" id="txNotes" placeholder="เช่น ซื้อชาบูเย็นนี้, ถอนเงินสด" style="width:100%; border-radius:12px;">
+            </div>
+            
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:15px; align-items:center;">
+              <div>
+                <label style="font-size:10px; font-weight:800; color:#64748b; display:block; margin-bottom:4px;">แท็กติดตาม (เช่น #เที่ยว #ขนม)</label>
+                <input type="text" class="glass-input sm" id="txTags" placeholder="#tag" style="width:100%; border-radius:12px;">
+              </div>
+              <div style="display:flex; gap:10px; align-items:center;">
+                <input type="file" id="txPhotoUpload" accept="image/*" style="display:none;" onchange="mpHandlePhotoUpload(this)">
+                <button class="btn-glass-pastel" onclick="document.getElementById('txPhotoUpload').click()" style="padding:6px 12px;"><span style="font-size:14px;">📸</span> แนบสลิป</button>
+                <div id="txPhotoPreview"></div>
+              </div>
+            </div>
+            
+            <button class="btn-pastel-primary" onclick="mpAddTransaction()" style="width:100%; border-radius:14px; padding:12px;">💾 บันทึกรายการลงบัญชี</button>
+          </div>
+          
+          <h3 style="font-size:14px; font-weight:850; color:#64748b; margin:20px 0 10px 0; display:flex; justify-content:space-between; align-items:center;">
+            <span>${selectedWalletId ? `🔍 ประวัติสำหรับ ${state.moneyWallets.find(w => w.id === selectedWalletId)?.name}` : '📋 ประวัติธุรกรรมล่าสุด'}</span>
+            ${selectedWalletId ? '<button onclick="mpSetSelectedWallet(null)" style="font-size:10px; border:none; background:none; color:var(--primary); font-weight:800; cursor:pointer;">ดูทั้งหมด</button>' : ''}
+          </h3>
+          
+          <div style="max-height: 400px; overflow-y: auto;">
+            ${filteredTxs.map(t => {
+              let categoryIcon = '🐽';
+              if (t.category.includes('🍔')) categoryIcon = '🍔';
+              else if (t.category.includes('🛍️')) categoryIcon = '🛍️';
+              else if (t.category.includes('🚗')) categoryIcon = '🚗';
+              else if (t.category.includes('🏠')) categoryIcon = '🏠';
+              else if (t.category.includes('💡')) categoryIcon = '💡';
+              else if (t.category.includes('🎮')) categoryIcon = '🎮';
+              else if (t.category.includes('🎓')) categoryIcon = '🎓';
+              else if (t.category.includes('🐽')) categoryIcon = '🐽';
+              
+              const isInc = t.type === 'income';
+              const isTrf = t.type === 'transfer';
+              const amtSign = isInc ? '+' : (isTrf ? '⇆' : '-');
+              const amtClass = isInc ? 'income' : (isTrf ? 'transfer' : 'expense');
+              
+              return `
+                <div class="tx-row">
+                  <div class="tx-left">
+                    <div class="tx-icon">${categoryIcon}</div>
+                    <div class="tx-details">
+                      <span class="tx-desc">${t.notes}</span>
+                      <div style="display:flex; align-items:center; gap:5px; margin-top:2px;">
+                        <span class="tx-sub">${t.date}</span>
+                        ${t.tags ? t.tags.split(' ').map(tag => `<span class="pill-badge" style="background:#e2e8f0; color:#475569;">${tag}</span>`).join('') : ''}
+                        ${t.photo ? `<span onclick="openModal('📄 รูปแนบหลักฐาน', '<img src=\\\x22${t.photo}\\\x22 style=\\\x22width:100%; border-radius:12px;\\\x22>')\" style="font-size:10px; cursor:pointer; color:var(--primary); text-decoration:underline; font-weight:750;">🖼️ สลิป</span>` : ''}
+                      </div>
+                    </div>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <span class="tx-amount ${amtClass}">${amtSign}฿${t.amount.toLocaleString()}</span>
+                    <button class="icon-btn danger sm" onclick="mpDeleteTransaction('${t.id}')" style="background:transparent; border:none; color:#ef4444; font-size:14px;">✕</button>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+            ${filteredTxs.length === 0 ? '<div class="empty-sm" style="padding:40px; text-align:center; color:#94a3b8;">ยังไม่มีประวัติธุรกรรม</div>' : ''}
+          </div>
         </div>
       </div>
-
-      <div class="glass-card habit-block">
-        <div class="hb-title">✅ Habit Tracker — วันนี้</div>
-        <div class="habit-list">
-          ${habitList.map(h => `<div class="habit-row">
-            <button class="check-circle sm ${todayHabits[h] ? 'checked' : ''}" data-habit="${h}">${todayHabits[h] ? '✓' : ''}</button>
-            <span class="habit-name ${todayHabits[h] ? 'done' : ''}">${h}</span>
-          </div>`).join('')}
+    `;
+  } else if (subView === 'scanner') {
+    mainContent = `
+      <div class="mp-card" style="text-align:center;">
+        <h2 style="margin-top:0; font-size:18px; font-weight:900; color:var(--primary);">🌅 AI Receipt Scanner — สแกนใบเสร็จอัจฉริยะ</h2>
+        <p style="font-size:12px; color:#64748b; margin-top:4px; max-width:500px; margin-left:auto; margin-right:auto;">ไม่ต้องเสียเวลาพิมพ์! ถ่ายรูปสลิปหรืออัปโหลดใบเสร็จ ระบบ AI จะทำการวิเคราะห์จำนวนเงิน, รายละเอียดร้านค้า และแยกประเภทบัญชีให้คุณโดยอัตโนมัติ</p>
+        
+        <div style="display:flex; justify-content:center; gap:8px; margin-bottom:15px;">
+          <button class="btn-glass-pastel" onclick="mpSelectMockReceipt('seven')">🍙 ใบเสร็จ 7-Eleven</button>
+          <button class="btn-glass-pastel" onclick="mpSelectMockReceipt('starbucks')">☕ ใบเสร็จ Starbucks</button>
+          <button class="btn-glass-pastel" onclick="mpSelectMockReceipt('shabu')">🍲 บิลร้านชาบู</button>
+        </div>
+        
+        <div class="scanner-window" id="scannerWin">
+          <div class="scan-laser"></div>
+          <img id="receiptPreviewImage" src="https://images.unsplash.com/photo-1554415707-6e8cfc93fe23?auto=format&fit=crop&w=400&q=80" alt="Receipt Preview">
+        </div>
+        <div id="mockReceiptDetails" style="font-size:11.5px; font-weight:800; color:#475569; margin-bottom:15px;">
+          📄 ใบเสร็จ 7-Eleven (ข้าวผัด + น้ำดื่ม) — ยอด ฿187
+        </div>
+        
+        <div style="display:flex; justify-content:center; gap:12px;">
+          <input type="file" id="aiPhotoUpload" accept="image/*" style="display:none;" onchange="
+            const file = this.files[0];
+            if(file) {
+              const reader = new FileReader();
+              reader.onload = function(e) {
+                document.getElementById('receiptPreviewImage').src = e.target.result;
+                document.getElementById('mockReceiptDetails').innerHTML = '📄 ใบเสร็จที่ผู้ใช้อัปโหลด (วิเคราะห์ด้วย OCR-AI)';
+                state.mpSelectedMockReceiptType = 'custom_uploaded';
+              };
+              reader.readAsDataURL(file);
+            }
+          ">
+          <button class="btn-pastel" onclick="document.getElementById('aiPhotoUpload').click()"><span style="font-size:14px;">📤</span> อัปโหลดรูปใบเสร็จจริง</button>
+          <button class="btn-pastel-primary" onclick="mpScanReceiptStart()" style="padding:10px 25px;">⚡ เริ่มสแกนด้วย AI</button>
         </div>
       </div>
-    </div>
-
-    <div class="glass-card expense-block">
-      <div class="exp-title">💸 ค่าใช้จ่ายวันนี้
-        <span class="exp-total ${totalExp > budget ? 'over' : ''}">฿${totalExp} / ฿${budget}</span>
+    `;
+  } else if (subView === 'installments') {
+    mainContent = `
+      <div class="mp-grid">
+        <!-- Installment Settings and Debts summary -->
+        <div>
+          <div class="mp-card">
+            <h3 style="margin-top:0; font-size:14px; font-weight:850; color:#64748b;">🛍️ สรุปขีดจำกัดสินเชื่อ (Credit Limits)</h3>
+            <div style="margin-top:15px;">
+              <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:750; color:#475569; margin-bottom:4px;">
+                <span>SPayLater 🛍️</span>
+                <span>฿${state.moneyWallets.find(w => w.id === 'spaylater').balance.toLocaleString()} / ฿15,000</span>
+              </div>
+              <div class="goal-progress-bar">
+                <div class="goal-progress-fill" style="width: ${(state.moneyWallets.find(w => w.id === 'spaylater').balance / 15000) * 100}%; background:#ea580c;"></div>
+              </div>
+            </div>
+            <div style="margin-top:15px;">
+              <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:750; color:#475569; margin-bottom:4px;">
+                <span>S EasyCash 💸</span>
+                <span>฿${state.moneyWallets.find(w => w.id === 'seasycash').balance.toLocaleString()} / ฿20,000</span>
+              </div>
+              <div class="goal-progress-bar">
+                <div class="goal-progress-fill" style="width: ${(state.moneyWallets.find(w => w.id === 'seasycash').balance / 20000) * 100}%; background:#ef4444;"></div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="mp-card">
+            <h3 style="margin-top:0; font-size:14px; font-weight:850; color:#1e293b; margin-bottom:12px;">➕ บันทึกหนี้สินทั่วไป</h3>
+            <div style="margin-bottom:8px;">
+              <label style="font-size:10px; font-weight:800; color:#64748b; display:block; margin-bottom:2px;">ชื่อหนี้สิน / การซื้อ</label>
+              <input type="text" class="glass-input sm" id="debtName" placeholder="เช่น ผ่อนมอเตอร์ไซค์" style="width:100%;">
+            </div>
+            <div style="margin-bottom:8px; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+              <div>
+                <label style="font-size:10px; font-weight:800; color:#64748b; display:block; margin-bottom:2px;">ยอดผ่อนงวดละ (บาท)</label>
+                <input type="number" class="glass-input sm" id="debtPay" placeholder="฿" style="width:100%;">
+              </div>
+              <div>
+                <label style="font-size:10px; font-weight:800; color:#64748b; display:block; margin-bottom:2px;">จำนวนงวดที่เหลือ</label>
+                <input type="number" class="glass-input sm" id="debtMonths" value="6" style="width:100%;">
+              </div>
+            </div>
+            <button class="btn-pastel-primary sm" onclick="
+              const name = document.getElementById('debtName').value;
+              const pay = parseFloat(document.getElementById('debtPay').value);
+              const m = parseInt(document.getElementById('debtMonths').value);
+              if(!name || isNaN(pay) || isNaN(m)) { showToast('⚠️ ข้อมูลไม่ครบถ้วน', 'err'); return; }
+              state.moneyInstallments.push({
+                id: 'inst_' + Date.now(),
+                name,
+                walletId: 'cash',
+                principal: pay * m,
+                interestRate: 0,
+                totalPayable: pay * m,
+                monthlyPayment: pay,
+                remainingMonths: m,
+                totalMonths: m,
+                paidMonths: 0,
+                tags: '#general'
+              });
+              saveMoneyPod(); render(); showToast('✅ บันทึกยอดหนี้สินเรียบร้อย');
+            " style="width:100%; margin-top:8px;">💾 บันทึกสัญญานี้</button>
+          </div>
+        </div>
+        
+        <!-- Active Installments & Scheduler -->
+        <div class="mp-card">
+          <h3 style="margin-top:0; font-size:15px; font-weight:900; color:var(--primary); margin-bottom:15px;">📊 รายการสัญญาผ่อนชำระที่ทำงานอยู่ (Active Installments)</h3>
+          
+          ${state.moneyInstallments.map(i => {
+            const progress = (i.paidMonths / i.totalMonths) * 100;
+            const wName = i.walletId === 'spaylater' ? '🛍️ SPayLater' : (i.walletId === 'seasycash' ? '💸 S EasyCash' : '💵 หนี้ทั่วไป');
+            return `
+              <div style="background:white; border-radius:18px; padding:16px; border:1px solid rgba(0,0,0,0.04); margin-bottom:12px; box-shadow:0 2px 8px rgba(0,0,0,0.01);">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+                  <div>
+                    <span style="font-size:14px; font-weight:850; color:#1e293b;">${i.name}</span>
+                    <div style="font-size:10px; font-weight:750; color:#64748b; margin-top:2px;">ผ่านระบบบัญชี: ${wName}</div>
+                  </div>
+                  <div style="text-align:right;">
+                    <span style="font-size:14px; font-weight:900; color:#ef4444;">฿${i.monthlyPayment.toFixed(0)} / ด.</span>
+                    <div style="font-size:9.5px; color:#94a3b8; margin-top:1px;">ยอดเต็มผ่อนชำระ: ฿${i.totalPayable.toFixed(0)}</div>
+                  </div>
+                </div>
+                
+                <div style="display:flex; justify-content:space-between; font-size:10px; color:#64748b; margin-top:8px;">
+                  <span>งวดปัจจุบัน: ${i.paidMonths} / ${i.totalMonths} เดือน</span>
+                  <span>ความก้าวหน้า ${Math.round(progress)}%</span>
+                </div>
+                <div class="goal-progress-bar">
+                  <div class="goal-progress-fill" style="width: ${progress}%;"></div>
+                </div>
+                
+                <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
+                  <button class="btn-glass-pastel" onclick="mpPayInstallment('${i.id}')" style="padding:6px 12px; border-color:var(--primary); color:var(--primary); font-size:11px;">💳 ชำระงวดประจำเดือน</button>
+                </div>
+              </div>
+            `;
+          }).join('')}
+          ${state.moneyInstallments.length === 0 ? '<div style="padding:50px; text-align:center; color:#94a3b8; font-size:12.5px;">🎉 ยินดีด้วยครับ! ไม่มีสัญญาหรือหนี้สินผ่อนชำระค้างในระบบ</div>' : ''}
+        </div>
       </div>
-      ${totalExp > budget ? `<div class="alert glass-warn">⚠️ ใช้เงินเกินโควต้าวันนี้แล้ว!</div>` : ''}
-      <div class="exp-quick-add">
-        <input class="glass-input sm" id="expDesc" placeholder="รายการ...">
-        <input type="number" class="glass-input sm" id="expAmt" placeholder="฿" min="0">
-        <button class="btn-glass-primary sm" id="addExpBtn">+ เพิ่ม</button>
+    `;
+  } else if (subView === 'goals') {
+    mainContent = `
+      <div class="mp-grid">
+        <!-- New Goal Maker -->
+        <div class="mp-card">
+          <h3 style="margin-top:0; font-size:14px; font-weight:850; color:#1e293b; margin-bottom:12px;">🎯 ตั้งเป้าหมายเก็บเงินใหม่</h3>
+          <div style="margin-bottom:8px;">
+            <label style="font-size:10px; font-weight:800; color:#64748b; display:block; margin-bottom:2px;">ระบุเป้าหมาย (เช่น เที่ยวทะเล, ซื้อกล้อง)</label>
+            <input type="text" class="glass-input sm" id="newGoalName" placeholder="เช่น เงินสำรองฉุกเฉิน 🚨" style="width:100%;">
+          </div>
+          <div style="margin-bottom:12px;">
+            <label style="font-size:10px; font-weight:800; color:#64748b; display:block; margin-bottom:2px;">จำนวนเงินเป้าหมาย (บาท)</label>
+            <input type="number" class="glass-input sm" id="newGoalTarget" placeholder="฿" style="width:100%;">
+          </div>
+          <button class="btn-pastel-primary sm" onclick="mpAddGoal()" style="width:100%;">💾 บันทึกเป้าหมาย</button>
+        </div>
+        
+        <!-- Active Savings Goals list -->
+        <div class="mp-card">
+          <h3 style="margin-top:0; font-size:15px; font-weight:900; color:var(--primary); margin-bottom:15px;">🐷 ติดตามความคืบหน้าการเก็บเงิน (Savings Goals)</h3>
+          
+          <div style="display:grid; grid-template-columns:1fr; gap:12px;">
+            ${state.moneyGoals.map(g => {
+              const pct = Math.min(100, (g.saved / g.target) * 100);
+              return `
+                <div style="background:white; border-radius:18px; padding:16px; border:1px solid rgba(0,0,0,0.03); box-shadow:0 2px 8px rgba(0,0,0,0.01);">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <span style="font-size:14px; font-weight:850; color:#1e293b;">${g.name}</span>
+                    <span style="font-size:14px; font-weight:900; color:var(--primary);">฿${g.saved.toLocaleString()} / ฿${g.target.toLocaleString()}</span>
+                  </div>
+                  
+                  <div style="display:flex; justify-content:space-between; font-size:10px; color:#64748b; margin-top:8px;">
+                    <span>เป้าหมายความสำเร็จ</span>
+                    <span>${Math.round(pct)}%</span>
+                  </div>
+                  <div class="goal-progress-bar">
+                    <div class="goal-progress-fill" style="width: ${pct}%;"></div>
+                  </div>
+                  
+                  <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
+                    <button class="btn-glass-pastel" onclick="mpDepositGoal('${g.id}')" style="padding:6px 12px; font-size:11px; border-color:var(--primary); color:var(--primary);">💰 ฝากเงินเข้าออม</button>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+            ${state.moneyGoals.length === 0 ? '<div style="padding:50px; text-align:center; color:#94a3b8; font-size:12.5px;">ยังไม่มีเป้าหมายการออม ให้เริ่มต้นสร้างเป้าหมายกันเถอะครับ!</div>' : ''}
+          </div>
+        </div>
       </div>
-      ${expenses.map((e, i) => `<div class="exp-row">
-        <span>${e.desc}</span><span class="exp-amt">฿${e.amount}</span>
-        <button class="icon-btn danger sm" data-del-exp="${i}">✕</button>
-      </div>`).join('')}
-    </div>
-
-    <div class="glass-card sleep-block">
-      <div class="sl-title">😴 บันทึกการนอน</div>
-      <div class="sl-row">
-        <div class="sl-field"><label>นอนเวลา</label><input type="time" class="glass-input sm" id="sleepTime" value="${localStorage.getItem('sleep_' + today) || ''}"></div>
-        <div class="sl-field"><label>ตื่นเวลา</label><input type="time" class="glass-input sm" id="wakeTime" value="${localStorage.getItem('wake_' + today) || ''}"></div>
-        <button class="btn-glass-primary sm" id="saveSleepBtn">💾 บันทึก</button>
+    `;
+  } else if (subView === 'reports') {
+    const categoryTotals = {};
+    let totalSpent = 0;
+    state.moneyTransactions.filter(t => t.type === 'expense').forEach(t => {
+      categoryTotals[t.category] = (categoryTotals[t.category] || 0) + t.amount;
+      totalSpent += t.amount;
+    });
+    
+    mainContent = `
+      <div class="mp-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
+          <h2 style="margin:0; font-size:16px; font-weight:900; color:#1e293b;">📊 สถิติแบ่งตามหมวดหมู่ค่าใช้จ่าย (Expense Statistics)</h2>
+          <button class="btn-glass-pastel" onclick="mpExportCSV()"><span style="font-size:14px;">📥</span> ส่งออกรายงาน Excel (CSV)</button>
+        </div>
+        
+        <div style="display:grid; grid-template-columns:1fr; gap:15px; margin-bottom:25px;">
+          ${Object.entries(categoryTotals).map(([cat, amt]) => {
+            const pct = Math.round((amt / totalSpent) * 100);
+            return `
+              <div>
+                <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:750; color:#475569; margin-bottom:4px;">
+                  <span>${cat} (${pct}%)</span>
+                  <span style="font-weight:900; color:#ef4444;">฿${amt.toLocaleString()}</span>
+                </div>
+                <div class="goal-progress-bar">
+                  <div class="goal-progress-fill" style="width: ${pct}%; background:var(--primary);"></div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+          ${Object.keys(categoryTotals).length === 0 ? '<div style="padding:50px; text-align:center; color:#94a3b8; font-size:12.5px;">ยังไม่มีสถิติรายจ่ายในฐานข้อมูลการเงินขณะนี้</div>' : ''}
+        </div>
+        
+        <div style="border-top:1px solid rgba(0,0,0,0.05); padding-top:20px;">
+          <h3 style="margin-top:0; font-size:13.5px; font-weight:800; color:#64748b;">🏷️ ค้นหาด่วนด้วยแฮชแท็ก (#Hashtags)</h3>
+          <div style="display:flex; gap:8px; margin-bottom:15px;">
+            <input type="text" class="glass-input sm" id="reportTagSearch" placeholder="ระบุแฮชแท็ก เช่น #seven, #shabu" style="flex:1;">
+            <button class="btn-pastel-primary sm" onclick="mpSearchTags()">ค้นหา</button>
+          </div>
+        </div>
       </div>
-    </div>
+    `;
+  }
 
-    <div class="glass-card braindump-block">
-      <div class="bd-title">🧠 Brain Dump — คิดอะไรออก โยนใส่นี้</div>
-      <textarea class="glass-textarea" id="brainDump" placeholder="เขียนทุกอย่างที่คิดได้...">${localStorage.getItem('braindump') || ''}</textarea>
-      <button class="btn-glass sm" id="saveBrainBtn">💾 บันทึก</button>
+  return `
+    ${scopedStyle}
+    <div class="mp-wrap ${themeClass}">
+      <div class="mp-header">
+        <div class="mp-title-section">
+          <h1>🐽 MoneyPod Dashboard</h1>
+          <p>เครื่องมือจัดการการเงินอัจฉริยะแบบบูรณาการ: สแกนใบเสร็จ, ผ่อนชำระ SPayLater/SEasyCash & ออมเงิน</p>
+        </div>
+        
+        <div class="mp-theme-picker">
+          <div class="theme-dot mint" onclick="mpSetTheme('theme-mint')" title="Mint Fresh"></div>
+          <div class="theme-dot peach" onclick="mpSetTheme('theme-peach')" title="Honey Peach"></div>
+          <div class="theme-dot pink" onclick="mpSetTheme('theme-pink')" title="Bubblegum Pink"></div>
+          <div class="theme-dot lavender" onclick="mpSetTheme('theme-lavender')" title="Lavender Cream"></div>
+        </div>
+      </div>
+      
+      <div class="mp-subview-tabs">
+        <button class="mp-tab-btn ${subView === 'overview' ? 'active' : ''}" onclick="mpSetView('overview')">💵 แผงภาพรวมบัญชี</button>
+        <button class="mp-tab-btn ${subView === 'scanner' ? 'active' : ''}" onclick="mpSetView('scanner')">📸 สแกนใบเสร็จด้วย AI</button>
+        <button class="mp-tab-btn ${subView === 'installments' ? 'active' : ''}" onclick="mpSetView('installments')">🛍️ ผ่อนชำระ & หนี้สิน</button>
+        <button class="mp-tab-btn ${subView === 'goals' ? 'active' : ''}" onclick="mpSetView('goals')">🎯 เป้าหมายการออม</button>
+        <button class="mp-tab-btn ${subView === 'reports' ? 'active' : ''}" onclick="mpSetView('reports')">📊 สถิติ & ส่งออก</button>
+      </div>
+      
+      ${mainContent}
     </div>
-
-    <div class="glass-card visionboard-block">
-      <div class="vb-title">🌟 Vision Board — ความฝัน & เป้าหมาย</div>
-      <textarea class="glass-textarea sm" id="visionBoard" placeholder="เขียนเป้าหมาย ความฝัน สิ่งที่อยากทำหลังเรียนจบ...">${localStorage.getItem('visionboard') || ''}</textarea>
-      <button class="btn-glass sm" id="saveVisionBtn">💾 บันทึก</button>
-    </div>
-  </div>`;
+  `;
 }
 
 // ══════════════════════════════════════════════════
@@ -4683,11 +5952,6 @@ function renderSettings() {
           <button class="btn-glass sm" id="savePinBtn">💾</button>
           ${state.pin ? `<button class="btn-glass danger sm" id="removePinBtn">ลบ</button>` : ''}
         </div>
-      </div>
-      <div class="setting-row">
-        <span>💰 งบประมาณรายวัน (บาท)</span>
-        <input type="number" class="glass-input sm" id="dailyBudgetInput" value="${localStorage.getItem('daily_budget') || 200}" min="0">
-        <button class="btn-glass sm" id="saveBudgetBtn">💾</button>
       </div>
     </div>
 
@@ -5737,40 +7001,7 @@ function attachAllEvents() {
     };
   });
 
-  document.querySelectorAll('[data-mood]').forEach(b => b.onclick = () => {
-    const today = new Date().toISOString().split('T')[0];
-    localStorage.setItem('mood_' + today, b.dataset.mood); render(); showToast('บันทึกอารมณ์แล้ว ' + b.dataset.mood);
-  });
-  document.querySelectorAll('[data-habit]').forEach(b => b.onclick = () => {
-    const today = new Date().toISOString().split('T')[0];
-    const h = JSON.parse(localStorage.getItem('habits_' + today) || '{}');
-    h[b.dataset.habit] = !h[b.dataset.habit];
-    localStorage.setItem('habits_' + today, JSON.stringify(h)); render();
-    if (Object.values(h).filter(Boolean).length === 6) triggerConfetti();
-  });
-  document.getElementById('addExpBtn')?.addEventListener('click', () => {
-    const today = new Date().toISOString().split('T')[0];
-    const desc = document.getElementById('expDesc')?.value;
-    const amt = document.getElementById('expAmt')?.value;
-    if (!desc || !amt) return;
-    const exps = JSON.parse(localStorage.getItem('expenses_' + today) || '[]');
-    exps.push({ desc, amount: parseFloat(amt) });
-    localStorage.setItem('expenses_' + today, JSON.stringify(exps)); render();
-  });
-  document.querySelectorAll('[data-del-exp]').forEach(b => b.onclick = () => {
-    const today = new Date().toISOString().split('T')[0];
-    const exps = JSON.parse(localStorage.getItem('expenses_' + today) || '[]');
-    exps.splice(parseInt(b.dataset.delExp), 1);
-    localStorage.setItem('expenses_' + today, JSON.stringify(exps)); render();
-  });
-  document.getElementById('saveSleepBtn')?.addEventListener('click', () => {
-    const today = new Date().toISOString().split('T')[0];
-    localStorage.setItem('sleep_' + today, document.getElementById('sleepTime')?.value || '');
-    localStorage.setItem('wake_' + today, document.getElementById('wakeTime')?.value || '');
-    showToast('💾 บันทึกการนอนแล้ว');
-  });
-  document.getElementById('saveBrainBtn')?.addEventListener('click', () => { localStorage.setItem('braindump', document.getElementById('brainDump')?.value || ''); showToast('💾 บันทึก Brain Dump แล้ว'); });
-  document.getElementById('saveVisionBtn')?.addEventListener('click', () => { localStorage.setItem('visionboard', document.getElementById('visionBoard')?.value || ''); showToast('💾 บันทึก Vision Board แล้ว'); });
+
 
   document.getElementById('addMusicBtn')?.addEventListener('click', () => {
     const url = document.getElementById('newMusicUrl').value.trim();
@@ -5792,7 +7023,7 @@ function attachAllEvents() {
 
   document.getElementById('settingDarkMode')?.addEventListener('click', () => { state.darkMode = !state.darkMode; localStorage.setItem('darkMode', state.darkMode); document.documentElement.setAttribute('data-theme', state.darkMode ? 'dark' : 'light'); render(); });
 
-  document.getElementById('saveBudgetBtn')?.addEventListener('click', () => { localStorage.setItem('daily_budget', document.getElementById('dailyBudgetInput')?.value || 200); showToast('✅ บันทึกงบรายวันแล้ว'); });
+
   document.getElementById('savePinBtn')?.addEventListener('click', async () => {
     const pin = document.getElementById('pinInput')?.value;
     if (pin && pin.length === 6) {
@@ -6131,7 +7362,7 @@ function startInactivityTracker() {
 
 window.updateSetColor = updateSetColor;
 
-window.addEventListener('DOMContentLoaded', async () => {
+async function initApp() {
   try {
     startInactivityTracker();
     await loadCourseDatabase();
@@ -6172,7 +7403,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     console.error("Initialization failed:", e);
     render();
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}
 
 // Page Visibility API — kill tree if unfocused during pomodoro
 document.addEventListener('visibilitychange', () => {
