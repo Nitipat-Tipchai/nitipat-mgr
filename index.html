@@ -2,6 +2,14 @@
 <html lang="th">
 
 <head>
+  <script>
+    window.addEventListener('error', function(e) {
+      const errDiv = document.createElement('div');
+      errDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:red;color:white;padding:20px;z-index:99999;font-family:monospace;white-space:pre-wrap;';
+      errDiv.textContent = 'Global JS Error: ' + e.message + ' at ' + e.filename + ':' + e.lineno + ':' + e.colno + '\nStack:\n' + (e.error ? e.error.stack : 'N/A');
+      document.body.appendChild(errDiv);
+    });
+  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="mobile-web-app-capable" content="yes">
