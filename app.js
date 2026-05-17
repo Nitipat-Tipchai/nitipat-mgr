@@ -4637,10 +4637,11 @@ function renderSettings() {
         ${state.notionConnected ? `Connected: ${state.notionBotName}` : 'Not Connected'}
       </div>
     </div>
-    <div style="display:flex; gap:8px; margin-top:15px;">
+    <div style="display:flex; gap:8px; margin-top:15px; flex-wrap:wrap;">
       <button class="btn-glass sm" onclick="NotionHub.checkConnection()">🔄 ตรวจเช็ค</button>
       <button class="btn-glass sm" onclick="NotionHub.sync(true)">⚡ ซิงก์ตอนนี้</button>
       <button class="btn-glass sm" onclick="NotionHub.setupTrigger()">⏰ เปิด Auto-Sync</button>
+      <button class="btn-glass sm" style="color:var(--c-red); border-color:rgba(239,68,68,0.2); background:rgba(239,68,68,0.05);" onclick="NotionHub.forceResetSync()">🗑️ บังคับซิงก์ใหม่</button>
     </div>
     
     <div id="notionSetupArea" style="margin-top:15px; padding:10px; background:var(--c-accent)11; border-radius:8px; display:${state.notionConnected ? 'none' : 'block'};">
@@ -7424,6 +7425,43 @@ const NotionHub = {
       showToast('📤 ส่ง Reflection ไปยัง Notion แล้ว');
     } catch (e) {
       console.error("Reflection sync failed", e);
+    }
+  },
+
+  async forceResetSync() {
+    if (!confirm("⚠️ คำเตือน: ระบบจะล้างรหัสประวัติการซิงก์วิชาและการบ้านเดิมทั้งหมดในฐานข้อมูล Firestore เพื่อบังคับให้วิชาเรียนและการบ้านทั้งหมดในแอปถูกส่งขึ้นไปสร้างใหม่ในฐานข้อมูล Notion ชุดใหม่โดยสมบูรณ์\n\nการกระทำนี้จะช่วยแก้ปัญหากรณีฐานข้อมูลบน Notion โดนสร้างใหม่แล้วแอปยังจำค่า ID เก่า\n\nคุณต้องการบังคับซิงก์ใหม่ทั้งหมดตอนนี้หรือไม่?")) {
+      return;
+    }
+    
+    showToast("⏳ กำลังเตรียมการล้างประวัติการซิงก์เดิม...");
+    try {
+      const courses = Object.values(state.courses).flat();
+      for (const course of courses) {
+        course.notionPageId = null;
+        course.notionUrl = null;
+        await fsUpd('courses', course.id, { notionPageId: null, notionUrl: null });
+      }
+      
+      const assignments = Object.values(state.assignments).flat();
+      for (const assign of assignments) {
+        assign.notionPageId = null;
+        await fsUpd('assignments', assign.id, { notionPageId: null });
+      }
+      
+      const exams = Object.values(state.exams).flat();
+      for (const exam of exams) {
+        exam.notionPageId = null;
+        await fsUpd('exams', exam.id, { notionPageId: null });
+      }
+      
+      state.lastNotionSync = null;
+      localStorage.removeItem('last_notion_sync');
+      
+      showToast("🔄 ล้างค่าเชื่อมโยงเดิมสำเร็จ! กำลังอัปโหลดวิชาเรียนและการบ้านชุดใหม่ทั้งหมดขึ้น Notion...");
+      await this.sync(true);
+    } catch (e) {
+      console.error("Force Re-Sync Error:", e);
+      showToast("❌ การบังคับซิงก์ใหม่ล้มเหลว", "err");
     }
   }
 };
