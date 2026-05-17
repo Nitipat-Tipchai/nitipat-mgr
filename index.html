@@ -64,24 +64,45 @@
       });
     }
 
-    function executeRpc(method, args, context) {
+    function executeRpc(method, args, context, attempt = 1) {
+      const maxAttempts = 3;
+      const backoffMs = 1500 * Math.pow(2, attempt - 1);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 35000); // 35 seconds client timeout
+
       fetch(GAS_WEB_APP_URL, {
         method: 'POST',
         body: JSON.stringify({ action: method, args: args }),
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        signal: controller.signal
       })
-        .then(res => res.json())
+        .then(res => {
+          clearTimeout(timeoutId);
+          return res.json();
+        })
         .then(data => {
           if (data.success) {
             if (context.success) context.success(data.result);
           } else {
-            if (context.failure) context.failure(data.error);
-            else console.error("GAS Error:", data.error);
+            if (attempt < maxAttempts) {
+              console.warn(`GAS RPC Error. Retrying attempt ${attempt + 1}/${maxAttempts} in ${backoffMs}ms...`, data.error);
+              setTimeout(() => executeRpc(method, args, context, attempt + 1), backoffMs);
+            } else {
+              if (context.failure) context.failure(data.error);
+              else console.error("GAS Error:", data.error);
+            }
           }
         })
         .catch(err => {
-          if (context.failure) context.failure(err.toString());
-          else console.error("Network Error:", err);
+          clearTimeout(timeoutId);
+          if (attempt < maxAttempts) {
+            console.warn(`GAS RPC Network failure/timeout. Retrying attempt ${attempt + 1}/${maxAttempts} in ${backoffMs}ms...`, err);
+            setTimeout(() => executeRpc(method, args, context, attempt + 1), backoffMs);
+          } else {
+            if (context.failure) context.failure(err.toString());
+            else console.error("Network Error after max retries:", err);
+          }
         });
     }
   </script>
