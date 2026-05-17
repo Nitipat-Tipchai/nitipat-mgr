@@ -7263,6 +7263,13 @@ const NotionHub = {
     render();
 
     try {
+      // 0. Automatically clean up and deduplicate Semesters in Notion first!
+      try {
+        await new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).cleanupDuplicateSemesters());
+      } catch (err) {
+        console.error("Error deduplicating semesters:", err);
+      }
+
       // 1. Sync Courses (Subjects) concurrently
       const courses = Object.values(state.courses).flat();
       const coursePromises = courses.map(async (course) => {
