@@ -7311,6 +7311,61 @@ const NotionHub = {
       }
 
       // 4. Pull Updates from Notion (Assignments Database)
+      try {
+        const lastSync = manual ? null : state.lastNotionSync; // If manual sync, pull all updates!
+        const updates = await new Promise((res, rej) => {
+          google.script.run
+            .withSuccessHandler(res)
+            .withFailureHandler(rej)
+            .fetchNotionUpdates(lastSync);
+        });
+        
+        if (updates && updates.length > 0) {
+          let pullCount = 0;
+          for (const item of updates) {
+            let assign = null;
+            if (item.appId) {
+              assign = Object.values(state.assignments).flat().find(a => a.id === item.appId);
+            }
+            if (!assign) {
+              assign = Object.values(state.assignments).flat().find(a => a.notionPageId === item.notionPageId);
+            }
+            
+            if (assign) {
+              let changed = false;
+              if (item.status && item.status !== (assign.submitted ? 'Done' : assign.status)) {
+                assign.submitted = (item.status === 'Done');
+                if (item.status !== 'Done') assign.status = item.status;
+                changed = true;
+              }
+              if (item.title && item.title !== assign.title) {
+                assign.title = item.title;
+                changed = true;
+              }
+              if (item.deadline && item.deadline !== assign.dueDate) {
+                assign.dueDate = item.deadline;
+                changed = true;
+              }
+              
+              if (changed) {
+                await fsUpd('assignments', assign.id, {
+                  submitted: assign.submitted,
+                  status: assign.status || 'In Progress',
+                  title: assign.title,
+                  dueDate: assign.dueDate
+                });
+                pullCount++;
+              }
+            }
+          }
+          if (pullCount > 0 && manual) {
+            showToast(`📥 ดึงข้อมูลอัปเดต ${pullCount} รายการจาก Notion เรียบร้อย!`);
+          }
+        }
+      } catch (err) {
+        console.error("Error pulling updates from Notion:", err);
+      }
+
       state.lastNotionSync = new Date().toISOString();
       localStorage.setItem('last_notion_sync', state.lastNotionSync);
       state.notionConnected = true;
