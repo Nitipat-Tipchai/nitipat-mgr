@@ -7271,45 +7271,62 @@ const NotionHub = {
         console.error("Error deduplicating semesters:", err);
       }
 
-      // 1. Sync Courses (Subjects) concurrently
+      // 1. Sync Courses (Subjects) in one batch
       const courses = Object.values(state.courses).flat();
-      const coursePromises = courses.map(async (course) => {
-        if (!course.notionPageId || !course.notionUrl || manual) {
-          try {
-            const sem = state.semesters.find(s => String(s.id) === String(course.semId));
-            const courseWithSem = {
-              ...course,
-              semesterName: sem ? sem.name : 'Unknown Semester'
-            };
-            const res = await new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).syncCourseToNotion(courseWithSem));
-            if (res && res.success) {
-              course.notionPageId = res.pageId;
-              course.notionUrl = res.url;
-              await fsUpd('courses', course.id, { notionPageId: res.pageId, notionUrl: res.url });
-            }
-          } catch (err) {
-            console.error(`Error syncing course ${course.code} to Notion:`, err);
-          }
-        }
+      const coursesToSync = courses.filter(c => !c.notionPageId || !c.notionUrl || manual).map(course => {
+        const sem = state.semesters.find(s => String(s.id) === String(course.semId));
+        return {
+          ...course,
+          semesterName: sem ? sem.name : 'Unknown Semester'
+        };
       });
-      await Promise.all(coursePromises);
 
-      // 2. Sync Assignments concurrently
-      const assignments = Object.values(state.assignments).flat();
-      const assignmentPromises = assignments.map(async (assign) => {
-        if (!assign.notionPageId || (assign.updatedAt && assign.updatedAt > state.lastNotionSync)) {
-          try {
-            const res = await new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).syncAssignmentToNotion(assign));
-            if (res && res.success && res.pageId) {
-              assign.notionPageId = res.pageId;
-              await fsUpd('assignments', assign.id, { notionPageId: res.pageId });
+      if (coursesToSync.length > 0) {
+        try {
+          const res = await new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).syncCoursesToNotionBatch(coursesToSync));
+          if (res && res.success && res.results) {
+            for (const item of res.results) {
+              if (item.success) {
+                const localCourse = courses.find(c => c.id === item.id);
+                if (localCourse) {
+                  localCourse.notionPageId = item.pageId;
+                  localCourse.notionUrl = item.url;
+                  await fsUpd('courses', localCourse.id, { notionPageId: item.pageId, notionUrl: item.url });
+                }
+              } else {
+                console.error(`Failed to batch sync course ${item.id}:`, item.error);
+              }
             }
-          } catch (err) {
-            console.error(`Error syncing assignment ${assign.title} to Notion:`, err);
           }
+        } catch (err) {
+          console.error("Error in course batch sync:", err);
         }
-      });
-      await Promise.all(assignmentPromises);
+      }
+
+      // 2. Sync Assignments in one batch
+      const assignments = Object.values(state.assignments).flat();
+      const assignmentsToSync = assignments.filter(assign => !assign.notionPageId || (assign.updatedAt && assign.updatedAt > state.lastNotionSync));
+      
+      if (assignmentsToSync.length > 0) {
+        try {
+          const res = await new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).syncAssignmentsToNotionBatch(assignmentsToSync));
+          if (res && res.success && res.results) {
+            for (const item of res.results) {
+              if (item.success) {
+                const localAssign = assignments.find(a => a.id === item.id);
+                if (localAssign) {
+                  localAssign.notionPageId = item.pageId;
+                  await fsUpd('assignments', localAssign.id, { notionPageId: item.pageId });
+                }
+              } else {
+                console.error(`Failed to batch sync assignment ${item.id}:`, item.error);
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Error in assignment batch sync:", err);
+        }
+      }
 
       // 3. Sync Notebooks (Notion -> Google Drive)
       try {
