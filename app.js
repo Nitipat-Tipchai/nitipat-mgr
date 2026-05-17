@@ -7305,7 +7305,13 @@ const NotionHub = {
 
       // 2. Sync Assignments in one batch
       const assignments = Object.values(state.assignments).flat();
-      const assignmentsToSync = assignments.filter(assign => !assign.notionPageId || (assign.updatedAt && assign.updatedAt > state.lastNotionSync));
+      const assignmentsToSync = assignments.filter(assign => !assign.notionPageId || (assign.updatedAt && assign.updatedAt > state.lastNotionSync)).map(assign => {
+        const course = Object.values(state.courses).flat().find(c => String(c.id) === String(assign.courseId));
+        return {
+          ...assign,
+          courseNotionPageId: course ? course.notionPageId : null
+        };
+      });
       
       if (assignmentsToSync.length > 0) {
         try {
