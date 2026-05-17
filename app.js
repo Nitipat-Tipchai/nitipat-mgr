@@ -35,10 +35,11 @@ const LoginGate = {
   async sync(showToastMsg = true) {
     if (showToastMsg) this.statusEl.textContent = "SYNCING SECURITY VAULT...";
     const config = await this.getSecurityConfig();
+    this.correctPinSalt = config.pinSalt || 'NITIPAT_SALT_DEFAULT';
     if (config.pin && config.pin.length > 20) {
       this.correctPinHash = config.pin;
     } else {
-      this.correctPinHash = await hashPIN(config.pin || "111111");
+      this.correctPinHash = await hashPIN(config.pin || "111111", this.correctPinSalt);
     }
     if (showToastMsg) this.statusEl.textContent = "VAULT SYNCED. TRY AGAIN.";
   },
@@ -114,6 +115,7 @@ const LoginGate = {
   },
 
   press(val) {
+    if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(10);
     if (val === 'DEL') {
       this.inputPin = this.inputPin.slice(0, -1);
     } else if (this.inputPin.length < 6) {
@@ -134,13 +136,14 @@ const LoginGate = {
   },
 
   clear() {
+    if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(10);
     this.inputPin = "";
     this.updateDots();
   },
 
   async verify() {
-    let hashedInput = await hashPIN(this.inputPin);
-    if (hashedInput === this.correctPinHash) {
+    const isValid = await verifyPIN(this.inputPin, this.correctPinHash, this.correctPinSalt || 'NITIPAT_SALT_DEFAULT');
+    if (isValid) {
       this.statusEl.textContent = "ACCESS GRANTED. SYNCING DATA...";
       sessionStorage.setItem('unlocked', 'true');
       sessionStorage.setItem('unlocked_at', Date.now().toString());
@@ -151,9 +154,9 @@ const LoginGate = {
       // Problem 5: Auto-sync once on failure
       this.statusEl.textContent = "VERIFYING WITH REMOTE VAULT...";
       await this.sync(false);
-      hashedInput = await hashPIN(this.inputPin);
+      const isValidRetry = await verifyPIN(this.inputPin, this.correctPinHash, this.correctPinSalt || 'NITIPAT_SALT_DEFAULT');
       
-      if (hashedInput === this.correctPinHash) {
+      if (isValidRetry) {
         this.verify(); // Success after sync
         return;
       }
@@ -213,96 +216,29 @@ async function startAppCore() {
   }
 }
 
+// ═════════// COURSE DATABASE — วิชาทั้งหมดในหลักสูตร 137 หน่วยกิต (Loaded dynamically from courses_db.json)
 // ══════════════════════════════════════════════════
-// COURSE DATABASE — วิชาทั้งหมดในหลักสูตร 137 หน่วยกิต
-// ══════════════════════════════════════════════════
-const COURSE_DB = {
-  // หมวดศึกษาทั่วไป
-  general: [
-    { code: "01175xxx", name: "กิจกรรมพลศึกษา", nameEn: "Physical Education", credits: 1, group: "อยู่ดีมีสุข" },
-    { code: "01200101", name: "การคิดเชิงนวัตกรรม", nameEn: "Innovative Thinking", credits: 3, group: "ศาสตร์ผู้ประกอบการ" },
-    { code: "01355101", name: "ภาษาอังกฤษเพื่อชีวิตประจำวัน", nameEn: "English for Everyday Life", credits: 3, group: "ภาษา" },
-    { code: "01355102", name: "ภาษาอังกฤษสำหรับชีวิตในมหาวิทยาลัย", nameEn: "English for University Life", credits: 3, group: "ภาษา" },
-    { code: "01355103", name: "ภาษาอังกฤษเพื่อโอกาสทางอาชีพ", nameEn: "English for Job Opportunities", credits: 3, group: "ภาษา" },
-    { code: "01371111", name: "สารสนเทศเพื่อการเรียนรู้", nameEn: "Information Media for Learning", credits: 1, group: "ภาษา" },
-    { code: "01999021", name: "ภาษาไทยเพื่อการสื่อสารทางวิชาการและวิชาชีพ", nameEn: "Thai for Academic Communication", credits: 3, group: "ภาษา" },
-    { code: "01999023", name: "ทักษะดิจิทัล", nameEn: "Digital Literacy", credits: 2, group: "ภาษา" },
-    { code: "01999111", name: "ศาสตร์แห่งแผ่นดิน", nameEn: "Knowledge of the Land", credits: 2, group: "พลเมือง" },
-    { code: "01385223", name: "วิวัฒนาการของเพลงลูกทุ่งไทย", nameEn: "Evolution of Thai Country Songs", credits: 3, group: "สุนทรียะ" },
-    { code: "01385261", name: "ดนตรีพื้นเมืองภาคเหนือ", nameEn: "Northern Thai Folk Music", credits: 3, group: "สุนทรียะ" },
-    { code: "01387101", name: "ศิลปะการอยู่ร่วมกับผู้อื่น", nameEn: "The Art of Living with Others", credits: 3, group: "อยู่ดีมีสุข" },
-    { code: "01204111", name: "คอมพิวเตอร์และการโปรแกรม", nameEn: "Computers and Programming", credits: 3, group: "ภาษา" },
-  ],
-  // พื้นฐานทางคณิตศาสตร์และวิทยาศาสตร์
-  science: [
-    { code: "01403114", name: "ปฏิบัติการหลักมูลเคมีทั่วไป", nameEn: "Laboratory in Fundamental of General Chemistry", credits: 1, prereq: [] },
-    { code: "01403117", name: "หลักมูลเคมีทั่วไป", nameEn: "Fundamental of General Chemistry", credits: 3, prereq: [] },
-    { code: "01417167", name: "คณิตศาสตร์วิศวกรรม I", nameEn: "Engineering Mathematics I", credits: 3, prereq: [] },
-    { code: "01417168", name: "คณิตศาสตร์วิศวกรรม II", nameEn: "Engineering Mathematics II", credits: 3, prereq: ["01417167"] },
-    { code: "01417267", name: "คณิตศาสตร์วิศวกรรม III", nameEn: "Engineering Mathematics III", credits: 3, prereq: ["01417168"] },
-    { code: "01420111", name: "ฟิสิกส์ทั่วไป I", nameEn: "General Physics I", credits: 3, prereq: [] },
-    { code: "01420112", name: "ฟิสิกส์ทั่วไป II", nameEn: "General Physics II", credits: 3, prereq: ["01420111"] },
-    { code: "01420113", name: "ปฏิบัติการฟิสิกส์ I", nameEn: "Laboratory in Physics I", credits: 1, prereq: [] },
-    { code: "01420114", name: "ปฏิบัติการฟิสิกส์ II", nameEn: "Laboratory in Physics II", credits: 1, prereq: [] },
-  ],
-  // พื้นฐานทางวิศวกรรม (Engineering Core)
-  engineering_basic: [
-    { code: "01205201", name: "วิศวกรรมไฟฟ้าเบื้องต้น", nameEn: "Introduction to Electrical Engineering", credits: 3, prereq: [] },
-    { code: "01205202", name: "ปฏิบัติการวิศวกรรมไฟฟ้า I", nameEn: "Electrical Engineering Laboratory I", credits: 1, prereq: ["01205201"] },
-    { code: "01206221", name: "ความน่าจะเป็นและสถิติประยุกต์สำหรับวิศวกร", nameEn: "Applied Probability and Statistics for Engineers", credits: 3, prereq: [] },
-    { code: "01208111", name: "การเขียนแบบวิศวกรรม", nameEn: "Engineering Drawing", credits: 3, prereq: [] },
-    { code: "01208221", name: "กลศาสตร์วิศวกรรม I", nameEn: "Engineering Mechanics I", credits: 3, prereq: [] },
-    { code: "01208281", name: "การฝึกงานโรงงาน", nameEn: "Workshop Practice", credits: 1, prereq: [] },
-    { code: "01213211", name: "วัสดุศาสตร์สำหรับวิศวกร", nameEn: "Materials Science for Engineers", credits: 3, prereq: [], description: "ความสัมพันธ์ระหว่างโครงสร้าง สมบัติ กระบวนการ และสมรรถนะของวัสดุวิศวกรรม แผนภาพสมดุลเฟสและการตีความ โครงสร้างจุลภาคและมหภาคที่สัมพันธ์กับสมบัติของวัสดุวิศวกรรม การตรวจสอบโครงสร้างของวัสดุ การทดสอบและการวิเคราะห์สมบัติของวัสดุ การกัดกร่อนและการเสื่อมของวัสดุ กระบวนการผลิตของวัสดุวิศวกรรม วัสดุประกอบและวัสดุก่อสร้าง" },
-  ],
-  // วิชาบังคับ (Major Required)
-  core: [
-    { code: "01213212", name: "หลักมูลของวัสดุอนินทรีย์", nameEn: "Fundamental of Inorganic Materials", credits: 4, prereq: [], description: "เวกเตอร์ระนาบ ดัชนีมิลเลอร์ และเทนเซอร์ ผลึกส่วนกลับและระนาบการเคลื่อน โครงสร้างผลึกของวัสดุ เคมีของตำหนิ ตำหนิในโครงสร้างผลึก กลไกของดิสโลเคชันและขอบเกรน โครงสร้างอสัณฐานของวัสดุอนินทรีย์และแก้วเซรามิก การเคลือบในเซรามิก ทฤษฎีควอนตัม พันธะในวัสดุอนินทรีย์ สมบัติทางไฟฟ้า สมบัติทางแสง สมบัติทางแม่เหล็ก สมบัติทางความร้อน ความสัมพันธ์ระหว่างโครงสร้างและสมบัติของวัสดุ" },
-    { code: "01213213", name: "หลักเคมีสำหรับวัสดุอินทรีย์", nameEn: "Principle Chemistry for Organic Materials", credits: 4, prereq: [], description: "พันธะและโครงสร้างของสารอินทรีย์ สเตอริโอเคมี ชนิดของปฏิกิริยาเคมีและกลไก ชีวโมเลกุล ชนิดของพอลิเมอร์และการจำแนก ชนิดและกลไกการเกิดพอลิเมอร์ โครงสร้างทางเคมีของพอลิเมอร์" },
-    { code: "01213214", name: "ปฏิบัติการหลักเคมีสำหรับวัสดุอินทรีย์", nameEn: "Principle Chemistry Laboratory for Organic Materials", credits: 1, prereq: ["01213213"], description: "ปฏิบัติการเกี่ยวกับหลักเคมีสำหรับวัสดุอินทรีย์" },
-    { code: "01213215", name: "หลักมูลของเทคโนโลยีวัสดุ", nameEn: "Fundamentals of Materials Technology", credits: 3, prereq: [] },
-    { code: "01213216", name: "พฤติกรรมทางกลของวัสดุ", nameEn: "Mechanical Behavior of Materials", credits: 4, prereq: ["01213212"], description: "พื้นฐานเกี่ยวกับความเค้นและความเครียด พฤติกรรมแบบยืดหยุ่นและพลาสติก กลไกการเสริมความแข็งแรงของวัสดุ ความวิบัติของวัสดุแบบต่างๆ การแตกร้าว ความล้า การคืบ การทดสอบสมบัติทางกลของวัสดุ การประยุกต์ใช้ในงานวิศวกรรม" },
-    { code: "01213217", name: "อุณหพลศาสตร์ของวัสดุ", nameEn: "Thermodynamics of Materials", credits: 3, prereq: ["01213213"], description: "กฎของอุณหพลศาสตร์ พลังงานและเอนโทรปี พลังงานอิสระของกิบบ์ส สมดุลเฟสในระบบสารบริสุทธิ์และสารละลาย สารละลายในอุดมคติและสารละลายจริง กิจกรรมทางเคมี แผนภูมิความร้อนของเฟส การประยุกต์ใช้ในงานวิศวกรรมวัสดุ" },
-    { code: "01213218", name: "กระบวนการผลิตสำหรับวิศวกรวัสดุ", nameEn: "Manufacturing Processes for Materials Engineers", credits: 3, prereq: ["01213212"], description: "กระบวนการผลิตสำหรับวิศวกรรมวัสดุ ได้แก่ กระบวนการหล่อ การขึ้นรูป การตัดแต่ง การเชื่อมต่อ การปรับปรุงสมบัติทางความร้อนและทางกล การผลิตวัสดุเซรามิกและพอลิเมอร์ เทคโนโลยีการผลิตสมัยใหม่" },
-    { code: "01213219", name: "ปฏิบัติการกระบวนการแปรรูปวัสดุ", nameEn: "Materials Processing Laboratory", credits: 1, prereq: ["01213218"], description: "ปฏิบัติการเกี่ยวกับการแปรรูปวัสดุสำหรับโลหะ เซรามิกและพอลิเมอร์ การออกแบบใช้คอมพิวเตอร์ช่วย การขึ้นรูปต้นแบบเร็ว เทคโนโลยีการพิมพ์แบบสามมิติ" },
-    { code: "01213311", name: "หลักของเทคนิคการศึกษาลักษณะเฉพาะ", nameEn: "Principle of Characterization Techniques", credits: 3, prereq: ["01213211"], description: "การวิเคราะห์พื้นผิวด้วยกล้องจุลทรรศน์แบบแสงและกล้องจุลทรรศน์อิเล็กตรอน โครงสร้างผลึกและการวิเคราะห์ด้วยมาตรการเลี้ยวเบนของรังสีเอ็กซ์ การวิเคราะห์พื้นที่ผิวและขนาดอนุภาค การวิเคราะห์ทางเคมีโดยสเปกโทรสโกปี การวิเคราะห์เชิงความร้อน" },
-    { code: "01213312", name: "ปฏิบัติการการศึกษาลักษณะเฉพาะและการวิเคราะห์สมบัติของวัสดุ", nameEn: "Materials Characterization and Properties Analysis Lab", credits: 1, prereq: ["01213311"], description: "ปฏิบัติการการเตรียมชิ้นงานตัวอย่างสำหรับการวิเคราะห์โครงสร้างจุลภาค โครงสร้างผลึก โครงสร้างพื้นผิว และสมบัติทางความร้อนของวัสดุ" },
-    { code: "01213313", name: "จลนพลศาสตร์และปรากฏการณ์การถ่ายโอนของวัสดุ", nameEn: "Kinetics and Transport Phenomena in Materials Engineering", credits: 4, prereq: ["01213217"], description: "ทฤษฎีจลนศาสตร์ประยุกต์สำหรับวิศวกรรมวัสดุและการแต่งแร่ ทฤษฎีการชน พลังงานกระตุ้น การไหลของของไหลในกระบวนการวัสดุ การถ่ายเทความร้อน: การนำความร้อน การพาความร้อน และการแผ่รังสีความร้อน การวิเคราะห์เชิงความร้อนโดยใช้คอมพิวเตอร์ช่วยวิศวกรรม การวิเคราะห์ความเค้นเชิงความร้อนโดยใช้คอมพิวเตอร์ช่วยวิศวกรรม การถ่ายเทมวล: การแพร่มวล การพามวล การเกิดนิวเคลียสและการเติบโต การแข็งตัว" },
-    { code: "01213314", name: "การวิเคราะห์ความวิบัติและการป้องกัน", nameEn: "Failure Analysis and Prevention", credits: 3, prereq: ["01213216"], description: "การวิเคราะห์ความวิบัติและการป้องกัน การเสื่อมสภาพของวัสดุและอุปกรณ์ ตำหนิของผลิตภัณฑ์และการทดสอบ ความวิบัติรูปแบบต่างๆ ในวัสดุ การวิเคราะห์รอยแตกและภาพรอยแตก ความวิบัติในเซรามิก ความวิบัติจากการกัดกร่อน การเสื่อมสภาพของพอลิเมอร์ ความวิบัติเนื่องจากความผิดพลาดในการผลิต กรณีศึกษา" },
-    { code: "01213316", name: "อุตสาหกรรมวัสดุในประเทศไทย", nameEn: "Materials Industry in Thailand", credits: 1, prereq: ["01213218"], description: "บทบาทของวัสดุศาสตร์และวิศวกรรมวัสดุในอุตสาหกรรม การประยุกต์และการผลิตวัสดุวิศวกรรม โดยอ้างอิงอุตสาหกรรมในประเทศไทย การจัดการในอุตสาหกรรม การเยี่ยมชมโรงงานอุตสาหกรรม" },
-    { code: "01213395", name: "การเตรียมข้อเสนอโครงการวิจัย", nameEn: "Research Proposal Preparation", credits: 1, prereq: [], description: "การอภิปรายและการสืบค้นถึงความก้าวหน้าทางเทคโนโลยีในปัจจุบันและปัญหาต่างๆ ในเทคโนโลยีของวัสดุ การวางแผนการวิจัย การเขียนข้อเสนอโครงงานวิจัยและนำเสนอข้อเสนอโครงงานวิจัย" },
-    { code: "01213411", name: "การคัดเลือกวัสดุและการออกแบบทางวิศวกรรม", nameEn: "Materials Selection and Engineering Design", credits: 3, prereq: ["01213216", "01213218"], description: "บทบาทของวัสดุในการออกแบบและพัฒนาผลิตภัณฑ์นวัตกรรม วัสดุและสมบัติ แผนภูมิวัสดุ ดัชนีวัสดุ การคัดเลือกวัสดุ การคัดเลือกวัสดุในกรณีหลายเงื่อนไขและวัตถุประสงค์ การคัดเลือกวัสดุและรูปร่าง การบูรณาการหลักการคัดเลือกวัสดุร่วมกับการใช้คอมพิวเตอร์ช่วยในการออกแบบและวิเคราะห์เชิงวิศวกรรม การคัดเลือกกระบวนการ เงื่อนไขสำคัญในการออกแบบและเลือกวัสดุสำหรับผลิตภัณฑ์พอลิเมอร์และพลาสติก การใช้คอมพิวเตอร์ช่วยในการออกแบบและผลิตผลิตภัณฑ์พอลิเมอร์และพลาสติก กรณีศึกษา" },
-    { code: "01213412", name: "การจัดการการผลิตในอุตสาหกรรมวัสดุ", nameEn: "Production Management for Materials Industry", credits: 3, prereq: [], description: "เทคนิคการพยากรณ์ การจัดการอุตสาหกรรมวัสดุ การควบคุมสินค้าคงคลัง การวางแผนความต้องการของวัสดุ การวางแผนกำลังการผลิต การจัดลำดับการผลิต การควบคุมการผลิตในอุตสาหกรรมวัสดุ การวิเคราะห์ต้นทุนทางอุตสาหกรรมวัสดุและจุดคุ้มทุน" },
-    { code: "01213497", name: "สัมมนา", nameEn: "Seminar", credits: 1, prereq: [] },
-    { code: "01213499", name: "โครงงานวิศวกรรมวัสดุ", nameEn: "Materials Engineering Project", credits: 3, prereq: ["01213395"] },
-  ],
-  // วิชาเลือก (Major Elective)
-  elective: [
-    { code: "01213399", name: "การฝึกงาน", nameEn: "Internship", credits: 1, prereq: [] },
-    { code: "01213421", name: "โลหกรรมกายภาพ", nameEn: "Physical Metallurgy", credits: 3, prereq: ["01213212"], description: "โครงสร้างโลหะและการเกิดผลึก ข้อบกพร่องในโครงสร้างผลึก ดิสโลเคชันและการเปลี่ยนรูปอย่างถาวร การเกิดนิวเคลียสและการแข็งตัว แผนภาพสมดุลของเฟส การอบชุบความร้อน การเปลี่ยนเฟส กลไกการเพิ่มความแข็งแรง การแพร่ในของแข็ง สมบัติและการใช้งานของโลหะผสมทั้งในและนอกกลุ่มเหล็ก" },
-    { code: "01213422", name: "โลหกรรมเชิงเคมี", nameEn: "Chemical Metallurgy", credits: 3, prereq: ["01213211"], description: "หลักการของโลหกรรมความร้อนสำหรับการสกัดโลหะจากแร่ การเตรียมแร่ การถลุง กระบวนการปรับเปลี่ยนและการทำให้บริสุทธิ์ การผลิตทองแดง การผลิตเหล็กและเหล็กกล้า หลักการของโลหกรรมสารละลายสำหรับการสกัดโลหะจากแร่โลหะ การสกัดโลหะโดยใช้ตัวทำละลาย กระบวนการทำให้โลหะเข้มข้น กระบวนการกู้ การใช้ประโยชน์โลหะ" },
-    { code: "01213423", name: "การขึ้นรูปและการหล่อโลหะ", nameEn: "Forming and Casting of Metals", credits: 3, prereq: ["01213218"], description: "ทฤษฎีและการพัฒนาสมัยใหม่ของกระบวนการหล่อโลหะ วิธีมาตรฐานและวิธีใหม่ การออกแบบระบบการไหลและรูล้น การออกแบบกระบวนการ การตกแต่งสำเร็จและการตรวจสอบงานหล่อ แหล่งและการกำจัดขีดจำกัดของการออกแบบ ทฤษฎีและปฏิบัติการของการรีด การตีขึ้นรูป การอัดขึ้นรูป การลากขึ้นรูป แหล่งและการกำจัดข้อบกพร่อง" },
-    { code: "01213424", name: "โลหกรรมเชิงผง", nameEn: "Powder Metallurgy", credits: 3, prereq: ["01213211"], description: "เทคนิคการผลิตผงโลหะ การศึกษาลักษณะเฉพาะของผงโลหะ วิธีการผสมและการขึ้นรูป การเผาผนึกโลหะ ทฤษฎีการเผาผนึก การปรับปรุงสมบัติด้วยความร้อน การปรับแต่งขั้นสุดท้าย โลหกรรมผงชั้นสูงประยุกต์" },
-    { code: "01213425", name: "เทคโนโลยีการบำบัดพื้นผิว", nameEn: "Surface Treatment Technology", credits: 3, prereq: ["01213421"], description: "การบำบัดพื้นผิวและการวิเคราะห์พื้นผิวของวัสดุที่ถูกบำบัด การบำบัดพื้นผิวทางความร้อน เคมี กายภาพและทางกล สมบัติและการประยุกต์วัสดุที่ผ่านการบำบัดพื้นผิวในอุตสาหกรรม" },
-    { code: "01213426", name: "วิศวกรรมโลหะผสม", nameEn: "Alloys Engineering", credits: 3, prereq: ["01213211"] },
-    { code: "01213427", name: "การกัดกร่อน", nameEn: "Corrosion", credits: 3, prereq: ["01213211"], description: "หลักการการกัดกร่อน วิธีการวัดและการคำนวณอัตราการกัดกร่อนโดยใช้เทคนิคทางเคมีไฟฟ้า รูปแบบของการกัดกร่อน การทดสอบการกัดกร่อน การกัดกร่อนในสภาพแวดล้อมจำเพาะ การกัดกร่อนที่อุณหภูมิสูง กรณีศึกษาการวิบัติของวัสดุในระหว่างใช้งานเนื่องจากการกัดกร่อน หลักการเลือกวัสดุและการออกแบบ สารยับยั้งการกัดกร่อน การป้องกันแบบแอโนดิกและแคโทดิก การเตรียมผิวและการเคลือบผิวเพื่อซ่อมบำรุง" },
-    { code: "01213431", name: "เซรามิกเบื้องต้น", nameEn: "Introduction to Ceramics", credits: 3, prereq: ["01213212"] },
-    { code: "01213432", name: "การแปรรูปเซรามิก", nameEn: "Ceramic Processing", credits: 3, prereq: ["01213212"], description: "ลักษณะเฉพาะของวัสดุเซรามิก ขนาดและรูปร่างของอนุภาค ความหนาแน่น โครงสร้างและพื้นผิวจำเพาะของรูพรุน เคมีภัณฑ์สำหรับการกระจายและรวมตัวของอนุภาค กลไกของอนุภาค การกระจายขนาดของอนุภาคและวิทยาการไหล การผสม การขึ้นรูปและกระบวนการหลังการขึ้นรูปของอุตสาหกรรมเซรามิก การอบแห้ง การตกแต่ง การเคลือบและการเผา กระบวนการผลิตเซรามิกในระดับห้องปฏิบัติการหรืออุตสาหกรรม" },
-    { code: "01213441", name: "หลักมูลของวัสดุพอลิเมอร์", nameEn: "Fundamental of Polymeric Materials", credits: 3, prereq: ["01213213"], description: "ความสัมพันธ์ของโครงสร้างทางเคมีและสมบัติของพอลิเมอร์ น้ำหนักโมเลกุลและการกระจายน้ำหนักโมเลกุล สัณฐานวิทยาของพอลิเมอร์ สารละลายพอลิเมอร์ พอลิเมอร์ผสม สมบัติของพอลิเมอร์และการทดสอบ วิทยากระแสของพอลิเมอร์ การแปรรูปพอลิเมอร์ สารเติมแต่ง เทคโนโลยีเส้นใย" },
-    { code: "01213442", name: "เทคโนโลยียาง", nameEn: "Rubber Technology", credits: 3, prereq: ["01213213"] },
-    { code: "01213451", name: "วัสดุประกอบ", nameEn: "Composite Materials", credits: 3, prereq: ["01213211"], description: "การจำแนกชนิดของวัสดุเชิงประกอบ ชนิดของสารเสริมแรง กระบวนการผลิต สมบัติเชิงกล กลไกการเพิ่มความแข็งแรงในวัสดุประกอบ การประยุกต์ใช้ในอุตสาหกรรม" },
-    { code: "01213452", name: "วัสดุชีวภาพเบื้องต้น", nameEn: "Introduction to Biomaterials", credits: 3, prereq: ["01213211"] },
-    { code: "01213453", name: "นวัตกรรมวิศวกรรมนาโน", nameEn: "Innovation of Nanoengineering", credits: 3, prereq: ["01213211"] },
-    { code: "01213455", name: "วัสดุและอุปกรณ์ไฟฟ้า แม่เหล็ก แสง", nameEn: "Electromagnetooptic Materials and Devices", credits: 3, prereq: ["01213212"] },
-    { code: "01213457", name: "วัสดุสำหรับเทคโนโลยีการเก็บเกี่ยวพลังงาน", nameEn: "Materials for Energy Harvesting Technology", credits: 3, prereq: ["01213212"] },
-    { code: "01213461", name: "โลหกรรมของการเชื่อมและการทดสอบแบบไม่ทำลาย", nameEn: "Welding Metallurgy and Non-destructive Testing", credits: 3, prereq: ["01213211"] },
-    { code: "01213471", name: "การจัดการพลังงานในอุตสาหกรรมวัสดุ", nameEn: "Energy Management in Materials Industries", credits: 3, prereq: ["01213217"], description: "เทอร์โมไดนามิกของกระบวนการผลิตวัสดุ การคำนวณการใช้พลังงาน การวิเคราะห์ต้นทุนพลังงาน การใช้พลังงานในอุตสาหกรรมผลิตโลหะ การใช้พลังงานในอุตสาหกรรมผลิตเซรามิก การใช้พลังงานในอุตสาหกรรมผลิตพอลิเมอร์ การเก็บเกี่ยวพลังงานความร้อนเหลือทิ้ง การออกแบบกระบวนการเพื่อลดการใช้พลังงาน กรณีศึกษา" },
-    { code: "01213472", name: "แบบจำลองคอมพิวเตอร์ของวัสดุ", nameEn: "Computer Modeling of Materials", credits: 3, prereq: ["01213212"], description: "การใช้คอมพิวเตอร์ช่วยคำนวณเบื้องต้น หลักเบื้องต้นของการใช้คอมพิวเตอร์ช่วยออกแบบ การวิเคราะห์ความเค้นความเครียดด้วยคอมพิวเตอร์ การจำลองแบบมัลติฟิสิกส์ แบบจำลองสนามเฟส การจำลองทางพลวัตของโมเลกุล การจำลองทางควอนตัม โครงข่ายประสาทเทียม" },
-    { code: "01213490", name: "สหกิจศึกษา", nameEn: "Co-operative Education", credits: 7, prereq: [] },
-  ]
-};
+let COURSE_DB = { general: [], science: [], engineering_basic: [], core: [], elective: [] };
+let ALL_COURSES = [];
 
-const ALL_COURSES = [...COURSE_DB.general, ...COURSE_DB.science, ...COURSE_DB.engineering_basic, ...COURSE_DB.core, ...COURSE_DB.elective];
+async function loadCourseDatabase() {
+  try {
+    const res = await fetch('./courses_db.json');
+    if (res.ok) {
+      const data = await res.json();
+      COURSE_DB = data;
+      ALL_COURSES = [
+        ...COURSE_DB.general,
+        ...COURSE_DB.science,
+        ...COURSE_DB.engineering_basic,
+        ...COURSE_DB.core,
+        ...COURSE_DB.elective
+      ];
+    }
+  } catch (e) {
+    console.error("Failed to load courses_db.json:", e);
+  }
+}
 
 // ══════════════════════════════════════════════════
 // ACADEMIC CALENDAR 2568-2569 (embedded)
@@ -393,6 +329,7 @@ let state = {
   view: 'dashboard',
   isLocked: sessionStorage.getItem('unlocked') !== 'true',
   pin: null,
+  pinSalt: 'NITIPAT_SALT_DEFAULT',
   semesters: [], courses: {}, assignments: {}, exams: {}, grades: {},
   habits: [], expenses: [], sleep: [], moods: [], notes: [],
   clubTasks: JSON.parse(localStorage.getItem('clubTasks') || '[]'),
@@ -445,7 +382,6 @@ let state = {
   deviceId: Math.random().toString(36).substring(7),
   activeCourseId: null,
   currentFolderId: null,
-  folderPath: [], // Breadcrumbs: [{name, id}]
   selectedItems: new Set(),
   isRenaming: null,
   links: JSON.parse(localStorage.getItem('course_links') || '{}'), // courseId -> [{name, url}]
@@ -782,25 +718,38 @@ function getDistance(lat1, lon1, lat2, lon2) {
 }
 
 const GPSManager = {
+  hasCheckedInToday(courseId) {
+    const history = state.attendanceHistory[courseId] || [];
+    if (history.length === 0) return false;
+    const today = new Date().toDateString();
+    return history.some(record => new Date(record.timestamp).toDateString() === today);
+  },
+
   async checkInSuggestion() {
     const curClass = this.getCurrentClass();
     if (!curClass) return;
 
-    const coords = await this.getCurrentPosition();
-    let targetLat = 14.065, targetLng = 100.606; // Default KU
-    if (curClass.targetCoords) {
-      const [lat, lng] = curClass.targetCoords.split(',').map(Number);
-      if (!isNaN(lat) && !isNaN(lng)) {
-        targetLat = lat;
-        targetLng = lng;
-      }
-    }
-    const distance = getDistance(coords.lat, coords.lng, targetLat, targetLng);
+    if (this.hasCheckedInToday(curClass.id)) return;
 
-    if (distance <= 200) { // 200m
-      this.showCheckInPrompt(curClass, true);
-    } else {
-      this.showCheckInPrompt(curClass, false); // Suggest Online
+    try {
+      const coords = await this.getCurrentPosition();
+      let targetLat = 14.065, targetLng = 100.606; // Default KU
+      if (curClass.targetCoords) {
+        const [lat, lng] = curClass.targetCoords.split(',').map(Number);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          targetLat = lat;
+          targetLng = lng;
+        }
+      }
+      const distance = getDistance(coords.lat, coords.lng, targetLat, targetLng);
+
+      if (distance <= 200) { // 200m
+        this.showCheckInPrompt(curClass, true);
+      } else {
+        this.showCheckInPrompt(curClass, false); // Suggest Online
+      }
+    } catch (e) {
+      console.warn("Could not retrieve geolocation: ", e);
     }
   },
 
@@ -949,8 +898,28 @@ function renderTopicMastery(courseId, parentId = null) {
         `;
   }
 
+  // Course-wide Linked Files (from Drive Toolbar)
+  if (parentId === null) {
+    const c = findCourseById(courseId);
+    if (c && c.linkedFiles && c.linkedFiles.length > 0) {
+      html += `
+        <div class="glass-card nb-card" style="margin-bottom:15px; background:rgba(99,102,241,0.05); border-color:var(--c-indigo); padding: 15px;">
+          <div style="font-size:14px; font-weight:800; color:var(--c-indigo); margin-bottom:8px; display:flex; align-items:center; gap:6px;">📚 เอกสารประกอบรายวิชา (Linked Files)</div>
+          <div style="display:flex; flex-wrap:wrap; gap:5px;">
+            ${c.linkedFiles.map(f => `
+              <div class="file-tag" style="background:white; padding:4px 10px; border-radius:6px; font-size:11px; display:flex; align-items:center; gap:5px; border:1px solid #e2e8f0; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+                <span onclick="previewFile('${f.id}', '${f.name}', '${f.url}', '${f.mimeType}')" style="cursor:pointer; font-weight:600;">📄 ${f.name}</span>
+                <span onclick="unlinkFileFromCourse('${courseId}', '${f.id}')" style="cursor:pointer; color:var(--c-red); font-weight:800; margin-left:3px;">✕</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+  }
+
   if (topics.length === 0 && parentId === null) {
-    return `<div class="empty-sm">ยังไม่มีหัวข้อที่เรียน <br> <button class="nb-btn sm" style="margin-top:10px;" onclick="addTopic('${courseId}', null)">➕ เพิ่มหัวข้อหลัก</button></div>`;
+    return html + `<div class="empty-sm">ยังไม่มีหัวข้อที่เรียน <br> <button class="nb-btn sm" style="margin-top:10px;" onclick="addTopic('${courseId}', null)">➕ เพิ่มหัวข้อหลัก</button></div>`;
   }
 
   html += `<div class="${parentId ? 'topic-branch' : ''}">
@@ -1248,10 +1217,22 @@ const PDFManager = {
     };
 
     google.script.run
-      .withSuccessHandler((url) => {
-        if (url) {
-          window.open(url, '_blank');
-          showToast("PDF Generated Successfully", "ok");
+      .withSuccessHandler((res) => {
+        if (res && res.success && res.id) {
+          showToast("✅ PDF Generated Successfully. Downloading...", "ok");
+          downloadFileViaProxy(res.id, `NITIPAT_TRANSCRIPT_${STUDENT.id}.pdf`);
+        } else if (res && typeof res === 'string') {
+          const match = res.match(/\/d\/(.*?)\//);
+          const fileId = match ? match[1] : null;
+          if (fileId) {
+            showToast("✅ PDF Generated Successfully. Downloading...", "ok");
+            downloadFileViaProxy(fileId, `NITIPAT_TRANSCRIPT_${STUDENT.id}.pdf`);
+          } else {
+            window.open(res, '_blank');
+            showToast("PDF Generated Successfully", "ok");
+          }
+        } else {
+          showToast("❌ PDF Generation Failed", "err");
         }
       })
       .withFailureHandler(() => showToast("PDF Generation Failed", "err"))
@@ -1290,10 +1271,10 @@ function hideLoadingBlocker() {
 }
 
 async function fsSet(col, id, data) {
-  showLoadingBlocker();
   try {
     const plainData = JSON.parse(JSON.stringify(data));
-    await setDoc(doc(db, col, id), { ...plainData, _t: serverTimestamp() });
+    setDoc(doc(db, col, id), { ...plainData, _t: serverTimestamp() })
+      .catch(e => handleFirebaseError(e, 'fsSet'));
     
     // Notion Sync Trigger (only for main data objects)
     if ((col === 'assignments' || col === 'exams') && !data._notion_syncing && typeof google !== 'undefined' && google.script) {
@@ -1308,43 +1289,41 @@ async function fsSet(col, id, data) {
     handleFirebaseError(e, 'fsSet');
   }
   saveToLocalStorage();
-  hideLoadingBlocker();
 }
 async function fsDel(col, id) {
-  showLoadingBlocker();
   try {
-    await deleteDoc(doc(db, col, id));
+    deleteDoc(doc(db, col, id))
+      .catch(e => handleFirebaseError(e, 'fsDel'));
   } catch (e) {
     handleFirebaseError(e, 'fsDel');
   }
   saveToLocalStorage();
-  hideLoadingBlocker();
 }
 async function fsUpd(col, id, data) {
-  showLoadingBlocker();
   try {
     const plainData = JSON.parse(JSON.stringify(data));
-    await updateDoc(doc(db, col, id), plainData);
+    updateDoc(doc(db, col, id), plainData)
+      .catch(e => handleFirebaseError(e, 'fsUpd'));
     
     // Trigger Notion Update if relevant
     if ((col === 'assignments' || col === 'exams') && !data._notion_syncing && typeof google !== 'undefined' && google.script) {
       // Need full data for Notion sync
-      const fullDoc = await getDoc(doc(db, col, id));
-      if (fullDoc.exists()) {
-        const fullData = fullDoc.data();
-        const syncFunc = col === 'assignments' ? 'syncAssignmentToNotion' : 'syncExamToNotion';
-        google.script.run.withSuccessHandler(res => {
-          if (res && res.success && res.pageId && !fullData.notionPageId) {
-             fsUpd(col, id, { notionPageId: res.pageId, _notion_syncing: true });
-          }
-        })[syncFunc](fullData);
-      }
+      getDoc(doc(db, col, id)).then(fullDoc => {
+        if (fullDoc.exists()) {
+          const fullData = fullDoc.data();
+          const syncFunc = col === 'assignments' ? 'syncAssignmentToNotion' : 'syncExamToNotion';
+          google.script.run.withSuccessHandler(res => {
+            if (res && res.success && res.pageId && !fullData.notionPageId) {
+               fsUpd(col, id, { notionPageId: res.pageId, _notion_syncing: true });
+            }
+          })[syncFunc](fullData);
+        }
+      }).catch(e => console.error("Notion sync document fetch failed", e));
     }
   } catch (e) {
     handleFirebaseError(e, 'fsUpd');
   }
   saveToLocalStorage();
-  hideLoadingBlocker();
 }
 
 function handleFirebaseError(e, source) {
@@ -1415,6 +1394,7 @@ async function loadAll() {
 
     if (secSnap.exists()) {
       state.pin = secSnap.data().global_pin;
+      state.pinSalt = secSnap.data().pin_salt || 'NITIPAT_SALT_DEFAULT';
       if (state.pin && sessionStorage.getItem('unlocked') !== 'true') state.isLocked = true;
       else state.isLocked = false;
     }
@@ -2087,6 +2067,17 @@ function render() {
   const pro = getProStatus(gpa);
   const curSem = getCurrentSemester();
 
+  // Save scroll positions of all scrollable containers in the app
+  const scrollPositions = {};
+  const scrollableElements = app.querySelectorAll('*');
+  scrollableElements.forEach((el, idx) => {
+    if (el.scrollTop > 0 || el.scrollLeft > 0) {
+      scrollPositions[idx] = { top: el.scrollTop, left: el.scrollLeft };
+    }
+  });
+  const windowScrollTop = window.scrollY;
+  const windowScrollLeft = window.scrollX;
+
   app.innerHTML = `
     <div class="app-container">
       ${renderStatusBanner()}
@@ -2099,6 +2090,17 @@ function render() {
     ${renderFAB()}
     ${state.modal ? renderModal() : ''}
   `;
+
+  // Restore scroll positions of all scrollable containers
+  const newScrollableElements = app.querySelectorAll('*');
+  newScrollableElements.forEach((el, idx) => {
+    if (scrollPositions[idx]) {
+      el.scrollTop = scrollPositions[idx].top;
+      el.scrollLeft = scrollPositions[idx].left;
+    }
+  });
+  window.scrollTo(windowScrollLeft, windowScrollTop);
+
   attachAllEvents();
   if (state.pomodoroActive) updatePomodoroDisplay();
   if (state.view === 'dashboard') renderGPAXChart();
@@ -2136,7 +2138,7 @@ function renderStatusBanner() {
   } else if (nextClass) {
     const diffMins = Math.round((nextClass.slot.startHour - currentTimeVal) * 60);
     const diffHours = Math.floor(diffMins / 60);
-    const displayTime = diffHours > 0 ? `${diffHours} ชม. ${diffMins % 60} นาที` : `${diffMins} นาที`;
+    const displayTime = diffHours > 0 ? `${diffHours} ชม. ${diffMins % 60} นาที` : `${displayTime} นาที`;
     return `
       <div class="status-banner next">
         <span class="sb-icon">⏳</span>
@@ -2273,12 +2275,13 @@ function attachLockScreenEvents() {
 
   numPad.forEach(btn => {
     btn.onclick = async () => {
+      if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(10);
       if (currentInput.length < 6) {
         currentInput += btn.dataset.num;
         updateDots();
         if (currentInput.length === 6) {
-          const hashedInput = await hashPIN(currentInput);
-          if (hashedInput === state.pin) {
+          const isValid = await verifyPIN(currentInput, state.pin, state.pinSalt);
+          if (isValid) {
             sessionStorage.setItem('unlocked', 'true');
             sessionStorage.setItem('unlocked_at', Date.now().toString());
             state.isLocked = false;
@@ -2294,8 +2297,16 @@ function attachLockScreenEvents() {
     };
   });
 
-  if (pinClear) pinClear.onclick = () => { currentInput = ""; updateDots(); };
-  if (pinDel) pinDel.onclick = () => { currentInput = currentInput.slice(0, -1); updateDots(); };
+  if (pinClear) pinClear.onclick = () => { 
+    if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(10);
+    currentInput = ""; 
+    updateDots(); 
+  };
+  if (pinDel) pinDel.onclick = () => { 
+    if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(10);
+    currentInput = currentInput.slice(0, -1); 
+    updateDots(); 
+  };
 
   if (showIdBtn) showIdBtn.onclick = () => {
     openModal('🪪 บัตรนิสิต (Digital ID)', `
@@ -2486,9 +2497,9 @@ function renderCourseHubPage() {
           </div>
 
           <div class="hub-tabs-premium" style="margin: 10px 20px 25px; display:flex; gap:12px; justify-content:center; align-items:stretch; background:rgba(255,255,255,0.4); padding:10px; border-radius:24px; backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.6);">
-             <button class="nav-tab-btn ${tab === 'Files' ? 'active' : ''}" onclick="state.activeHubTab='Files'; render();">
-               <div style="font-size:26px; ${tab !== 'Files' ? 'opacity:0.8;' : 'margin-bottom:2px;'}">☁️</div>
-               ${tab === 'Files' ? '<div class="tab-label">Files</div>' : ''}
+              <button class="nav-tab-btn ${tab === 'Files' ? 'active' : ''}" onclick="state.activeHubTab='Files'; render();">
+                <div style="font-size:26px; ${tab !== 'Files' ? 'opacity:0.8;' : 'margin-bottom:2px;'}">☁️</div>
+                ${tab === 'Files' ? '<div class="tab-label">Files</div>' : ''}
              </button>
              <button class="nav-tab-btn ${tab === 'Grades' ? 'active' : ''}" onclick="state.activeHubTab='Grades'; render();">
                <div style="font-size:26px; ${tab !== 'Grades' ? 'opacity:0.8;' : 'margin-bottom:2px;'}">📊</div>
@@ -2515,7 +2526,11 @@ function renderCourseHubPage() {
 }
 
 function isGAS() {
-  return typeof google !== 'undefined' && google?.script;
+  return window.location.hostname.includes('script.google.com') || window.location.hostname.includes('script.googleusercontent.com');
+}
+
+function isDriveSupported() {
+  return isGAS();
 }
 
 function refreshExplorerOnly(courseId) {
@@ -2531,19 +2546,63 @@ function refreshExplorerOnly(courseId) {
   }
 }
 
+async function downloadFileViaProxy(fileId, fileName) {
+  showToast('⏳ กำลังเตรียมไฟล์ดาวน์โหลด...');
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res && res.success && res.base64) {
+        try {
+          const base64Data = res.base64;
+          const parts = base64Data.split(',');
+          const mime = parts[0].match(/:(.*?);/)[1];
+          const bstr = atob(parts[1]);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          
+          const blob = new Blob([u8arr], { type: mime });
+          const urlObj = URL.createObjectURL(blob);
+          
+          const a = document.createElement('a');
+          a.href = urlObj;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          
+          document.body.removeChild(a);
+          URL.revokeObjectURL(urlObj);
+          showToast('✅ ดาวน์โหลดสำเร็จ!');
+        } catch (e) {
+          console.error("Download conversion failed:", e);
+          showToast('❌ ดาวน์โหลดไม่สำเร็จ: แปลงไฟล์ล้มเหลว', 'err');
+        }
+      } else {
+        showToast('❌ ดาวน์โหลดไม่สำเร็จ: ' + (res?.error || 'เกิดข้อผิดพลาดจากเซิร์ฟเวอร์'), 'err');
+      }
+    })
+    .withFailureHandler(err => {
+      showToast('❌ ดาวน์โหลดล้มเหลว: ' + err.message, 'err');
+    })
+    .getFileDataBase64(fileId);
+}
+
+window.downloadFileViaProxy = downloadFileViaProxy;
+
 function renderMiniDrive(c) {
   const filesData = state.courseFiles?.[state.currentFolderId || c.driveId];
   const hasSelection = state.selectedItems.size > 0;
-  const gasDisabled = !isGAS() ? 'disabled style="opacity:0.5; cursor:not-allowed;" title="ต้องใช้ผ่าน Google Apps Script"' : '';
+  const gasDisabled = !isDriveSupported() ? 'disabled style="opacity:0.5; cursor:not-allowed;" title="ต้องใช้ผ่าน Google Apps Script/Proxy"' : '';
 
   return `
         <div class="drive-container" style="padding: 0 20px;">
           <div class="drive-toolbar" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-            <div class="drive-breadcrumbs" style="font-weight:600; font-size:18px; color:#1e293b;">
-              <span class="breadcrumb-item" onclick="gotoFolder('${c.id}', '${c.driveId}', 'Root')" style="cursor:pointer; display:flex; align-items:center;">Home</span>
-              ${state.folderPath.map((p, idx) => `
-                <span class="breadcrumb-sep" style="margin:0 5px; opacity:0.5;">/</span>
-                <span class="breadcrumb-item" style="cursor:pointer;" onclick="gotoFolder('${c.id}', '${p.id}', '${p.name}', ${idx})">${p.name}</span>
+            <div class="drive-breadcrumbs" style="font-weight:600; font-size:18px; color:#1e293b; display:flex; align-items:center;">
+              ${state.driveBreadcrumbs.map((b, idx) => `
+                ${idx > 0 ? '<span class="breadcrumb-sep" style="margin:0 5px; opacity:0.5;">/</span>' : ''}
+                <span class="breadcrumb-item" style="cursor:pointer; ${idx === state.driveBreadcrumbs.length - 1 ? 'opacity:0.5; pointer-events:none;' : ''}" onclick="gotoFolder('${c.id}', '${b.id}', '${b.name}')">${b.name === 'Root' ? 'Home' : b.name}</span>
               `).join('')}
             </div>
             <div class="drive-tools" style="display:flex; gap:12px; font-size:16px; color:#64748b;">
@@ -2556,9 +2615,9 @@ function renderMiniDrive(c) {
               ` : ''}
               <button class="icon-btn-minimal" onclick="PickerManager.openPicker('${c.id}', '${c.driveId}', (docs) => handleLinkedFiles(docs, '${c.id}'))" title="Link Study Materials" ${gasDisabled}>➕🔗</button>
               <button class="icon-btn-minimal" onclick="state.driveViewMode = state.driveViewMode === 'list' ? 'grid' : 'list'; render();" title="Toggle View">${state.driveViewMode === 'list' ? '⊞' : '☰'}</button>
-              <button class="icon-btn-minimal" onclick="handleCreateFolder('${c.id}', '${state.currentFolderId || c.driveId}')" title="New Folder" ${gasDisabled}>📁+</button>
-              <button class="icon-btn-minimal" onclick="handleFileUpload('${c.id}', '${state.currentFolderId || c.driveId}')" title="Upload" ${gasDisabled}>↑</button>
-              <button class="icon-btn-minimal" onclick="refreshDriveFiles('${c.id}', '${state.currentFolderId || c.driveId}')" title="Refresh" ${gasDisabled}>🔄</button>
+              <button class="icon-btn-minimal" onclick="handleCreateFolder('${c.id}')" title="New Folder" ${gasDisabled}>📁+</button>
+              <button class="icon-btn-minimal" onclick="handleFileUpload('${c.id}')" title="Upload" ${gasDisabled}>↑</button>
+              <button class="icon-btn-minimal" onclick="refreshDriveFiles('${c.id}')" title="Refresh" ${gasDisabled}>🔄</button>
             </div>
           </div>
           
@@ -2679,7 +2738,7 @@ function renderCourseSettings(c) {
                 <label>Folder ID (Auto-assigned)</label>
                 <div style="display:flex; gap:8px;">
                    <input type="text" class="glass-input sm" id="set-drive-id" value="${c.driveId || ''}" readonly>
-                   <button class="nb-btn sm" onclick="automateDriveFolder('${c.id}')" ${!isGAS() ? 'disabled style="opacity:0.5; cursor:not-allowed;" title="ต้องใช้ผ่าน Google Apps Script"' : ''}>🔄 เชื่อมต่ออัตโนมัติ</button>
+                   <button class="nb-btn sm" onclick="automateDriveFolder('${c.id}')" ${!isDriveSupported() ? 'disabled style="opacity:0.5; cursor:not-allowed;" title="ต้องใช้ผ่าน Google Apps Script/Proxy"' : ''}>🔄 เชื่อมต่ออัตโนมัติ</button>
                 </div>
               </div>
               <button class="nb-btn-danger sm" style="margin-top:25px; width:100%;" onclick="if(confirm('คุณแน่ใจหรือไม่ว่าจะลบวิชานี้?')) { if(confirm('ยืนยันอีกครั้ง! ข้อมูลทั้งหมดจะหายไป')) deleteCourse('${c.id}') }">🗑 ลบวิชานี้จากระบบ</button>
@@ -2875,9 +2934,9 @@ function toggleItemSelection(id, event) {
 }
 
 async function handleCreateFolder(courseId, parentId) {
-  if (!isGAS()) { alert("ฟีเจอร์นี้ต้องใช้ผ่าน Google Apps Script URL"); return; }
+  if (!isDriveSupported()) { alert("ฟีเจอร์นี้ต้องใช้ผ่าน Google Apps Script URL หรือ Proxy"); return; }
   const c = findCourseById(courseId);
-  const targetParentId = parentId || (c ? c.driveId : null);
+  const targetParentId = state.currentFolderId || parentId || (c ? c.driveId : null);
 
   if (!targetParentId) {
     showToast('❌ ไม่สามารถระบุโฟลเดอร์ปลายทางได้', 'err');
@@ -2903,7 +2962,7 @@ async function handleCreateFolder(courseId, parentId) {
 }
 
 async function renameSelectedItem() {
-  if (!isGAS()) { alert("ฟีเจอร์นี้ต้องใช้ผ่าน Google Apps Script URL"); return; }
+  if (!isDriveSupported()) { alert("ฟีเจอร์นี้ต้องใช้ผ่าน Google Apps Script URL หรือ Proxy"); return; }
   const id = Array.from(state.selectedItems)[0];
   const newName = prompt('ชื่อใหม่:');
   if (!newName || !id) return;
@@ -2920,7 +2979,7 @@ async function renameSelectedItem() {
 }
 
 async function deleteSelectedItems() {
-  if (!isGAS()) { alert("ฟีเจอร์นี้ต้องใช้ผ่าน Google Apps Script URL"); return; }
+  if (!isDriveSupported()) { alert("ฟีเจอร์นี้ต้องใช้ผ่าน Google Apps Script URL หรือ Proxy"); return; }
   if (!confirm(`ยืนยันการลบ ${state.selectedItems.size} รายการ?`)) return;
   showToast('🗑 กำลังลบ...');
   google.script.run
@@ -2953,39 +3012,166 @@ async function previewFile(id, name, url, mimeType = '') {
   const isImage = /\.(jpg|jpeg|png|gif)$/i.test(name) || mimeType.includes('image');
   const isPDF = name.toLowerCase().endsWith('.pdf') || mimeType.includes('pdf');
 
-  let body = `<div class="preview-loading"><div class="spinner"></div><p>กำลังเตรียมไฟล์แบบ Native...</p></div>`;
+  // Loading skeleton UI (Pulse Animation)
+  let loadingHtml = `
+    <div class="preview-skeleton" style="display: flex; flex-direction: column; gap: 15px; padding: 10px;">
+      <div style="height: 20px; background: rgba(0,0,0,0.05); border-radius: 4px; width: 45%; animation: preview-pulse 1.5s infinite;"></div>
+      <div style="height: 380px; background: rgba(0,0,0,0.05); border-radius: 12px; animation: preview-pulse 1.5s infinite; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px;">
+        <div class="spinner"></div>
+        <p style="font-size: 13px; opacity: 0.7; margin-top: 10px;">กำลังเตรียมไฟล์แบบ Native...</p>
+      </div>
+    </div>
+    <style>
+      @keyframes preview-pulse {
+        0%, 100% { opacity: 0.6; }
+        50% { opacity: 1; }
+      }
+    </style>
+  `;
   
-  openModal(name, `<div id="preview-container">${body}</div>`, `
+  // Make print function globally accessible in module context
+  window.printPdf = () => {
+    const iframe = document.getElementById('pdfPreviewIframe');
+    if (iframe) {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch (e) {
+        console.warn("Cross-origin or iframe print error, printing main window:", e);
+        window.print();
+      }
+    } else {
+      window.print();
+    }
+  };
+
+  // Helper to show fallback options if GAS fails
+  const showFallbackUI = (container) => {
+    container.innerHTML = `
+      <div class="empty-hero" style="min-height:280px; text-align:center; padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <div style="font-size:50px; color:var(--c-rust); margin-bottom: 10px;">⚠️</div>
+        <h3 style="font-weight:700; margin-bottom:8px;">ไม่สามารถดึงข้อมูลไฟล์ได้</h3>
+        <p style="font-size:13px; opacity:0.7; margin-bottom:25px; max-width: 320px;">เกิดข้อผิดพลาดหรือเซิร์ฟเวอร์ตอบสนองช้าเกินไป (ไฟล์อาจมีขนาดใหญ่เกินขีดจำกัด)</p>
+        <div style="display:flex; gap:12px; justify-content:center; width: 100%; max-width: 320px;">
+          <button class="nb-btn-primary sm" style="flex: 1;" onclick="window.open('${url || `https://drive.google.com/open?id=${id}`}', '_blank')">📂 เปิดใน Drive</button>
+          <button class="nb-btn sm" style="flex: 1;" onclick="downloadFileViaProxy('${id}', '${name.replace(/'/g, "\\'")}')">⬇ Download</button>
+        </div>
+      </div>
+    `;
+  };
+
+  // Open Modal with loading skeleton
+  openModal(name, `<div id="preview-container">${loadingHtml}</div>`, `
     <div style="display:flex; gap:10px; width:100%;">
-      <button class="nb-btn sm" style="flex:1;" onclick="window.open('https://drive.google.com/uc?export=download&id=${id}', '_blank')">⬇ Download</button>
-      <button class="nb-btn sm" style="flex:1;" onclick="window.open('https://drive.google.com/file/d/${id}/view', '_blank')">🖨 Print / Full View</button>
+      <button class="nb-btn sm" style="flex:1;" onclick="downloadFileViaProxy('${id}', '${name.replace(/'/g, "\\'")}')">⬇ Download</button>
+      <button id="modalPrintBtn" class="nb-btn sm" style="flex:1; opacity:0.5; cursor:not-allowed;" onclick="window.printPdf()" disabled>🖨 Print</button>
     </div>
   `);
 
-  if (isImage) {
-    google.script.run.withSuccessHandler(res => {
-      if (res.success) {
-        document.getElementById('preview-container').innerHTML = `<img src="${res.base64}" style="width:100%; border-radius:12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">`;
-      } else {
-        document.getElementById('preview-container').innerHTML = `<p>โหลดรูปไม่สำเร็จ: ${res.error}</p>`;
+  let loaded = false;
+
+  // Timeout Warning: ถ้าโหลดเกิน 10 วินาที ให้ขึ้นเตือนและปุ่มลัดไป Google Drive
+  const timeoutId = setTimeout(() => {
+    if (!loaded) {
+      const container = document.getElementById('preview-container');
+      if (container) {
+        container.innerHTML = `
+          <div style="text-align:center; padding: 40px 20px; background: rgba(0,0,0,0.02); border-radius: 12px; border: 1.5px dashed rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 380px;">
+            <div class="spinner" style="margin-bottom: 20px;"></div>
+            <h4 style="margin: 0 0 8px; font-weight:700; color:var(--c-rust); font-size: 16px;">ไฟล์ขนาดใหญ่ กำลังโหลด...</h4>
+            <p style="font-size:12px; opacity:0.7; margin-bottom:25px; max-width: 280px; line-height: 1.5;">เอกสารกำลังถูกดึงและดาวน์โหลดเป็น Base64 ในพื้นหลัง หากรอนานเกินไป คุณสามารถเปิดดูโดยตรงได้ทันที</p>
+            <button class="nb-btn-primary sm" onclick="window.open('${url || `https://drive.google.com/open?id=${id}`}', '_blank')">📂 เปิดดูโดยตรงบน Google Drive</button>
+          </div>
+        `;
       }
-    }).getFileDataBase64(id);
+    }
+  }, 10000);
+
+  if (isImage) {
+    google.script.run
+      .withSuccessHandler(res => {
+        loaded = true;
+        clearTimeout(timeoutId);
+        const container = document.getElementById('preview-container');
+        if (!container) return;
+
+        if (res && res.success) {
+          container.innerHTML = `<img src="${res.base64}" style="width:100%; border-radius:12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">`;
+          
+          // Enable and redirect Print button to print the main page/image
+          const printBtn = document.getElementById('modalPrintBtn');
+          if (printBtn) {
+            printBtn.removeAttribute('disabled');
+            printBtn.style.opacity = '1';
+            printBtn.style.cursor = 'pointer';
+            printBtn.onclick = () => window.print();
+          }
+        } else {
+          showFallbackUI(container);
+        }
+      })
+      .withFailureHandler(() => {
+        loaded = true;
+        clearTimeout(timeoutId);
+        const container = document.getElementById('preview-container');
+        if (container) showFallbackUI(container);
+      })
+      .getFileDataBase64(id);
+
   } else if (isPDF) {
-    // PDF Native preview logic (Directly opening the view is often better on mobile than iframes)
-    document.getElementById('preview-container').innerHTML = `
-      <div class="empty-hero" style="min-height:300px;">
-        <div style="font-size:50px;">📄</div>
-        <h3>PDF Preview</h3>
-        <p>เอกสารพร้อมสำหรับการดาวน์โหลดหรือพิมพ์</p>
-        <button class="nb-btn-primary" onclick="window.open('https://drive.google.com/file/d/${id}/view', '_blank')">เปิดเอกสารต้นฉบับ</button>
-      </div>`;
+    google.script.run
+      .withSuccessHandler(res => {
+        loaded = true;
+        clearTimeout(timeoutId);
+        const container = document.getElementById('preview-container');
+        if (!container) return;
+
+        if (res && res.success) {
+          // Double Fallback rendering: Option A (Iframe) -> Option B (Embed)
+          container.innerHTML = `
+            <iframe id="pdfPreviewIframe" src="${res.base64}" width="100%" height="500px" style="border:none; border-radius:8px; box-shadow: 0 4px 15px rgba(0,0,0,0.08);" onerror="this.outerHTML='<embed type=\"application/pdf\" src=\"${res.base64}\" width=\"100%\" height=\"500px\" style=\"border-radius:8px;\">'">
+              <embed type="application/pdf" src="${res.base64}" width="100%" height="500px" style="border-radius:8px;">
+            </iframe>
+          `;
+
+          // Enable Print Button
+          const printBtn = document.getElementById('modalPrintBtn');
+          if (printBtn) {
+            printBtn.removeAttribute('disabled');
+            printBtn.style.opacity = '1';
+            printBtn.style.cursor = 'pointer';
+          }
+        } else {
+          showFallbackUI(container);
+        }
+      })
+      .withFailureHandler(() => {
+        loaded = true;
+        clearTimeout(timeoutId);
+        const container = document.getElementById('preview-container');
+        if (container) showFallbackUI(container);
+      })
+      .getFileDataBase64(id);
+
   } else {
-    document.getElementById('preview-container').innerHTML = `<div class="empty-hero"><h3>ไม่รองรับการพรีวิวแบบ Native</h3><p>กรุณาเปิดผ่าน Google Drive</p><a href="${url || `https://drive.google.com/open?id=${id}`}" target="_blank" class="nb-btn-primary">เปิดไฟล์</a></div>`;
+    // Non-previewable files fallback
+    clearTimeout(timeoutId);
+    const container = document.getElementById('preview-container');
+    if (container) {
+      container.innerHTML = `
+        <div class="empty-hero" style="min-height:280px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+          <div style="font-size:50px; margin-bottom: 12px;">📄</div>
+          <h3 style="font-weight: 700; margin-bottom: 6px;">ไม่รองรับการพรีวิวแบบ Native</h3>
+          <p style="font-size: 13px; opacity: 0.7; margin-bottom: 25px;">ประเภทไฟล์นี้ยังไม่เปิดใช้งานฟังก์ชันพรีวิวโดยตรงบนระบบ</p>
+          <a href="${url || `https://drive.google.com/open?id=${id}`}" target="_blank" class="nb-btn-primary" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center; padding: 12px 24px; border-radius: 20px;">📂 เปิดดูบน Google Drive</a>
+        </div>
+      `;
+    }
   }
 }
 
 async function automateDriveFolder(courseId) {
-  if (!isGAS()) { alert("ฟีเจอร์นี้ต้องใช้ผ่าน Google Apps Script URL"); return; }
+  if (!isDriveSupported()) { alert("ฟีเจอร์นี้ต้องใช้ผ่าน Google Apps Script URL หรือ Proxy"); return; }
   const c = findCourseById(courseId);
   const sem = state.semesters.find(s => state.courses[s.id]?.find(x => x.id === courseId));
   showToast('🤖 กำลังจัดการโฟลเดอร์อัตโนมัติ...');
@@ -3095,11 +3281,30 @@ async function handleLinkedFiles(docs, courseId) {
     const course = findCourseById(courseId);
     if (!course) return;
     
-    // For now, refresh drive as they might be in standard folders
-    // Or we could store them in a 'pinned_files' collection
-    showToast(`✅ Files linked to ${course.code}`);
+    if (!course.linkedFiles) course.linkedFiles = [];
+    docs.forEach(d => {
+      if (!course.linkedFiles.find(f => f.id === d.id)) {
+        course.linkedFiles.push({ id: d.id, name: d.name, url: d.url, mimeType: d.mimeType });
+      }
+    });
+    
+    await fsUpd('courses', courseId, { linkedFiles: course.linkedFiles });
+    showToast(`✅ Linked ${docs.length} files to ${course.code}`);
+    render();
     refreshDriveFiles(courseId, course.driveId);
 }
+
+async function unlinkFileFromCourse(courseId, fileId) {
+  if (!confirm('ยืนยันการยกเลิกลิงก์ไฟล์นี้จากวิชา?')) return;
+  const course = findCourseById(courseId);
+  if (course && course.linkedFiles) {
+    course.linkedFiles = course.linkedFiles.filter(f => f.id !== fileId);
+    await fsUpd('courses', courseId, { linkedFiles: course.linkedFiles });
+    showToast('✅ ยกเลิกลิงก์ไฟล์สำเร็จ');
+    render();
+  }
+}
+window.unlinkFileFromCourse = unlinkFileFromCourse;
 
 
 async function deleteTopic(courseId, topicId) {
@@ -3816,11 +4021,16 @@ function renderAssignCard(a, done = false) {
       <button class="check-circle ${done ? 'checked' : ''}" data-toggle-assign="${a.id}">${done ? '✓' : ''}</button>
       <div class="ac-body">
         <div class="ac-title ${done ? 'strike' : ''}">${a.title}</div>
-        <div class="ac-meta">
+        <div class="ac-meta" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
           <span class="badge-course" style="background:${a.courseColor || 'var(--c-accent)'}22;color:${a.courseColor || 'var(--c-accent)'}">${a.courseName}</span>
           <span>📅 ${new Date(a.dueDate).toLocaleDateString('th-TH')} ${a.dueTime || ''}</span>
           ${a.maxScore ? `<span>💯 ${a.maxScore} คะแนน</span>` : ''}
           ${a.type ? `<span class="assign-type-badge">${a.type}</span>` : ''}
+          ${a.folderUrl ? `
+            <a href="${a.folderUrl}" target="_blank" class="badge-course" style="text-decoration:none; background:rgba(99,102,241,0.1); color:rgb(99,102,241); display:inline-flex; align-items:center; gap:4px; font-weight:600; border:1px solid rgba(99,102,241,0.2);">
+              📂 โฟลเดอร์เก็บงาน
+            </a>
+          ` : ''}
         </div>
         ${a.note ? `<div class="ac-note">${a.note}</div>` : ''}
         ${!done && d <= 3 && d >= 0 ? `<div class="countdown-mini" style="color:${urgColor}">
@@ -4821,13 +5031,24 @@ function openAddAssignmentForm(a = null) {
     if (!data.title || !data.dueDate) { showToast('⚠️ กรอกชื่องานและกำหนดส่ง', 'err'); return; }
     await fsSet('assignments', data.id, data);
 
-    if (!a && course?.driveId && typeof google !== 'undefined' && google.script) {
+    if (!a && (course?.driveAssignments || course?.driveId) && typeof google !== 'undefined' && google.script && google.script.run) {
       showToast(`📂 กำลังเตรียมพื้นที่${data.type === 'Lab' ? ' Lab' : 'เก็บงาน'}...`);
-      google.script.run.withSuccessHandler(res => {
+      google.script.run.withSuccessHandler(async res => {
         if (res && res.success) {
           showToast(`✅ สร้างโฟลเดอร์ ${data.type} สำเร็จ`);
+          await fsUpd('assignments', data.id, {
+            folderId: res.folderId,
+            folderUrl: res.folderUrl
+          });
+          const arr = state.assignments[data.courseId] || [];
+          const item = arr.find(x => x.id === data.id);
+          if (item) {
+            item.folderId = res.folderId;
+            item.folderUrl = res.folderUrl;
+          }
+          render();
         }
-      }).createAssignmentFolder(course.driveId, data.title, data.type);
+      }).createAssignmentFolder(course.driveAssignments || course.driveId, data.title, data.type);
     }
 
     if (typeof google !== 'undefined' && google.script) {
@@ -5498,10 +5719,19 @@ function attachAllEvents() {
   document.getElementById('savePinBtn')?.addEventListener('click', async () => {
     const pin = document.getElementById('pinInput')?.value;
     if (pin && pin.length === 6) {
-      const hashed = await hashPIN(pin);
-      setDoc(doc(db, 'app_settings', 'security'), { global_pin: hashed }).then(() => {
+      // Generate a cryptographically secure random 16-byte salt
+      const array = new Uint8Array(16);
+      crypto.getRandomValues(array);
+      const salt = Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
+      
+      const hashed = await hashPIN(pin, salt);
+      setDoc(doc(db, 'app_settings', 'security'), { 
+        global_pin: hashed,
+        pin_salt: salt
+      }).then(() => {
         state.pin = hashed;
-        showToast('🔒 ตั้งรหัส PIN (Hashed) สำเร็จแล้ว');
+        state.pinSalt = salt;
+        showToast('🔒 ตั้งรหัส PIN (PBKDF2 Secured) สำเร็จแล้ว');
         render();
       });
     } else {
@@ -5510,8 +5740,9 @@ function attachAllEvents() {
   });
   document.getElementById('removePinBtn')?.addEventListener('click', () => {
     if (confirm('ต้องการยกเลิกรหัส PIN ใช่หรือไม่?')) {
-      setDoc(doc(db, 'app_settings', 'security'), { global_pin: null }).then(() => {
+      setDoc(doc(db, 'app_settings', 'security'), { global_pin: null, pin_salt: null }).then(() => {
         state.pin = null;
+        state.pinSalt = 'NITIPAT_SALT_DEFAULT';
         state.isLocked = false;
         showToast('🔓 ยกเลิกรหัส PIN แล้ว');
         render();
@@ -5575,7 +5806,7 @@ function renderCourseHub(courseId) {
   state.activeCourseId = courseId;
   state.view = 'course-hub';
   state.activeHubTab = 'Files';
-  state.folderPath = [];
+  state.driveBreadcrumbs = [];
   state.currentFolderId = null;
   render();
 
@@ -5726,18 +5957,97 @@ window.saveCourseSettings = async function (id) {
     showToast('❌ บันทึกไม่สำเร็จ', 'err');
   }
 };
-async function hashPIN(pin) {
+async function hashPIN(pin, salt = 'NITIPAT_SALT_DEFAULT', iterations = 10000) {
+  try {
+    const encoder = new TextEncoder();
+    const passwordKey = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(pin),
+      'PBKDF2',
+      false,
+      ['deriveBits', 'deriveKey']
+    );
+    
+    const derivedKey = await crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt: encoder.encode(salt),
+        iterations: iterations,
+        hash: 'SHA-256'
+      },
+      passwordKey,
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['encrypt', 'decrypt']
+    );
+    
+    const exported = await crypto.subtle.exportKey('raw', derivedKey);
+    const hashArray = Array.from(new Uint8Array(exported));
+    return 'pbkdf2$' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch (e) {
+    // Cryptographic fallback to salted SHA-256 if subtle is unavailable or fails
+    const encoder = new TextEncoder();
+    const data = encoder.encode(pin + salt);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return 'sha256$' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+}
+
+async function verifyPIN(inputPin, storedHash, salt = 'NITIPAT_SALT_DEFAULT') {
+  if (!storedHash) return false;
+  
+  if (storedHash.startsWith('pbkdf2$')) {
+    const hashedInput = await hashPIN(inputPin, salt);
+    return hashedInput === storedHash;
+  }
+  
+  if (storedHash.startsWith('sha256$')) {
+    const hashedInput = await hashPIN(inputPin, salt);
+    return hashedInput === storedHash;
+  }
+  
+  // Legacy plain SHA-256 (no prefix)
   const encoder = new TextEncoder();
-  const data = encoder.encode(pin);
+  const data = encoder.encode(inputPin);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  const legacyHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return legacyHash === storedHash;
+}
+
+function startInactivityTracker() {
+  const resetTimer = () => {
+    if (sessionStorage.getItem('unlocked') === 'true') {
+      sessionStorage.setItem('unlocked_at', Date.now().toString());
+    }
+  };
+  
+  ['mousedown', 'mousemove', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
+    window.addEventListener(evt, resetTimer, { passive: true });
+  });
+  
+  setInterval(() => {
+    if (sessionStorage.getItem('unlocked') === 'true') {
+      const unlockedAt = sessionStorage.getItem('unlocked_at');
+      if (unlockedAt && (Date.now() - parseInt(unlockedAt) > 1800000)) {
+        sessionStorage.removeItem('unlocked');
+        sessionStorage.removeItem('unlocked_at');
+        state.isLocked = true;
+        showToast('🔒 เซสชันหมดอายุเนื่องจากไม่มีความเคลื่อนไหว', 'err');
+        LoginGate.init();
+        render();
+      }
+    }
+  }, 10000);
 }
 
 window.updateSetColor = updateSetColor;
 
 window.addEventListener('DOMContentLoaded', async () => {
   try {
+    startInactivityTracker();
+    await loadCourseDatabase();
     document.documentElement.setAttribute('data-theme', state.darkMode ? 'dark' : 'light');
     loadFromLocalStorage();
     
@@ -5762,6 +6072,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (typeof Radio !== 'undefined') {
       Radio.init();
     }
+
+    // Dynamic background GPS check-in tracker (runs every 5 minutes)
+    setInterval(() => {
+      if (!state.isLocked && !state.modal) {
+        GPSManager.checkInSuggestion().catch(err => console.error("Background GPS check failed: ", err));
+      }
+    }, 300000);
 
     setInterval(() => { if (!state.modal) render(); }, 30000);
   } catch (e) {
@@ -5852,16 +6169,17 @@ window.PickerManager = PickerManager;
  * SMART COURSE HUB: DRIVE EXPLORER
  */
 async function refreshDriveFiles(courseId, folderId, force = false) {
-  if (!folderId) return;
-  
   const c = findCourseById(courseId);
   if (!c) return;
 
+  const targetFolderId = folderId || state.currentFolderId || c.driveId;
+  if (!targetFolderId) return;
+
   // Initialize breadcrumbs if at root
-  if (folderId === c.driveId && state.driveBreadcrumbs.length === 0) {
-    state.driveBreadcrumbs = [{ id: folderId, name: 'Root' }];
+  if (targetFolderId === c.driveId && state.driveBreadcrumbs.length === 0) {
+    state.driveBreadcrumbs = [{ id: targetFolderId, name: 'Root' }];
   }
-  state.currentFolderId = folderId;
+  state.currentFolderId = targetFolderId;
 
   state.courseFiles = state.courseFiles || {};
   state.selectedItems.clear();
@@ -5869,7 +6187,7 @@ async function refreshDriveFiles(courseId, folderId, force = false) {
 
   google.script.run
     .withSuccessHandler(files => {
-      state.courseFiles[folderId] = {
+      state.courseFiles[targetFolderId] = {
         folders: files.filter(f => f.isFolder),
         files: files.filter(f => !f.isFolder)
       };
@@ -5878,13 +6196,17 @@ async function refreshDriveFiles(courseId, folderId, force = false) {
     .withFailureHandler(err => {
       showToast(`❌ โหลดไฟล์ล้มเหลว: ${err.message}`, 'err');
     })
-    .listDriveFiles(folderId);
+    .listDriveFiles(targetFolderId);
 }
 
 async function handleFileUpload(courseId, folderId) {
-  PickerManager.openPicker(courseId, folderId, (docs) => {
+  const c = findCourseById(courseId);
+  const targetFolderId = state.currentFolderId || folderId || (c ? c.driveId : null);
+  if (!targetFolderId) return;
+
+  PickerManager.openPicker(courseId, targetFolderId, (docs) => {
     showToast(`✅ อัปโหลด ${docs.length} รายการสำเร็จ (Direct to Drive)`);
-    refreshDriveFiles(courseId, folderId, true);
+    refreshDriveFiles(courseId, targetFolderId, true);
   });
 }
 
@@ -6808,35 +7130,42 @@ const NotionHub = {
     render();
 
     try {
-      // 1. Sync Courses (Subjects)
+      // 1. Sync Courses (Subjects) concurrently
       const courses = Object.values(state.courses).flat();
-      for (const course of courses) {
+      const coursePromises = courses.map(async (course) => {
         if (!course.notionPageId || !course.notionUrl) {
-          const res = await new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).syncCourseToNotion(course));
-          if (res.success) {
-            course.notionPageId = res.pageId;
-            course.notionUrl = res.url;
-            await fsUpd('courses', course.id, { notionPageId: res.pageId, notionUrl: res.url });
+          try {
+            const res = await new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).syncCourseToNotion(course));
+            if (res && res.success) {
+              course.notionPageId = res.pageId;
+              course.notionUrl = res.url;
+              await fsUpd('courses', course.id, { notionPageId: res.pageId, notionUrl: res.url });
+            }
+          } catch (err) {
+            console.error(`Error syncing course ${course.code} to Notion:`, err);
           }
         }
-      }
+      });
+      await Promise.all(coursePromises);
 
-      // 2. Sync Assignments
+      // 2. Sync Assignments concurrently
       const assignments = Object.values(state.assignments).flat();
-      for (const assign of assignments) {
-        // Push local to Notion if new or modified
+      const assignmentPromises = assignments.map(async (assign) => {
         if (!assign.notionPageId || (assign.updatedAt && assign.updatedAt > state.lastNotionSync)) {
-          const res = await new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).syncAssignmentToNotion(assign));
-          if (res.success && res.pageId) {
-            assign.notionPageId = res.pageId;
-            await fsUpd('assignments', assign.id, { notionPageId: res.pageId });
+          try {
+            const res = await new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).syncAssignmentToNotion(assign));
+            if (res && res.success && res.pageId) {
+              assign.notionPageId = res.pageId;
+              await fsUpd('assignments', assign.id, { notionPageId: res.pageId });
+            }
+          } catch (err) {
+            console.error(`Error syncing assignment ${assign.title} to Notion:`, err);
           }
         }
-      }
+      });
+      await Promise.all(assignmentPromises);
 
       // 3. Pull Updates from Notion (Assignments Database)
-      // This part would ideally iterate through databases and pull modified pages
-      // For now, we update the last sync timestamp
       state.lastNotionSync = new Date().toISOString();
       localStorage.setItem('last_notion_sync', state.lastNotionSync);
       state.notionConnected = true;
