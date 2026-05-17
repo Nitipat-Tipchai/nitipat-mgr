@@ -186,14 +186,14 @@ async function startAppCore() {
   try {
     let firebaseConfig;
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      console.warn("Using local mock Firebase config");
+      console.warn("Using aligned local Firebase config");
       firebaseConfig = {
-        apiKey: "LOCAL_MOCK_KEY",
-        authDomain: "local-mock.firebaseapp.com",
-        projectId: "local-mock",
-        storageBucket: "local-mock.appspot.com",
-        messagingSenderId: "123456",
-        appId: "1:123456:web:123456"
+        apiKey: "AIzaSyB7pGaPWn4n7NxrQ9l60V16u-qj05khqU8",
+        authDomain: "mat-e-db476.firebaseapp.com",
+        projectId: "mat-e-db476",
+        storageBucket: "mat-e-db476.firebasestorage.app",
+        messagingSenderId: "986910230630",
+        appId: "1:986910230630:web:7b4b23ce828d18ab7bc5a7"
       };
     } else {
       firebaseConfig = await new Promise((res, rej) => {
@@ -3976,27 +3976,56 @@ window.deleteSemesterCalendar = async (semName) => {
   }
 };
 
-window.checkFcmStatus = () => {
-  if (typeof google !== 'undefined' && google.script) {
-    showToast('⌛ กำลังตรวจสอบจำนวนอุปกรณ์...');
-    google.script.run.withSuccessHandler(res => {
-      openModal('📱 สถานะการแจ้งเตือน', `
-        <div style="text-align:center; padding:20px;">
-          <div style="font-size:40px; margin-bottom:15px;">📡</div>
-          <div style="font-size:18px; font-weight:700;">ลงทะเบียนไว้ ${res.count} อุปกรณ์</div>
-          <p style="font-size:13px; color:var(--c-muted); margin-top:10px;">
-            หากเปลี่ยนเครื่องใหม่ หรือล้างแคช เบราว์เซอร์จะลงทะเบียนรหัสใหม่ให้อัตโนมัติครับ
-          </p>
-          <div style="margin-top:20px; font-family:monospace; font-size:11px; opacity:0.6; text-align:left; background:rgba(0,0,0,0.05); padding:10px; border-radius:8px;">
-            Tokens (Snippets):<br>
-            ${res.tokens.map(t => `• ${t}`).join('<br>')}
-          </div>
-          <button class="btn-glass danger full" style="margin-top:20px;" onclick="resetFcmTokens()">🗑 ล้างข้อมูลอุปกรณ์ทั้งหมด</button>
+window.checkFcmStatus = async () => {
+  showToast('⌛ กำลังตรวจสอบจำนวนอุปกรณ์...');
+  try {
+    const q = query(collection(db, 'fcm_tokens'), where('userId', '==', STUDENT.id));
+    const snap = await getDocs(q);
+    const count = snap.size;
+    const tokens = [];
+    
+    snap.forEach(d => {
+      const data = d.data();
+      if (data.token) {
+        const snippet = data.token.substring(0, 10) + '...' + data.token.substring(data.token.length - 10);
+        const platform = data.platform || 'Unknown';
+        tokens.push(`${snippet} (${platform})`);
+      }
+    });
+
+    openModal('📱 สถานะการแจ้งเตือน PWA', `
+      <div style="text-align:center; padding:20px;">
+        <div style="font-size:40px; margin-bottom:15px;">📡</div>
+        <div style="font-size:18px; font-weight:700;">ลงทะเบียนไว้ ${count} อุปกรณ์</div>
+        <p style="font-size:12px; color:#64748b; margin-top:10px; line-height:1.5;">
+          หากเปลี่ยนเครื่องใหม่ หรือล้างแคช เบราว์เซอร์จะลงทะเบียนรหัสการแจ้งเตือนใหม่ให้อัตโนมัติครับ
+        </p>
+        <div style="margin-top:20px; font-family:monospace; font-size:11px; opacity:0.7; text-align:left; background:rgba(0,0,0,0.05); padding:12px; border-radius:10px; max-height:150px; overflow-y:auto; line-height:1.6;">
+          <strong>อุปกรณ์เปิดใช้งานทั้งหมด (${count}):</strong><br>
+          ${tokens.map(t => `• ${t}`).join('<br>')}
+          ${tokens.length === 0 ? '<i>ไม่มีอุปกรณ์เปิดใช้งาน</i>' : ''}
         </div>
-      `, '<button class="nb-btn nb-btn-primary full" onclick="closeModal()">รับทราบ</button>');
-    }).getFcmStatus();
-  } else {
-    showToast('❌ ไม่สามารถติดต่อเซิร์ฟเวอร์ได้', 'err');
+        <button class="btn-glass danger full" style="margin-top:20px; width: 100%;" onclick="resetFcmTokens()">🗑 ล้างข้อมูลอุปกรณ์ทั้งหมด</button>
+      </div>
+    `, '<button class="nb-btn nb-btn-primary full" onclick="closeModal()">รับทราบ</button>');
+
+  } catch (err) {
+    console.error("Firestore FCM check failed:", err);
+    if (typeof google !== 'undefined' && google.script) {
+      google.script.run.withSuccessHandler(res => {
+        openModal('📱 สถานะการแจ้งเตือน', `
+          <div style="text-align:center; padding:20px;">
+            <div style="font-size:40px; margin-bottom:15px;">📡</div>
+            <div style="font-size:18px; font-weight:700;">ลงทะเบียนไว้ ${res.count} อุปกรณ์</div>
+            <button class="btn-glass danger full" style="margin-top:20px;" onclick="resetFcmTokens()">🗑 ล้างข้อมูลอุปกรณ์ทั้งหมด</button>
+          </div>
+        `, '<button class="nb-btn nb-btn-primary full" onclick="closeModal()">รับทราบ</button>');
+      }).withFailureHandler(e => {
+        showToast('❌ ไม่สามารถดึงข้อมูลอุปกรณ์ได้: ' + e, 'err');
+      }).getFcmStatus();
+    } else {
+      showToast('❌ เกิดข้อผิดพลาดในการดึงข้อมูลอุปกรณ์', 'err');
+    }
   }
 };
 
@@ -4040,17 +4069,24 @@ window.testAlarmSound = async () => {
 window.resetFcmTokens = async () => {
   if (!confirm('⚠️ ยืนยันที่จะล้างข้อมูลอุปกรณ์ทั้งหมดใช่หรือไม่?\n\n(ทุกเครื่องจะต้องกด "เปิดใช้งาน" ใหม่เพื่อรับแจ้งเตือนอีกครั้ง)')) return;
 
+  showToast('⏳ กำลังล้างข้อมูลอุปกรณ์...');
+  try {
+    const q = query(collection(db, 'fcm_tokens'), where('userId', '==', STUDENT.id));
+    const snap = await getDocs(q);
+    const promises = snap.docs.map(d => deleteDoc(d.ref));
+    await Promise.all(promises);
+    
+    closeModal();
+    showToast('✅ ล้างข้อมูลสำเร็จ! กรุณากดลงทะเบียนใหม่');
+  } catch (e) {
+    console.error("Firestore FCM reset failed:", e);
+    showToast('❌ เกิดข้อผิดพลาดในการล้างข้อมูลคลาวด์', 'err');
+  }
+
   if (typeof google !== 'undefined' && google.script) {
-    showToast('⏳ กำลังล้างข้อมูล...');
-    google.script.run.withSuccessHandler(async () => {
-      closeModal();
-      showToast('✅ ล้างข้อมูลสำเร็จ! กรุณากดลงทะเบียนใหม่');
-      // ล้าง Firestore ด้วยเพื่อความสะอาด
-      try {
-        const snap = await getDocs(query(collection(db, 'fcm_tokens'), where('userId', '==', STUDENT.id)));
-        for (const d of snap.docs) await deleteDoc(d.ref);
-      } catch (e) { }
-    }).resetFcmTokens();
+    try {
+      google.script.run.withFailureHandler(() => {}).resetFcmTokens();
+    } catch (e) {}
   }
 };
 
@@ -5843,44 +5879,6 @@ function renderMoneyPod() {
         </div>
       </div>
     `;
-  } else if (subView === 'scanner') {
-    mainContent = `
-      <div class="mp-card" style="text-align:center;">
-        <h2 style="margin-top:0; font-size:18px; font-weight:900; color:var(--primary);">🌅 AI Receipt Scanner — สแกนใบเสร็จอัจฉริยะ</h2>
-        <p style="font-size:12px; color:#64748b; margin-top:4px; max-width:500px; margin-left:auto; margin-right:auto;">ไม่ต้องเสียเวลาพิมพ์! ถ่ายรูปสลิปหรืออัปโหลดใบเสร็จ ระบบ AI จะทำการวิเคราะห์จำนวนเงิน, รายละเอียดร้านค้า และแยกประเภทบัญชีให้คุณโดยอัตโนมัติ</p>
-        
-        <div style="display:flex; justify-content:center; gap:8px; margin-bottom:15px;">
-          <button class="btn-glass-pastel" onclick="mpSelectMockReceipt('seven')">🍙 ใบเสร็จ 7-Eleven</button>
-          <button class="btn-glass-pastel" onclick="mpSelectMockReceipt('starbucks')">☕ ใบเสร็จ Starbucks</button>
-          <button class="btn-glass-pastel" onclick="mpSelectMockReceipt('shabu')">🍲 บิลร้านชาบู</button>
-        </div>
-        
-        <div class="scanner-window" id="scannerWin">
-          <div class="scan-laser"></div>
-          <img id="receiptPreviewImage" src="https://images.unsplash.com/photo-1554415707-6e8cfc93fe23?auto=format&fit=crop&w=400&q=80" alt="Receipt Preview">
-        </div>
-        <div id="mockReceiptDetails" style="font-size:11.5px; font-weight:800; color:#475569; margin-bottom:15px;">
-          📄 ใบเสร็จ 7-Eleven (ข้าวผัด + น้ำดื่ม) — ยอด ฿187
-        </div>
-        
-        <div style="display:flex; justify-content:center; gap:12px;">
-          <input type="file" id="aiPhotoUpload" accept="image/*" style="display:none;" onchange="
-            const file = this.files[0];
-            if(file) {
-              const reader = new FileReader();
-              reader.onload = function(e) {
-                document.getElementById('receiptPreviewImage').src = e.target.result;
-                document.getElementById('mockReceiptDetails').innerHTML = '📄 ใบเสร็จที่ผู้ใช้อัปโหลด (วิเคราะห์ด้วย OCR-AI)';
-                state.mpSelectedMockReceiptType = 'custom_uploaded';
-              };
-              reader.readAsDataURL(file);
-            }
-          ">
-          <button class="btn-pastel" onclick="document.getElementById('aiPhotoUpload').click()"><span style="font-size:14px;">📤</span> อัปโหลดรูปใบเสร็จจริง</button>
-          <button class="btn-pastel-primary" onclick="mpScanReceiptStart()" style="padding:10px 25px;">⚡ เริ่มสแกนด้วย AI</button>
-        </div>
-      </div>
-    `;
   } else if (subView === 'installments') {
     mainContent = `
       <div class="mp-grid">
@@ -6099,7 +6097,7 @@ function renderMoneyPod() {
       <div class="mp-header">
         <div class="mp-title-section">
           <h1>🐽 MoneyPod Dashboard</h1>
-          <p>เครื่องมือจัดการการเงินอัจฉริยะแบบบูรณาการ: สแกนใบเสร็จ, ผ่อนชำระ SPayLater/SEasyCash & ออมเงิน</p>
+          <p>เครื่องมือจัดการการเงินอัจฉริยะแบบบูรณาการ: ผ่อนชำระ SPayLater/SEasyCash & ออมเงิน</p>
         </div>
         
         <div class="mp-theme-picker">
@@ -6112,7 +6110,6 @@ function renderMoneyPod() {
       
       <div class="mp-subview-tabs">
         <button class="mp-tab-btn ${subView === 'overview' ? 'active' : ''}" onclick="mpSetView('overview')">💵 แผงภาพรวมบัญชี</button>
-        <button class="mp-tab-btn ${subView === 'scanner' ? 'active' : ''}" onclick="mpSetView('scanner')">📸 สแกนใบเสร็จด้วย AI</button>
         <button class="mp-tab-btn ${subView === 'installments' ? 'active' : ''}" onclick="mpSetView('installments')">🛍️ ผ่อนชำระ & หนี้สิน</button>
         <button class="mp-tab-btn ${subView === 'goals' ? 'active' : ''}" onclick="mpSetView('goals')">🎯 เป้าหมายการออม</button>
         <button class="mp-tab-btn ${subView === 'reports' ? 'active' : ''}" onclick="mpSetView('reports')">📊 สถิติ & ส่งออก</button>
@@ -7860,7 +7857,11 @@ async function initWebPush() {
           serviceWorkerRegistration: registration
         });
         if (currentToken) {
-          google.script.run.saveFcmToken(currentToken);
+          if (typeof google !== 'undefined' && google.script) {
+            try {
+              google.script.run.withFailureHandler(() => {}).saveFcmToken(currentToken);
+            } catch (e) {}
+          }
         }
       }
     } catch (err) {
@@ -7886,7 +7887,6 @@ async function requestNotificationPermission() {
 
       if (currentToken) {
         console.log('FCM Token:', currentToken);
-        // ใช้ ID เครื่อง (deviceId) หรือ Hash ของ Token เพื่อไม่ให้ทับกัน
         const tokenHash = currentToken.substring(currentToken.length - 20);
         await setDoc(doc(db, 'fcm_tokens', tokenHash), {
           token: currentToken,
@@ -7895,9 +7895,17 @@ async function requestNotificationPermission() {
           platform: navigator.platform,
           userAgent: navigator.userAgent
         });
-        google.script.run.withSuccessHandler(res => {
-          showToast(`✅ ลงทะเบียนสำเร็จ! (อุปกรณ์ที่ ${res.count})`);
-        }).saveFcmToken(currentToken);
+        
+        if (typeof google !== 'undefined' && google.script) {
+          google.script.run.withSuccessHandler(res => {
+            showToast(`✅ ลงทะเบียนสำเร็จ! (อุปกรณ์ที่ ${res?.count || 1})`);
+          }).withFailureHandler(err => {
+            console.warn("GAS saveFcmToken failed (falling back silently to Firestore):", err);
+            showToast(`✅ ลงทะเบียนแจ้งเตือนสำเร็จ (เชื่อมต่อคลาวด์)`);
+          }).saveFcmToken(currentToken);
+        } else {
+          showToast(`✅ ลงทะเบียนแจ้งเตือนสำเร็จ (เชื่อมต่อคลาวด์)`);
+        }
 
         showToast("✅ เปิดการแจ้งเตือน FCM สำเร็จ!");
         new Notification("NITIPAT MANAGER", {
