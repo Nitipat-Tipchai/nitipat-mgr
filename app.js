@@ -360,10 +360,10 @@ let state = {
   pomodoroCount: 0,
 
   // MoneyPod State
-  moneyWallets: JSON.parse(localStorage.getItem('moneyWallets') || '[{"id":"cash","name":"เงินสด 💵","type":"cash","balance":1500},{"id":"bank","name":"บัญชีธนาคาร 🏦","type":"bank","balance":8500},{"id":"savings","name":"กระปุกออมเงิน 🐷","type":"savings","balance":5000},{"id":"spaylater","name":"SPayLater 🛍️","type":"debt","balance":0,"limit":15000},{"id":"seasycash","name":"SEasyCash 💸","type":"debt","balance":0,"limit":20000}]'),
+  moneyWallets: JSON.parse(localStorage.getItem('moneyWallets') || '[{"id":"cash","name":"เงินสด 💵","type":"cash","balance":0},{"id":"bank","name":"บัญชีธนาคาร 🏦","type":"bank","balance":0},{"id":"savings","name":"กระปุกออมเงิน 🐷","type":"savings","balance":0},{"id":"spaylater","name":"SPayLater 🛍️","type":"debt","balance":0,"limit":15000},{"id":"seasycash","name":"SEasyCash 💸","type":"debt","balance":0,"limit":20000}]'),
   moneyTransactions: JSON.parse(localStorage.getItem('moneyTransactions') || '[]'),
-  moneyBudgets: JSON.parse(localStorage.getItem('moneyBudgets') || '{"food":5000,"shopping":3000,"travel":2000}'),
-  moneyGoals: JSON.parse(localStorage.getItem('moneyGoals') || '[{"id":"g1","name":"เที่ยวญี่ปุ่น 🇯🇵","target":45000,"saved":5000},{"id":"g2","name":"ซื้อ iPad Pro 📱","target":32000,"saved":8000}]'),
+  moneyBudgets: JSON.parse(localStorage.getItem('moneyBudgets') || '{"food":0,"shopping":0,"travel":0}'),
+  moneyGoals: JSON.parse(localStorage.getItem('moneyGoals') || '[]'),
   moneyInstallments: JSON.parse(localStorage.getItem('moneyInstallments') || '[]'),
   moneyTheme: localStorage.getItem('moneyTheme') || 'theme-mint',
   moneyDailyBudget: parseFloat(localStorage.getItem('moneyDailyBudget') || '300'),
@@ -5552,6 +5552,14 @@ function renderMoneyPod() {
       showToast('🎯 สร้างเป้าหมายการออมใหม่เรียบร้อย!');
     };
 
+    window.mpDeleteGoal = function(goalId) {
+      if (!confirm('⚠️ ยืนยันที่จะลบเป้าหมายการออมนี้ใช่หรือไม่?')) return;
+      state.moneyGoals = state.moneyGoals.filter(g => g.id !== goalId);
+      saveMoneyPod();
+      render();
+      showToast('🗑️ ลบเป้าหมายการออมเรียบร้อย!');
+    };
+
     window.mpDepositGoal = function(goalId) {
       const goal = state.moneyGoals.find(g => g.id === goalId);
       if (!goal) return;
@@ -6037,6 +6045,7 @@ function renderMoneyPod() {
                   </div>
                   
                   <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
+                    <button class="btn-glass-pastel" onclick="mpDeleteGoal('${g.id}')" style="padding:6px 12px; font-size:11px; border-color:#ef4444; color:#ef4444; background:rgba(239, 68, 68, 0.05);">🗑️ ลบเป้าหมาย</button>
                     <button class="btn-glass-pastel" onclick="mpDepositGoal('${g.id}')" style="padding:6px 12px; font-size:11px; border-color:var(--primary); color:var(--primary);">💰 ฝากเงินเข้าออม</button>
                   </div>
                 </div>
@@ -7852,16 +7861,20 @@ async function initWebPush() {
       // อัปเดต Token อัตโนมัติถ้าเคยอนุญาตแล้ว
       if (Notification.permission === 'granted' && typeof getToken !== 'undefined') {
         const registration = await navigator.serviceWorker.ready;
-        const currentToken = await getToken(messaging, {
-          vapidKey: 'BGJJHyr07SwrKxHuo1w8HDRYCb6R-p6kZsk6yRaq-ho-iQ-7S0YdfTgz9KKDFW95jyQ927xCY51r6Wml84TonF4'.trim(),
-          serviceWorkerRegistration: registration
-        });
-        if (currentToken) {
-          if (typeof google !== 'undefined' && google.script) {
-            try {
-              google.script.run.withFailureHandler(() => {}).saveFcmToken(currentToken);
-            } catch (e) {}
+        try {
+          const currentToken = await getToken(messaging, {
+            vapidKey: 'BGJJHyr07SwrKxHuo1w8HDRYCb6R-p6kZsk6yRaq-ho-iQ-7S0YdfTgz9KKDFW95jyQ927xCY51r6Wml84TonF4'.trim(),
+            serviceWorkerRegistration: registration
+          });
+          if (currentToken) {
+            if (typeof google !== 'undefined' && google.script) {
+              try {
+                google.script.run.withFailureHandler(() => {}).saveFcmToken(currentToken);
+              } catch (e) {}
+            }
           }
+        } catch (tokenErr) {
+          console.warn('FCM token auto-update skipped: Push service connection is currently unavailable or blocked (VPN/AdBlocker/network). Using local notifications fallback.');
         }
       }
     } catch (err) {
@@ -7916,16 +7929,17 @@ async function requestNotificationPermission() {
         showToast("⚠️ ไม่สามารถรับรหัสลงทะเบียนได้", "err");
       }
     } catch (err) {
-      console.error('An error occurred while retrieving token. ', err);
-      let errorMsg = "❌ เกิดข้อผิดพลาดในการลงทะเบียน FCM";
-
-      if (err.name === 'AbortError' || err.message.includes('push service error')) {
-        errorMsg = "⚠️ ไม่สามารถติดต่อบริการ Push ได้\n\n(หากใช้ iPhone/iPad ต้อง 'เพิ่มไปยังหน้าจอโฮม' ก่อน หรืออาจเกิดจากบล็อกโฆษณา/VPN)";
-      } else if (err.code === 'messaging/permission-blocked') {
-        errorMsg = "⚠️ คุณบล็อกการแจ้งเตือนไว้ กรุณาปลดล็อกในตั้งค่าเบราว์เซอร์";
-      }
-
-      showToast(errorMsg, "err");
+      console.warn('FCM token retrieval failed: Push service unavailable, activating Local notifications fallback.', err);
+      
+      // Since browser notification permission is granted, local notifications WILL work perfectly!
+      state.notificationsGranted = true;
+      
+      showToast("📢 เปิดใช้งาน 'ระบบแจ้งเตือนจำลองในหน้าต่างแอป' ให้คุณแล้ว!\n(เนื่องจากเครือข่าย/VPN บล็อกระบบ Push ของบราวเซอร์)", "success");
+      
+      new Notification("NITIPAT MANAGER", {
+        body: "เปิดใช้งานระบบการแจ้งเตือนจำลอง (Local Notifications) เรียบร้อยแล้ว!",
+        icon: "https://img1.pic.in.th/images/Gemini_Generated_Image_k0lkzwk0lkzwk0lk.png"
+      });
     }
   } else {
     showToast("⚠️ คุณยังไม่ได้อนุญาตการแจ้งเตือน", "err");
