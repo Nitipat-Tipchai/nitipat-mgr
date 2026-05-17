@@ -1381,7 +1381,7 @@ async function loadAll() {
   render();
 
   try {
-    const [sSnap, cSnap, aSnap, eSnap, secSnap, mastSnap, structSnap, reflSnap] = await Promise.all([
+    const [sSnap, cSnap, aSnap, eSnap, secSnap, mastSnap, structSnap, reflSnap, profSnap] = await Promise.all([
       getDocs(collection(db, "semesters")),
       getDocs(collection(db, "courses")),
       getDocs(collection(db, "assignments")),
@@ -1389,7 +1389,8 @@ async function loadAll() {
       getDoc(doc(db, "app_settings", "security")),
       getDocs(collection(db, "topic_mastery")),
       getDocs(collection(db, "course_structures")),
-      getDocs(collection(db, "reflections"))
+      getDocs(collection(db, "reflections")),
+      getDoc(doc(db, "app_settings", "profile"))
     ]);
 
     if (secSnap.exists()) {
@@ -1397,6 +1398,18 @@ async function loadAll() {
       state.pinSalt = secSnap.data().pin_salt || 'NITIPAT_SALT_DEFAULT';
       if (state.pin && sessionStorage.getItem('unlocked') !== 'true') state.isLocked = true;
       else state.isLocked = false;
+    }
+
+    if (profSnap.exists()) {
+      const profData = profSnap.data();
+      if (profData.idCardPhoto) {
+        state.idCardPhoto = profData.idCardPhoto;
+        localStorage.setItem('id_card_photo', state.idCardPhoto);
+      }
+      if (profData.studentPhoto) {
+        STUDENT.photoUrl = profData.studentPhoto;
+        localStorage.setItem('student_photo', STUDENT.photoUrl);
+      }
     }
 
     state.semesters = sSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.order - b.order);
@@ -5026,16 +5039,23 @@ function openAddAssignmentForm(a = null) {
       note: document.getElementById('f-aNote').value,
       status: a ? a.status : 'ยังไม่เริ่ม',
       submitted: a ? a.submitted : false,
-      subtasks: a ? a.subtasks || [] : []
+      subtasks: a ? a.subtasks || [] : [],
+      folderId: a ? a.folderId || null : null,
+      folderUrl: a ? a.folderUrl || null : null
     };
     if (!data.title || !data.dueDate) { showToast('⚠️ กรอกชื่องานและกำหนดส่ง', 'err'); return; }
     await fsSet('assignments', data.id, data);
 
-    if (!a && (course?.driveAssignments || course?.driveId) && typeof google !== 'undefined' && google.script && google.script.run) {
-      showToast(`📂 กำลังเตรียมพื้นที่${data.type === 'Lab' ? ' Lab' : 'เก็บงาน'}...`);
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+      showToast(`📂 กำลังซิงก์พื้นที่เก็บงานใน Google Drive...`);
+      const sem = state.semesters.find(s => s.id === course?.semId);
+      const courseWithSem = {
+        ...course,
+        semesterName: sem ? sem.name : 'Unknown Semester'
+      };
       google.script.run.withSuccessHandler(async res => {
         if (res && res.success) {
-          showToast(`✅ สร้างโฟลเดอร์ ${data.type} สำเร็จ`);
+          showToast(a ? '✅ ซิงก์ชื่อโฟลเดอร์ใน Drive สำเร็จ' : '✅ สร้างโฟลเดอร์สำหรับงานสำเร็จ');
           await fsUpd('assignments', data.id, {
             folderId: res.folderId,
             folderUrl: res.folderUrl
@@ -5046,9 +5066,30 @@ function openAddAssignmentForm(a = null) {
             item.folderId = res.folderId;
             item.folderUrl = res.folderUrl;
           }
+          
+          // Self-heal course folder references if created/repaired
+          const courseUpdates = {};
+          if (res.parentAssignmentsId && !course.driveAssignments) {
+            courseUpdates.driveAssignments = res.parentAssignmentsId;
+            course.driveAssignments = res.parentAssignmentsId;
+          }
+          if (res.parentCourseId && !course.driveId) {
+            courseUpdates.driveId = res.parentCourseId;
+            course.driveId = res.parentCourseId;
+          }
+          if (Object.keys(courseUpdates).length > 0) {
+            await fsUpd('courses', course.id, courseUpdates);
+          }
           render();
+        } else {
+          showToast('❌ การสร้างโฟลเดอร์ใน Drive ขัดข้อง: ' + (res?.error || 'Unknown error'), 'err');
         }
-      }).createAssignmentFolder(course.driveAssignments || course.driveId, data.title, data.type);
+      }).createOrUpdateAssignmentFolder(courseWithSem, {
+        id: data.id,
+        title: data.title,
+        type: data.type,
+        folderId: data.folderId
+      });
     }
 
     if (typeof google !== 'undefined' && google.script) {
@@ -5520,6 +5561,10 @@ function attachAllEvents() {
       if (a?.calendarEventId && typeof google !== 'undefined' && google.script) {
         const curSem = getCurrentSemester() || state.semesters[state.semesters.length - 1];
         if (curSem) google.script.run.deleteCalendarEvent(`NITIPAT MANAGER - ${curSem.name}`, a.calendarEventId);
+      }
+      if (a?.folderId && typeof google !== 'undefined' && google.script && google.script.run) {
+        showToast('🗑️ กำลังลบโฟลเดอร์การบ้านใน Google Drive...');
+        google.script.run.deleteAssignmentFolder(a.folderId);
       }
       await fsDel('assignments', id); await loadAll();
     }
@@ -7080,10 +7125,48 @@ window.handleIdCardUpload = (input) => {
   if (file) {
     const reader = new FileReader();
     reader.onload = (re) => {
-      state.idCardPhoto = re.target.result;
-      localStorage.setItem('id_card_photo', state.idCardPhoto);
-      showToast('✅ อัปโหลดรูปบัตรแล้ว');
-      render();
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 600;
+        const MAX_HEIGHT = 600;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+        state.idCardPhoto = compressedBase64;
+        localStorage.setItem('id_card_photo', state.idCardPhoto);
+
+        // Optimistically set in Firestore
+        fsSet('app_settings', 'profile', {
+          idCardPhoto: state.idCardPhoto,
+          studentPhoto: STUDENT.photoUrl
+        }).then(() => {
+          showToast('✅ อัปโหลดและซิงก์รูปบัตรแล้ว');
+          render();
+        }).catch(err => {
+          console.error("Profile sync failed:", err);
+          showToast('⚠️ อัปโหลดแล้ว แต่ซิงก์คลาวด์ขัดข้อง', 'err');
+          render();
+        });
+      };
+      img.src = re.target.result;
     };
     reader.readAsDataURL(file);
   }
@@ -7093,7 +7176,16 @@ window.removeIdCard = () => {
   if (confirm('ลบรูปบัตรใช่หรือไม่?')) {
     state.idCardPhoto = null;
     localStorage.removeItem('id_card_photo');
-    render();
+    fsSet('app_settings', 'profile', {
+      idCardPhoto: null,
+      studentPhoto: STUDENT.photoUrl
+    }).then(() => {
+      showToast('✅ ลบรูปบัตรและซิงก์คลาวด์แล้ว');
+      render();
+    }).catch(err => {
+      console.error("Profile sync failed:", err);
+      render();
+    });
   }
 };
 
@@ -7133,9 +7225,14 @@ const NotionHub = {
       // 1. Sync Courses (Subjects) concurrently
       const courses = Object.values(state.courses).flat();
       const coursePromises = courses.map(async (course) => {
-        if (!course.notionPageId || !course.notionUrl) {
+        if (!course.notionPageId || !course.notionUrl || manual) {
           try {
-            const res = await new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).syncCourseToNotion(course));
+            const sem = state.semesters.find(s => s.id === course.semId);
+            const courseWithSem = {
+              ...course,
+              semesterName: sem ? sem.name : 'Unknown Semester'
+            };
+            const res = await new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).syncCourseToNotion(courseWithSem));
             if (res && res.success) {
               course.notionPageId = res.pageId;
               course.notionUrl = res.url;
