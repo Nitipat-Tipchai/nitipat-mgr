@@ -21,6 +21,22 @@ const LoginGate = {
     this.pinContainer = document.getElementById('pin-container');
     
     this.statusEl.textContent = "ESTABLISHING SECURE CONNECTION...";
+    
+    // Bind Keyboard event listener for PIN entries
+    if (!this._hasKeyboardListener) {
+      window.addEventListener('keydown', (e) => {
+        if (!state.isLocked) return;
+        if (e.key >= '0' && e.key <= '9') {
+          this.press(e.key);
+        } else if (e.key === 'Backspace') {
+          this.press('DEL');
+        } else if (e.key === 'Escape') {
+          this.clear();
+        }
+      });
+      this._hasKeyboardListener = true;
+    }
+
     try {
       await this.sync(false);
       this.statusEl.textContent = "IDENTITY VERIFICATION REQUIRED";
@@ -39,7 +55,7 @@ const LoginGate = {
     if (config.pin && config.pin.length > 20) {
       this.correctPinHash = config.pin;
     } else {
-      this.correctPinHash = await hashPIN(config.pin || "111111", this.correctPinSalt);
+      this.correctPinHash = await hashPIN(config.pin || "246810", this.correctPinSalt);
     }
     if (showToastMsg) this.statusEl.textContent = "VAULT SYNCED. TRY AGAIN.";
   },
@@ -47,7 +63,7 @@ const LoginGate = {
   getSecurityConfig() {
     if (typeof google === 'undefined' || !google.script || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
       console.warn("Using local security fallback");
-      return Promise.resolve({ pin: "111111" });
+      return Promise.resolve({ pin: "246810" });
     }
     return new Promise((res, rej) => {
       google.script.run.withSuccessHandler(res).withFailureHandler(rej).getAppConfig();
@@ -391,6 +407,7 @@ let state = {
       }`),
   attendanceReasons: JSON.parse(localStorage.getItem('att_reasons') || '{}'),
   reflections: JSON.parse(localStorage.getItem('reflections') || '{}'),
+  notebooks: JSON.parse(localStorage.getItem('notebooks') || '{}'),
   calendarSettings: JSON.parse(localStorage.getItem('calendar_settings') || '{}'),
   courseStructures: JSON.parse(localStorage.getItem('course_structures') || '{}'),
   targetGPA: parseFloat(localStorage.getItem('target_gpax') || '2.00'),
@@ -2161,8 +2178,37 @@ function getTodayDayIndex() {
   return (new Date().getDay() + 6) % 7; // 0=Mon, 1=Tue...
 }
 
+function getReflectionText(courseId) {
+  const dateKey = new Date().toLocaleDateString('en-CA');
+  const refData = state.reflections[courseId];
+  if (!refData) return '';
+  if (typeof refData === 'object') {
+    return refData[dateKey] || refData.latest || '';
+  }
+  return refData; // legacy string
+}
+window.getReflectionText = getReflectionText;
+
+async function saveReflectionData(courseId, val) {
+  const dateKey = new Date().toLocaleDateString('en-CA');
+  if (typeof state.reflections[courseId] !== 'object' || state.reflections[courseId] === null) {
+    state.reflections[courseId] = {};
+  }
+  state.reflections[courseId][dateKey] = val;
+  state.reflections[courseId].latest = val;
+  localStorage.setItem('reflections', JSON.stringify(state.reflections));
+  
+  try {
+    await fsSet('reflections', courseId, state.reflections[courseId]);
+  } catch (e) {
+    console.warn("Firestore reflection sync failed", e);
+  }
+}
+window.saveReflectionData = saveReflectionData;
+
 function getMissingReflections() {
   const now = new Date();
+  const dateKey = now.toLocaleDateString('en-CA');
   const dayIdx = getTodayDayIndex();
   const currentTimeVal = now.getHours() + (now.getMinutes() / 60);
   const curSem = getCurrentSemester();
@@ -2173,8 +2219,8 @@ function getMissingReflections() {
   );
 
   return todayClasses.filter(c => {
-    const reflection = state.reflections[c.id] || "";
-    return currentTimeVal >= c.slot.endHour && reflection.trim().length < 10;
+    const text = getReflectionText(c.id);
+    return currentTimeVal >= c.slot.endHour && text.trim().length < 10;
   });
 }
 
@@ -2632,7 +2678,7 @@ function renderCourseHubPage() {
                    `<button class="nb-btn sm" style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; font-size:12px; border:2px solid black; background:#ecfdf5; color:#059669;" onclick="LiveClassHub.start('${c.id}')"><span>🚀</span> เริ่มจดเลคเชอร์</button>`
                  }
                  <a href="${c.folderUrl || '#'}" target="_blank" class="nb-btn sm" style="flex:1; text-align:center; background:#fff; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:8px; font-size:12px; border:2px solid black;"><span>📁</span> Drive</a>
-                  ${c.notionUrl ? `<a href="${c.notionUrl}" target="_blank" class="nb-btn sm" style="flex:1; text-align:center; background:#000; color:#fff; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:8px; font-size:12px; border:2px solid black;"><span>N</span> Notion</a>` : ''}
+                 ${c.notionUrl ? `<a href="${c.notionUrl}" target="_blank" class="nb-btn sm" style="flex:1; text-align:center; background:#000; color:#fff; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:8px; font-size:12px; border:2px solid black;"><span>N</span> Notion</a>` : ''}
               </div>
             </div>
           </div>
@@ -2641,6 +2687,10 @@ function renderCourseHubPage() {
               <button class="nav-tab-btn ${tab === 'Files' ? 'active' : ''}" onclick="state.activeHubTab='Files'; render();">
                 <div style="font-size:26px; ${tab !== 'Files' ? 'opacity:0.8;' : 'margin-bottom:2px;'}">☁️</div>
                 ${tab === 'Files' ? '<div class="tab-label">Files</div>' : ''}
+             </button>
+             <button class="nav-tab-btn ${tab === 'Notion' ? 'active' : ''}" onclick="state.activeHubTab='Notion'; render();">
+               <div style="font-size:26px; ${tab !== 'Notion' ? 'opacity:0.8;' : 'margin-bottom:2px;'}">📓</div>
+               ${tab === 'Notion' ? '<div class="tab-label">Notion</div>' : ''}
              </button>
              <button class="nav-tab-btn ${tab === 'Grades' ? 'active' : ''}" onclick="state.activeHubTab='Grades'; render();">
                <div style="font-size:26px; ${tab !== 'Grades' ? 'opacity:0.8;' : 'margin-bottom:2px;'}">📊</div>
@@ -2658,13 +2708,320 @@ function renderCourseHubPage() {
 
           <div class="hub-container">
             ${tab === 'Files' ? renderMiniDrive(c) :
-      tab === 'Grades' ? renderCourseProgress(c) :
-        tab === 'Attendance' ? renderCourseAttendance(c) :
-          renderCourseSettings(c)}
+              tab === 'Notion' ? renderNotionTab(c) :
+              tab === 'Grades' ? renderCourseProgress(c) :
+              tab === 'Attendance' ? renderCourseAttendance(c) :
+              renderCourseSettings(c)}
           </div>
         </div>
       `;
 }
+
+function renderNotionTab(c) {
+  const isSynced = !!c.notionUrl;
+  
+  if (!state.notebooks[c.id] || state.notebooks[c.id].length === 0) {
+    state.notebooks[c.id] = [
+      {
+        id: 'nb_default_' + c.id,
+        name: 'สมุดหลัก: ' + c.nameTh,
+        coverColor: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+        driveUrl: c.driveUrl || '',
+        notionUrl: c.notionUrl || ''
+      }
+    ];
+    localStorage.setItem('notebooks', JSON.stringify(state.notebooks));
+  }
+
+  const notebooksList = state.notebooks[c.id] || [];
+
+  return `
+    <style>
+      .bookshelf-container {
+        padding: 24px;
+        border-radius: 24px;
+        background: rgba(255,255,255,0.75);
+        border: 1px solid rgba(255,255,255,0.8);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.02);
+        font-family: 'Kanit', sans-serif;
+      }
+      .bookshelf-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 25px;
+        padding: 24px 20px 20px;
+        background: rgba(0, 0, 0, 0.02);
+        border-radius: 20px;
+        border: 1px dashed rgba(0, 0, 0, 0.08);
+        min-height: 180px;
+        align-items: flex-end;
+        position: relative;
+        margin-top: 15px;
+      }
+      .book-3d {
+        width: 110px;
+        height: 155px;
+        border-radius: 4px 12px 12px 4px;
+        position: relative;
+        cursor: pointer;
+        transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.4s ease;
+        transform-style: preserve-3d;
+        transform: perspective(600px) rotateY(-8deg);
+        box-shadow: -4px 6px 12px rgba(0,0,0,0.15), inset 2px 0 3px rgba(255,255,255,0.3);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 14px 10px;
+        color: white;
+        user-select: none;
+        background-size: cover !important;
+        background-position: center !important;
+      }
+      .book-3d:hover {
+        transform: perspective(600px) rotateY(15deg) translateZ(15px) translateY(-10px);
+        box-shadow: -12px 18px 24px rgba(0,0,0,0.25);
+      }
+      .book-spine-shadow {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 10px;
+        background: linear-gradient(to right, rgba(0,0,0,0.25), rgba(0,0,0,0) 90%);
+        border-radius: 4px 0 0 4px;
+      }
+      .book-title-text {
+        font-size: 11px;
+        font-weight: 850;
+        line-height: 1.3;
+        margin-top: 5px;
+        word-break: break-word;
+        text-shadow: 0 1.5px 3px rgba(0,0,0,0.5);
+      }
+      .book-badge-icon {
+        font-size: 9px;
+        background: rgba(0,0,0,0.4);
+        backdrop-filter: blur(4px);
+        border-radius: 5px;
+        padding: 2px 6px;
+        font-weight: 700;
+        align-self: flex-start;
+        letter-spacing: 0.5px;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+      }
+    </style>
+
+    <div class="notion-tab-container" style="padding: 0 20px 20px; font-family:'Kanit', sans-serif;">
+      <div class="hub-grid" style="display:grid; grid-template-columns:1fr; gap:20px;">
+        
+        <!-- Shelf Card -->
+        <div class="bookshelf-container">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <div style="text-align:left;">
+              <h3 style="margin:0; font-size:17px; font-weight:900; color:#1f2937; display:flex; align-items:center; gap:8px;">
+                <span>📚</span> ชั้นหนังสือเรียน 3D (Notion Bookshelf)
+              </h3>
+              <p style="margin:2px 0 0; font-size:11.5px; color:#6b7280;">รวมสมุดโน้ตเรียนและการบ้าน สามารถแบ่งได้หลายเล่ม</p>
+            </div>
+            <button class="btn-pastel-primary sm" onclick="window.mpCreateNotebook('${c.id}')" style="border-radius:10px; font-size:11px; padding:6px 14px;">+ สร้างสมุดใหม่</button>
+          </div>
+
+          <div class="bookshelf-grid">
+            ${notebooksList.map(nb => {
+              const bgStyle = nb.coverColor;
+              return `
+                <div class="book-3d" style="background:${bgStyle};" onclick="window.openNotebookOptions('${c.id}', '${nb.id}')">
+                  <div class="book-spine-shadow"></div>
+                  <div class="book-title-text">${nb.name}</div>
+                  <div class="book-badge-icon">📓 Open</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- Notion Hub Sync Control Card -->
+        <div class="glass-card nb-card" style="padding:24px; border-radius:24px; background:rgba(255,255,255,0.75); border:1px solid rgba(255,255,255,0.8); box-shadow:0 10px 30px rgba(0,0,0,0.02);">
+          <h4 style="margin:0 0 15px; font-size:15px; font-weight:800; color:#1f2937; display:flex; align-items:center; gap:8px;">
+            <span>⚙️</span> จัดการการเชื่อมโยงระบบ (Notion Settings)
+          </h4>
+          
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <button class="btn-glass sm" onclick="NotionHub.sync(true)" style="padding:12px; border-radius:14px; font-weight:700; font-size:12.5px;">
+              🔄 สั่งซิงค์ Notion ทั้งหมด
+            </button>
+            <button class="btn-glass sm" onclick="NotionHub.checkConnection()" style="padding:12px; border-radius:14px; font-weight:700; font-size:12.5px;">
+              🔍 ตรวจสอบการเชื่อมต่อ
+            </button>
+            <button class="btn-glass sm" onclick="NotionHub.setupTrigger()" style="padding:12px; border-radius:14px; font-weight:700; font-size:12.5px; grid-column: 1 / -1;">
+              ⚡ เปิด-ปิด ระบบซิงค์อัตโนมัติ (Auto-Sync)
+            </button>
+            <button class="btn-glass sm" style="padding:12px; border-radius:14px; font-weight:700; font-size:12.5px; grid-column: 1 / -1; color:#ef4444; border-color:rgba(239,68,68,0.2); background:rgba(239,68,68,0.05);" onclick="NotionHub.forceResetSync()">
+              ⚠️ บังคับยกเลิกและซิงค์ใหม่ (Force Reset)
+            </button>
+          </div>
+          
+          <div style="margin-top:20px; padding-top:15px; border-top:1px solid rgba(0,0,0,0.06); font-size:11.5px; color:#6b7280; display:flex; justify-content:space-between; align-items:center;">
+            <span>อัปเดตล่าสุด: ${state.lastNotionSync ? new Date(state.lastNotionSync).toLocaleString() : 'ยังไม่เคยซิงค์'}</span>
+            ${state.notionConnected ? `<span style="color:#22c55e; font-weight:700;">🟢 Online</span>` : `<span style="color:#ef4444; font-weight:700;">🔴 Offline</span>`}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  `;
+}
+window.renderNotionTab = renderNotionTab;
+
+// ── 3D Bookshelf Notebook Management Handlers ──
+window.mpCreateNotebook = function(courseId) {
+  const name = prompt('💡 กรุณากรอกชื่อสมุดเล่มใหม่:');
+  if (!name || !name.trim()) return;
+  
+  const presets = [
+    'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',
+    'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+    'linear-gradient(135deg, #0f2027 0%, #2c5364 100%)',
+    'linear-gradient(135deg, #00c6ff 0%, #0072ff 100%)',
+    'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)',
+    'linear-gradient(135deg, #f857a6 0%, #ff5858 100%)'
+  ];
+  const randomColor = presets[Math.floor(Math.random() * presets.length)];
+  
+  if (!state.notebooks[courseId]) state.notebooks[courseId] = [];
+  
+  const newNb = {
+    id: 'nb_' + Date.now(),
+    name: name.trim(),
+    coverColor: randomColor,
+    driveUrl: '',
+    notionUrl: ''
+  };
+  
+  state.notebooks[courseId].push(newNb);
+  localStorage.setItem('notebooks', JSON.stringify(state.notebooks));
+  render();
+  showToast('📒 สร้างสมุดโน้ตสำเร็จ!');
+};
+
+window.openNotebookOptions = function(courseId, nbId) {
+  const nb = state.notebooks[courseId].find(n => n.id === nbId);
+  if (!nb) return;
+
+  const presets = [
+    { name: '🌅 Sunset', val: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)' },
+    { name: '🌲 Emerald', val: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)' },
+    { name: '🌌 Space', val: 'linear-gradient(135deg, #0f2027 0%, #2c5364 100%)' },
+    { name: '🌊 Ocean', val: 'linear-gradient(135deg, #00c6ff 0%, #0072ff 100%)' },
+    { name: '🔮 Lavender', val: 'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)' },
+    { name: '🌹 Crimson', val: 'linear-gradient(135deg, #f857a6 0%, #ff5858 100%)' }
+  ];
+
+  let bodyHtml = `
+    <div style="display:flex; flex-direction:column; gap:14px; padding:10px; font-family:'Kanit', sans-serif;">
+      <div class="fg">
+        <label style="font-weight:700; font-size:12px; opacity:0.7;">ชื่อสมุดโน้ต</label>
+        <input type="text" id="editNbName" class="glass-input sm full" style="width:100%; padding:8px 12px; border-radius:10px; border:1px solid #ddd;" value="${nb.name}">
+      </div>
+      
+      <div class="fg">
+        <label style="font-weight:700; font-size:12px; opacity:0.7;">เลือกสีปกสำเร็จรูป (Preset Gradient)</label>
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-top:5px;">
+          ${presets.map(p => `
+            <button class="btn-glass sm" onclick="window.applyNbPresetCover('${courseId}', '${nbId}', '${p.val}')" style="background:${p.val}; color:white; border:none; text-shadow:0 1px 2px rgba(0,0,0,0.3); font-weight:700; height:32px; border-radius:8px; font-size:11px; cursor:pointer;">
+              ${p.name}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="fg">
+        <label style="font-weight:700; font-size:12px; opacity:0.7;">หรือ URL รูปหน้าปกกำหนดเอง (Custom Cover Image)</label>
+        <input type="text" id="editNbCoverUrl" class="glass-input sm full" style="width:100%; padding:8px 12px; border-radius:10px; border:1px solid #ddd;" placeholder="https://example.com/image.jpg" value="${nb.coverColor.startsWith('url') ? nb.coverColor.slice(4, -1).replace(/"/g, '') : ''}" onchange="window.applyNbCustomCover('${courseId}', '${nbId}', this.value)">
+      </div>
+
+      <div class="fg">
+        <label style="font-weight:700; font-size:12px; opacity:0.7;">🔗 ลิงก์ Notion</label>
+        <input type="text" id="editNbNotionUrl" class="glass-input sm full" style="width:100%; padding:8px 12px; border-radius:10px; border:1px solid #ddd;" placeholder="https://notion.so/..." value="${nb.notionUrl || ''}">
+      </div>
+
+      <div class="fg">
+        <label style="font-weight:700; font-size:12px; opacity:0.7;">📂 ลิงก์ Google Drive</label>
+        <input type="text" id="editNbDriveUrl" class="glass-input sm full" style="width:100%; padding:8px 12px; border-radius:10px; border:1px solid #ddd;" placeholder="https://drive.google.com/..." value="${nb.driveUrl || ''}">
+      </div>
+      
+      <div style="display:flex; gap:10px; margin-top:10px;">
+        ${nb.notionUrl ? `<a href="${nb.notionUrl}" target="_blank" class="btn-pastel-primary" style="flex:1; text-align:center; padding:10px; text-decoration:none; border-radius:12px; font-weight:800; font-size:12px; display:flex; align-items:center; justify-content:center; gap:5px;">📓 เปิดใน Notion</a>` : ''}
+        ${nb.driveUrl ? `<a href="${nb.driveUrl}" target="_blank" class="btn-glass-pastel" style="flex:1; text-align:center; padding:10px; text-decoration:none; border-radius:12px; font-weight:800; font-size:12px; display:flex; align-items:center; justify-content:center; gap:5px; border:1px solid #0f9d58; color:#0f9d58; background:rgba(15,157,88,0.05);">📂 เปิดใน Drive</a>` : ''}
+      </div>
+    </div>
+  `;
+
+  let footerHtml = `
+    <div style="display:flex; justify-content:space-between; width:100%; align-items:center; font-family:'Kanit', sans-serif;">
+      <button class="btn-glass-pastel" onclick="window.mpDeleteNotebook('${courseId}', '${nbId}')" style="padding: 8px 16px; border-radius:10px; color:#ef4444; border:1px solid #ef4444; background:rgba(239,68,68,0.05); font-size:12px; cursor:pointer;">🗑️ ลบสมุดเล่มนี้</button>
+      <div style="display:flex; gap:8px;">
+        <button class="btn-glass" onclick="closeModal()" style="padding: 8px 16px; border-radius:10px; font-size:12px; cursor:pointer; background:transparent; border:1px solid #ccc;">ยกเลิก</button>
+        <button class="btn-pastel-primary" onclick="window.mpSaveNotebook('${courseId}', '${nbId}')" style="padding: 8px 20px; border-radius:10px; font-size:12px; cursor:pointer; border:none;">💾 บันทึก</button>
+      </div>
+    </div>
+  `;
+
+  openModal('📘 จัดการสมุดเรียน', bodyHtml, footerHtml);
+};
+
+window.applyNbPresetCover = function(courseId, nbId, coverVal) {
+  const nb = state.notebooks[courseId].find(n => n.id === nbId);
+  if (!nb) return;
+  nb.coverColor = coverVal;
+  localStorage.setItem('notebooks', JSON.stringify(state.notebooks));
+  showToast('🎨 เปลี่ยนลายปกสมุดสำเร็จ!');
+  const el = document.getElementById('editNbCoverUrl');
+  if (el) el.value = '';
+};
+
+window.applyNbCustomCover = function(courseId, nbId, urlVal) {
+  const nb = state.notebooks[courseId].find(n => n.id === nbId);
+  if (!nb) return;
+  if (urlVal.trim()) {
+    nb.coverColor = `url("${urlVal.trim()}")`;
+    localStorage.setItem('notebooks', JSON.stringify(state.notebooks));
+    showToast('🖼️ ตั้งค่าหน้าปกแบบกำหนดเองสำเร็จ!');
+  }
+};
+
+window.mpSaveNotebook = function(courseId, nbId) {
+  const nb = state.notebooks[courseId].find(n => n.id === nbId);
+  if (!nb) return;
+
+  const newName = document.getElementById('editNbName').value.trim();
+  const newNotion = document.getElementById('editNbNotionUrl').value.trim();
+  const newDrive = document.getElementById('editNbDriveUrl').value.trim();
+
+  if (!newName) {
+    showToast('⚠️ กรุณาระบุชื่อสมุด', 'err');
+    return;
+  }
+
+  nb.name = newName;
+  nb.notionUrl = newNotion;
+  nb.driveUrl = newDrive;
+
+  localStorage.setItem('notebooks', JSON.stringify(state.notebooks));
+  closeModal();
+  render();
+  showToast('✅ บันทึกข้อมูลสมุดสำเร็จ!');
+};
+
+window.mpDeleteNotebook = function(courseId, nbId) {
+  if (confirm('⚠️ คุณแน่ใจที่จะลบสมุดเล่มนี้หรือไม่?\n(ข้อมูลลิงก์ที่บันทึกจะหายไป)')) {
+    state.notebooks[courseId] = state.notebooks[courseId].filter(n => n.id !== nbId);
+    localStorage.setItem('notebooks', JSON.stringify(state.notebooks));
+    closeModal();
+    render();
+    showToast('🗑️ ลบสมุดเรียบร้อยแล้ว!');
+  }
+};
 
 function isGAS() {
   return window.location.hostname.includes('script.google.com') || window.location.hostname.includes('script.googleusercontent.com');
@@ -2731,6 +3088,86 @@ async function downloadFileViaProxy(fileId, fileName) {
 }
 
 window.downloadFileViaProxy = downloadFileViaProxy;
+
+function renderNotionTab(c) {
+  const isSynced = !!c.notionUrl;
+  const statusColor = isSynced ? '#22c55e' : '#ef4444';
+  const statusBg = isSynced ? '#22c55e11' : '#ef444411';
+  
+  return `
+    <div class="notion-tab-container" style="padding: 0 20px 20px; font-family:'Kanit', sans-serif;">
+      <div class="hub-grid" style="display:grid; grid-template-columns:1fr; gap:20px;">
+        
+        <!-- Notebook Connection Status Card -->
+        <div class="glass-card nb-card" style="padding:24px; border-radius:24px; background:rgba(255,255,255,0.75); border:1px solid rgba(255,255,255,0.8); box-shadow:0 10px 30px rgba(0,0,0,0.02);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <span style="font-size:32px;">📓</span>
+              <div style="text-align:left;">
+                <h3 style="margin:0; font-size:18px; font-weight:800; color:#1f2937;">สมุดวิชาเรียน (Notion Notebook)</h3>
+                <p style="margin:2px 0 0; font-size:12px; color:#6b7280;">สมุดโน้ตคำสอนและการบ้านประจำวิชา ${c.code}</p>
+              </div>
+            </div>
+            <div style="padding:6px 12px; border-radius:100px; font-size:11px; font-weight:700; background:${statusBg}; color:${statusColor}; display:flex; align-items:center; gap:6px;">
+              <span style="width:6px; height:6px; background:${statusColor}; border-radius:50%;"></span>
+              ${isSynced ? 'เชื่อมโยงแล้ว' : 'ยังไม่ได้เชื่อมโยง'}
+            </div>
+          </div>
+
+          ${isSynced ? `
+            <div style="background:#f9fafb; border-radius:18px; padding:18px; border:1px solid #f3f4f6; margin-bottom:20px; text-align:left;">
+              <p style="margin:0 0 6px; font-size:12px; color:#4b5563; font-weight:500;">ลิงก์สมุดโน้ตบน Notion ของวิชานี้:</p>
+              <a href="${c.notionUrl}" target="_blank" style="word-break:break-all; font-size:12.5px; color:var(--primary); font-weight:600; text-decoration:none; display:block;">
+                ${c.notionUrl}
+              </a>
+            </div>
+            <a href="${c.notionUrl}" target="_blank" class="nb-btn" style="display:flex; align-items:center; justify-content:center; gap:10px; background:#000; color:#fff; border:2px solid #000; border-radius:18px; padding:14px 20px; font-size:14px; font-weight:700; text-decoration:none; box-shadow:0 8px 20px rgba(0,0,0,0.15); transition:transform 0.2s;">
+              <span>📓</span> เปิดสมุดวิชานี้ใน Notion
+            </a>
+          ` : `
+            <div style="background:#fee2e2; border-radius:18px; padding:20px; border:1px solid #fca5a5; margin-bottom:20px; text-align:center;">
+              <p style="margin:0 0 8px; font-size:13.5px; color:#991b1b; font-weight:700;">⚠️ ยังไม่ได้เชื่อมต่อสมุดโน้ตวิชานี้เข้ากับ Notion</p>
+              <p style="margin:0; font-size:12px; color:#7f1d1d; opacity:0.85;">สมุดของวิชานี้จะถูกสร้างขึ้นใน Notion ของคุณโดยอัตโนมัติเมื่อสั่งซิงค์ข้อมูล</p>
+            </div>
+            <button onclick="NotionHub.sync(true)" class="nb-btn" style="display:flex; align-items:center; justify-content:center; gap:10px; background:linear-gradient(135deg, #6366f1, #8b5cf6); color:#fff; border:none; border-radius:18px; padding:14px 20px; font-size:14px; font-weight:700; width:100%; box-shadow:0 8px 20px rgba(99,102,241,0.25); cursor:pointer;">
+              <span>🔄</span> สร้างและเชื่อมสมุดวิชานี้กับ Notion
+            </button>
+          `}
+        </div>
+
+        <!-- Notion Hub Sync Control Card -->
+        <div class="glass-card nb-card" style="padding:24px; border-radius:24px; background:rgba(255,255,255,0.75); border:1px solid rgba(255,255,255,0.8); box-shadow:0 10px 30px rgba(0,0,0,0.02);">
+          <h4 style="margin:0 0 15px; font-size:15px; font-weight:800; color:#1f2937; display:flex; align-items:center; gap:8px;">
+            <span>⚙️</span> จัดการการเชื่อมโยงระบบ (Notion Settings)
+          </h4>
+          
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <button class="btn-glass sm" onclick="NotionHub.sync(true)" style="padding:12px; border-radius:14px; font-weight:700; font-size:12.5px;">
+              🔄 สั่งซิงค์ Notion ทั้งหมด
+            </button>
+            <button class="btn-glass sm" onclick="NotionHub.checkConnection()" style="padding:12px; border-radius:14px; font-weight:700; font-size:12.5px;">
+              🔍 ตรวจสอบการเชื่อมต่อ
+            </button>
+            <button class="btn-glass sm" onclick="NotionHub.setupTrigger()" style="padding:12px; border-radius:14px; font-weight:700; font-size:12.5px; grid-column: 1 / -1;">
+              ⚡ เปิด-ปิด ระบบซิงค์อัตโนมัติ (Auto-Sync)
+            </button>
+            <button class="btn-glass sm" style="padding:12px; border-radius:14px; font-weight:700; font-size:12.5px; grid-column: 1 / -1; color:#ef4444; border-color:rgba(239,68,68,0.2); background:rgba(239,68,68,0.05);" onclick="NotionHub.forceResetSync()">
+              ⚠️ บังคับยกเลิกและซิงค์ใหม่ (Force Reset)
+            </button>
+          </div>
+          
+          <div style="margin-top:20px; padding-top:15px; border-top:1px solid rgba(0,0,0,0.06); font-size:11.5px; color:#6b7280; display:flex; justify-content:space-between; align-items:center;">
+            <span>อัปเดตล่าสุด: ${state.lastNotionSync ? new Date(state.lastNotionSync).toLocaleString() : 'ยังไม่เคยซิงค์'}</span>
+            ${state.notionConnected ? `<span style="color:#22c55e; font-weight:700;">🟢 Online</span>` : `<span style="color:#ef4444; font-weight:700;">🔴 Offline</span>`}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  `;
+}
+
+window.renderNotionTab = renderNotionTab;
 
 function renderMiniDrive(c) {
   const filesData = state.courseFiles?.[state.currentFolderId || c.driveId];
@@ -2947,7 +3384,7 @@ function renderAttendanceSummary(courseId) {
 
           <div class="reflection-card glass-card nb-card" style="background:#fff;">
             <div style="font-weight:800; font-size:14px; margin-bottom:8px;">📝 Reflection หลังเลิกคลาส</div>
-            <textarea id="reflInput_adv" class="nb-input" style="width:100%; min-height:80px; padding:10px; font-family:var(--font-body); font-size:13px;" placeholder="วันนี้เรียนรู้อะไรบ้าง?">${state.reflections[courseId] || ''}</textarea>
+            <textarea id="reflInput_adv" class="nb-input" style="width:100%; min-height:80px; padding:10px; font-family:var(--font-body); font-size:13px;" placeholder="วันนี้เรียนรู้อะไรบ้าง?">${getReflectionText(courseId)}</textarea>
             <button class="nb-btn sm nb-btn-primary" style="width:100%; margin-top:8px;" onclick="window.saveReflection('${courseId}')">💾 บันทึก Reflection</button>
           </div>
         </div>
@@ -2980,11 +3417,8 @@ window.saveReflection = async (courseId) => {
   if (!val) { showToast('⚠️ กรุณากรอกเนื้อหา', 'err'); return; }
 
   showToast('⏳ กำลังบันทึก Reflection...');
-  state.reflections[courseId] = val;
-  localStorage.setItem('reflections', JSON.stringify(state.reflections));
-
   try {
-    await fsSet('reflections', courseId, { text: val, updatedAt: new Date().toISOString() });
+    await saveReflectionData(courseId, val);
     showToast('✅ บันทึก Reflection สำเร็จ!');
     
     // Push to Notion
@@ -3150,165 +3584,20 @@ function printSelectedItems() {
 }
 
 async function previewFile(id, name, url, mimeType = '') {
-  const isImage = /\.(jpg|jpeg|png|gif)$/i.test(name) || mimeType.includes('image');
-  const isPDF = name.toLowerCase().endsWith('.pdf') || mimeType.includes('pdf');
+  const previewUrl = `https://drive.google.com/file/d/${id}/preview`;
 
-  // Loading skeleton UI (Pulse Animation)
-  let loadingHtml = `
-    <div class="preview-skeleton" style="display: flex; flex-direction: column; gap: 15px; padding: 10px;">
-      <div style="height: 20px; background: rgba(0,0,0,0.05); border-radius: 4px; width: 45%; animation: preview-pulse 1.5s infinite;"></div>
-      <div style="height: 380px; background: rgba(0,0,0,0.05); border-radius: 12px; animation: preview-pulse 1.5s infinite; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px;">
-        <div class="spinner"></div>
-        <p style="font-size: 13px; opacity: 0.7; margin-top: 10px;">กำลังเตรียมไฟล์แบบ Native...</p>
-      </div>
+  let bodyHtml = `
+    <div style="width: 100%; height: 65vh; border-radius: 12px; overflow: hidden; background: #f8fafc; border: 1px solid rgba(0,0,0,0.06); position: relative;">
+      <iframe src="${previewUrl}" width="100%" height="100%" style="border: none; background: white;" allow="autoplay"></iframe>
     </div>
-    <style>
-      @keyframes preview-pulse {
-        0%, 100% { opacity: 0.6; }
-        50% { opacity: 1; }
-      }
-    </style>
   `;
-  
-  // Make print function globally accessible in module context
-  window.printPdf = () => {
-    const iframe = document.getElementById('pdfPreviewIframe');
-    if (iframe) {
-      try {
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-      } catch (e) {
-        console.warn("Cross-origin or iframe print error, printing main window:", e);
-        window.print();
-      }
-    } else {
-      window.print();
-    }
-  };
 
-  // Helper to show fallback options if GAS fails
-  const showFallbackUI = (container) => {
-    container.innerHTML = `
-      <div class="empty-hero" style="min-height:280px; text-align:center; padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-        <div style="font-size:50px; color:var(--c-rust); margin-bottom: 10px;">⚠️</div>
-        <h3 style="font-weight:700; margin-bottom:8px;">ไม่สามารถดึงข้อมูลไฟล์ได้</h3>
-        <p style="font-size:13px; opacity:0.7; margin-bottom:25px; max-width: 320px;">เกิดข้อผิดพลาดหรือเซิร์ฟเวอร์ตอบสนองช้าเกินไป (ไฟล์อาจมีขนาดใหญ่เกินขีดจำกัด)</p>
-        <div style="display:flex; gap:12px; justify-content:center; width: 100%; max-width: 320px;">
-          <button class="nb-btn-primary sm" style="flex: 1;" onclick="window.open('${url || `https://drive.google.com/open?id=${id}`}', '_blank')">📂 เปิดใน Drive</button>
-          <button class="nb-btn sm" style="flex: 1;" onclick="downloadFileViaProxy('${id}', '${name.replace(/'/g, "\\'")}')">⬇ Download</button>
-        </div>
-      </div>
-    `;
-  };
-
-  // Open Modal with loading skeleton
-  openModal(name, `<div id="preview-container">${loadingHtml}</div>`, `
+  openModal(name, bodyHtml, `
     <div style="display:flex; gap:10px; width:100%;">
-      <button class="nb-btn sm" style="flex:1;" onclick="downloadFileViaProxy('${id}', '${name.replace(/'/g, "\\'")}')">⬇ Download</button>
-      <button id="modalPrintBtn" class="nb-btn sm" style="flex:1; opacity:0.5; cursor:not-allowed;" onclick="window.printPdf()" disabled>🖨 Print</button>
+      <button class="nb-btn-primary sm" style="flex:1;" onclick="window.open('${url || `https://drive.google.com/file/d/${id}/view`}', '_blank')">📂 เปิดใน Google Drive</button>
+      <button class="nb-btn sm" style="flex:1;" onclick="downloadFileViaProxy('${id}', '${name.replace(/'/g, "\\'")}')">⬇ ดาวน์โหลด</button>
     </div>
   `);
-
-  let loaded = false;
-
-  // Timeout Warning: ถ้าโหลดเกิน 10 วินาที ให้ขึ้นเตือนและปุ่มลัดไป Google Drive
-  const timeoutId = setTimeout(() => {
-    if (!loaded) {
-      const container = document.getElementById('preview-container');
-      if (container) {
-        container.innerHTML = `
-          <div style="text-align:center; padding: 40px 20px; background: rgba(0,0,0,0.02); border-radius: 12px; border: 1.5px dashed rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 380px;">
-            <div class="spinner" style="margin-bottom: 20px;"></div>
-            <h4 style="margin: 0 0 8px; font-weight:700; color:var(--c-rust); font-size: 16px;">ไฟล์ขนาดใหญ่ กำลังโหลด...</h4>
-            <p style="font-size:12px; opacity:0.7; margin-bottom:25px; max-width: 280px; line-height: 1.5;">เอกสารกำลังถูกดึงและดาวน์โหลดเป็น Base64 ในพื้นหลัง หากรอนานเกินไป คุณสามารถเปิดดูโดยตรงได้ทันที</p>
-            <button class="nb-btn-primary sm" onclick="window.open('${url || `https://drive.google.com/open?id=${id}`}', '_blank')">📂 เปิดดูโดยตรงบน Google Drive</button>
-          </div>
-        `;
-      }
-    }
-  }, 10000);
-
-  if (isImage) {
-    google.script.run
-      .withSuccessHandler(res => {
-        loaded = true;
-        clearTimeout(timeoutId);
-        const container = document.getElementById('preview-container');
-        if (!container) return;
-
-        if (res && res.success) {
-          container.innerHTML = `<img src="${res.base64}" style="width:100%; border-radius:12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">`;
-          
-          // Enable and redirect Print button to print the main page/image
-          const printBtn = document.getElementById('modalPrintBtn');
-          if (printBtn) {
-            printBtn.removeAttribute('disabled');
-            printBtn.style.opacity = '1';
-            printBtn.style.cursor = 'pointer';
-            printBtn.onclick = () => window.print();
-          }
-        } else {
-          showFallbackUI(container);
-        }
-      })
-      .withFailureHandler(() => {
-        loaded = true;
-        clearTimeout(timeoutId);
-        const container = document.getElementById('preview-container');
-        if (container) showFallbackUI(container);
-      })
-      .getFileDataBase64(id);
-
-  } else if (isPDF) {
-    google.script.run
-      .withSuccessHandler(res => {
-        loaded = true;
-        clearTimeout(timeoutId);
-        const container = document.getElementById('preview-container');
-        if (!container) return;
-
-        if (res && res.success) {
-          // Double Fallback rendering: Option A (Iframe) -> Option B (Embed)
-          container.innerHTML = `
-            <iframe id="pdfPreviewIframe" src="${res.base64}" width="100%" height="500px" style="border:none; border-radius:8px; box-shadow: 0 4px 15px rgba(0,0,0,0.08);" onerror="this.outerHTML='<embed type=\"application/pdf\" src=\"${res.base64}\" width=\"100%\" height=\"500px\" style=\"border-radius:8px;\">'">
-              <embed type="application/pdf" src="${res.base64}" width="100%" height="500px" style="border-radius:8px;">
-            </iframe>
-          `;
-
-          // Enable Print Button
-          const printBtn = document.getElementById('modalPrintBtn');
-          if (printBtn) {
-            printBtn.removeAttribute('disabled');
-            printBtn.style.opacity = '1';
-            printBtn.style.cursor = 'pointer';
-          }
-        } else {
-          showFallbackUI(container);
-        }
-      })
-      .withFailureHandler(() => {
-        loaded = true;
-        clearTimeout(timeoutId);
-        const container = document.getElementById('preview-container');
-        if (container) showFallbackUI(container);
-      })
-      .getFileDataBase64(id);
-
-  } else {
-    // Non-previewable files fallback
-    clearTimeout(timeoutId);
-    const container = document.getElementById('preview-container');
-    if (container) {
-      container.innerHTML = `
-        <div class="empty-hero" style="min-height:280px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-          <div style="font-size:50px; margin-bottom: 12px;">📄</div>
-          <h3 style="font-weight: 700; margin-bottom: 6px;">ไม่รองรับการพรีวิวแบบ Native</h3>
-          <p style="font-size: 13px; opacity: 0.7; margin-bottom: 25px;">ประเภทไฟล์นี้ยังไม่เปิดใช้งานฟังก์ชันพรีวิวโดยตรงบนระบบ</p>
-          <a href="${url || `https://drive.google.com/open?id=${id}`}" target="_blank" class="nb-btn-primary" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center; padding: 12px 24px; border-radius: 20px;">📂 เปิดดูบน Google Drive</a>
-        </div>
-      `;
-    }
-  }
 }
 
 async function automateDriveFolder(courseId) {
@@ -4380,6 +4669,10 @@ function renderGrades(gpa, pro) {
   const proMsgs = { safe: 'GPAX อยู่ในเกณฑ์ดี ต่อไปให้ได้ 2.00+', 'pro-low': 'GPAX 1.75–1.99 ต้องให้อาจารย์ที่ปรึกษาปลดล็อคก่อนลงทะเบียน', 'pro-high': 'GPAX 1.50–1.74 ระวัง! ติดต่อกัน 2 เทอม = ถูกไล่ออก', 'expelled': 'GPAX < 1.50 ติดต่อฝ่ายวิชาการทันที' };
   const statusColor = pro ? proColors[pro] : '#94a3b8';
   const lowGrades = Object.values(state.courses).flat().filter(c => c.grade && (c.grade === 'D' || c.grade === 'D+' || c.grade === 'F'));
+
+  const curSem = getCurrentSemester();
+  const curSemId = curSem ? curSem.id : (state.semesters[state.semesters.length - 1]?.id || '');
+
   return `<div class="page-wrap">
     <div class="page-header-row">
       <h1 class="page-title">🎓 เกรด & GPA</h1>
@@ -4408,15 +4701,16 @@ function renderGrades(gpa, pro) {
         <div id="targetResult" class="tool-result"></div>
       </div>
       <div class="glass-card tool-card">
-        <div class="tool-title">🧮 Quick Simulation</div>
+        <div class="tool-title">🧮 Quick Simulation (${curSem ? curSem.name : 'เทอมปัจจุบัน'})</div>
         <div class="tool-body">
           <div id="quickSimList" style="display:flex; flex-direction:column; gap:6px; max-height:200px; overflow-y:auto; margin-bottom:10px;">
-            ${Object.values(state.courses).flat().map(c => `<div class="sim-row" data-cid="${c.id}">
-              <span style="font-size:10px">${c.code}</span>
+            ${(state.courses[curSemId] || []).map(c => `<div class="sim-row" data-cid="${c.id}">
+              <span style="font-size:11px; font-weight:600;">${c.code} - ${c.nameTh}</span>
               <select class="glass-select sm">${Object.keys(GRADE_PTS).map(g => `<option ${c.grade === g ? 'selected' : ''}>${g}</option>`).join('')}</select>
             </div>`).join('')}
+            ${(state.courses[curSemId] || []).length === 0 ? `<div style="text-align:center; padding:20px; font-size:12px; color:var(--c-muted);">ไม่มีรายวิชาในเทอมปัจจุบัน</div>` : ''}
           </div>
-          <button class="btn-glass-primary sm full" id="simBtn">คำนวณผล GPAX</button>
+          <button class="btn-glass-primary sm full" id="simBtn" ${(state.courses[curSemId] || []).length === 0 ? 'disabled' : ''}>คำนวณผล GPAX</button>
         </div>
         <div id="simResult"></div>
       </div>
@@ -4446,7 +4740,7 @@ function renderGrades(gpa, pro) {
                 <span class="grade-badge-sm" style="background:${GRADE_COLORS[c.grade] || '#94a3b8'}22;color:${GRADE_COLORS[c.grade] || '#94a3b8'}">${c.grade || '—'}</span>
               </td>
               <td class="center-cell">
-                <select class="grade-select-inline" data-course-id="${c.id}">
+                <select class="grade-select-inline" data-course-id="${c.id}" ${sem.id !== curSemId ? 'disabled style="opacity:0.6; cursor:not-allowed;"' : ''}>
                   <option value="">-</option>
                   ${Object.keys(GRADE_PTS).map(g => `<option value="${g}" ${c.grade === g ? 'selected' : ''}>${g}</option>`).join('')}
                 </select>
@@ -5659,6 +5953,246 @@ function renderMoneyPod() {
       showToast('📥 ส่งออกไฟล์รายงาน CSV สู่เครื่องสำเร็จ');
     };
 
+    window.mpEditTransaction = function(txId) {
+      const tx = state.moneyTransactions.find(t => t.id === txId);
+      if (!tx) return;
+
+      const categories = ['🍔 อาหาร & เครื่องดื่ม', '🚗 เดินทาง & ยานพาหนะ', '🐽 การเงิน & หนี้สิน', '🏠 บ้าน & ที่พักอาศัย', '🛍️ ช้อปปิ้ง & ไลฟ์สไตล์', '🎮 ความบันเทิง & เกม', '📚 การศึกษา & หนังสือ', '💊 สุขภาพ & ยา', '💼 การงาน & ธุรกิจ', '🎁 ของขวัญ & ทำบุญ', '🌐 อื่นๆ'];
+
+      let bodyHtml = `
+        <div style="display:flex; flex-direction:column; gap:12px; padding:10px;">
+          <div class="fg">
+            <label>ประเภทรายการ</label>
+            <select id="editTxType" class="glass-select sm full">
+              <option value="expense" ${tx.type === 'expense' ? 'selected' : ''}>💸 รายจ่าย</option>
+              <option value="income" ${tx.type === 'income' ? 'selected' : ''}>💰 รายรับ</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label>จำนวนเงิน (บาท)</label>
+            <input type="number" id="editTxAmount" class="glass-input sm full" value="${tx.amount}" step="0.01">
+          </div>
+          <div class="fg">
+            <label>หมวดหมู่</label>
+            <select id="editTxCategory" class="glass-select sm full">
+              ${categories.map(c => `<option value="${c}" ${tx.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+            </select>
+          </div>
+          <div class="fg">
+            <label>บัญชีเงิน/เครดิตที่ใช้</label>
+            <select id="editTxWallet" class="glass-select sm full">
+              ${state.moneyWallets.map(w => `<option value="${w.id}" ${tx.walletId === w.id ? 'selected' : ''}>${w.name}</option>`).join('')}
+            </select>
+          </div>
+          <div class="fg">
+            <label>บันทึกช่วยจำ (Notes)</label>
+            <input type="text" id="editTxNotes" class="glass-input sm full" value="${tx.notes || ''}">
+          </div>
+          <div class="fg">
+            <label>แท็ก (Tags, คั่นด้วยเว้นวรรค เช่น #อาหาร)</label>
+            <input type="text" id="editTxTags" class="glass-input sm full" value="${tx.tags || ''}">
+          </div>
+          <div class="fg">
+            <label>วันที่</label>
+            <input type="date" id="editTxDate" class="glass-input sm full" value="${tx.date || new Date().toISOString().split('T')[0]}">
+          </div>
+        </div>
+      `;
+
+      const footerHtml = `
+        <div style="display:flex; gap:10px; justify-content:flex-end; width:100%;">
+          <button class="btn-glass-pastel" onclick="closeModal()" style="padding: 8px 16px; border-radius:10px; font-size:12px;">ยกเลิก</button>
+          <button class="btn-pastel-primary" onclick="mpSaveEditedTransaction('${txId}')" style="padding: 8px 20px; border-radius:10px; font-size:12px;">💾 บันทึกการแก้ไข</button>
+        </div>
+      `;
+
+      openModal('✏️ แก้ไขรายการธุรกรรม', bodyHtml, footerHtml);
+    };
+
+    window.mpSaveEditedTransaction = function(txId) {
+      const tx = state.moneyTransactions.find(t => t.id === txId);
+      if (!tx) return;
+
+      const oldAmount = tx.amount;
+      const oldType = tx.type;
+      const oldWalletId = tx.walletId;
+
+      const newType = document.getElementById('editTxType').value;
+      const newAmount = parseFloat(document.getElementById('editTxAmount').value);
+      const newCategory = document.getElementById('editTxCategory').value;
+      const newWalletId = document.getElementById('editTxWallet').value;
+      const newNotes = document.getElementById('editTxNotes').value.trim();
+      const newTags = document.getElementById('editTxTags').value.trim();
+      const newDate = document.getElementById('editTxDate').value;
+
+      if (isNaN(newAmount) || newAmount <= 0) {
+        showToast('⚠️ กรุณากรอกจำนวนเงินให้ถูกต้อง', 'err');
+        return;
+      }
+
+      // Delta balance adjustment
+      const oldWallet = state.moneyWallets.find(w => w.id === oldWalletId);
+      if (oldWallet) {
+        if (oldType === 'expense') {
+          oldWallet.balance += oldAmount;
+        } else {
+          oldWallet.balance -= oldAmount;
+        }
+      }
+
+      const newWallet = state.moneyWallets.find(w => w.id === newWalletId);
+      if (newWallet) {
+        if (newType === 'expense') {
+          newWallet.balance -= newAmount;
+        } else {
+          newWallet.balance += newAmount;
+        }
+      }
+
+      tx.type = newType;
+      tx.amount = newAmount;
+      tx.category = newCategory;
+      tx.walletId = newWalletId;
+      tx.notes = newNotes;
+      tx.tags = newTags;
+      tx.date = newDate;
+
+      saveMoneyPod();
+      closeModal();
+      render();
+      showToast('✅ แก้ไขรายการเรียบร้อยแล้ว!');
+    };
+
+    window.mpEditGoal = function(goalId) {
+      const goal = state.moneyGoals.find(g => g.id === goalId);
+      if (!goal) return;
+
+      const bodyHtml = `
+        <div style="display:flex; flex-direction:column; gap:12px; padding:10px;">
+          <div class="fg">
+            <label>ชื่อเป้าหมาย</label>
+            <input type="text" id="editGoalName" class="glass-input sm full" value="${goal.name}">
+          </div>
+          <div class="fg">
+            <label>จำนวนเงินเป้าหมาย (บาท)</label>
+            <input type="number" id="editGoalTarget" class="glass-input sm full" value="${goal.target}" step="0.01">
+          </div>
+          <div class="fg">
+            <label>จำนวนเงินออมสะสมปัจจุบัน (บาท)</label>
+            <input type="number" id="editGoalSaved" class="glass-input sm full" value="${goal.saved}" step="0.01">
+          </div>
+        </div>
+      `;
+
+      const footerHtml = `
+        <div style="display:flex; gap:10px; justify-content:flex-end; width:100%;">
+          <button class="btn-glass-pastel" onclick="closeModal()" style="padding: 8px 16px; border-radius:10px; font-size:12px;">ยกเลิก</button>
+          <button class="btn-pastel-primary" onclick="mpSaveEditedGoal('${goalId}')" style="padding: 8px 20px; border-radius:10px; font-size:12px;">💾 บันทึกการแก้ไข</button>
+        </div>
+      `;
+
+      openModal('✏️ แก้ไขเป้าหมายการออม', bodyHtml, footerHtml);
+    };
+
+    window.mpSaveEditedGoal = function(goalId) {
+      const goal = state.moneyGoals.find(g => g.id === goalId);
+      if (!goal) return;
+
+      const newName = document.getElementById('editGoalName').value.trim();
+      const newTarget = parseFloat(document.getElementById('editGoalTarget').value);
+      const newSaved = parseFloat(document.getElementById('editGoalSaved').value);
+
+      if (!newName || isNaN(newTarget) || newTarget <= 0 || isNaN(newSaved) || newSaved < 0) {
+        showToast('⚠️ กรุณากรอกข้อมูลให้ถูกต้อง', 'err');
+        return;
+      }
+
+      goal.name = newName;
+      goal.target = newTarget;
+      goal.saved = newSaved;
+
+      saveMoneyPod();
+      closeModal();
+      render();
+      showToast('✅ แก้ไขเป้าหมายสำเร็จ!');
+    };
+
+    window.mpEditInstallment = function(instId) {
+      const inst = state.moneyInstallments.find(i => i.id === instId);
+      if (!inst) return;
+
+      const bodyHtml = `
+        <div style="display:flex; flex-direction:column; gap:12px; padding:10px;">
+          <div class="fg">
+            <label>ชื่อรายการผ่อนชำระ/หนี้สิน</label>
+            <input type="text" id="editInstName" class="glass-input sm full" value="${inst.name}">
+          </div>
+          <div class="fg">
+            <label>ยอดผ่อนชำระต่อเดือน (บาท)</label>
+            <input type="number" id="editInstMonthly" class="glass-input sm full" value="${inst.monthlyPayment}" step="0.01">
+          </div>
+          <div class="fg">
+            <label>จำนวนงวดทั้งหมด (เดือน)</label>
+            <input type="number" id="editInstTotal" class="glass-input sm full" value="${inst.totalMonths}">
+          </div>
+          <div class="fg">
+            <label>จำนวนงวดที่จ่ายไปแล้ว (เดือน)</label>
+            <input type="number" id="editInstPaid" class="glass-input sm full" value="${inst.paidMonths}">
+          </div>
+          <div class="fg">
+            <label>ยอดเงินเต็มผ่อนชำระรวมดอกเบี้ย (บาท)</label>
+            <input type="number" id="editInstTotalPayable" class="glass-input sm full" value="${inst.totalPayable}" step="0.01">
+          </div>
+        </div>
+      `;
+
+      const footerHtml = `
+        <div style="display:flex; gap:10px; justify-content:flex-end; width:100%;">
+          <button class="btn-glass-pastel" onclick="closeModal()" style="padding: 8px 16px; border-radius:10px; font-size:12px;">ยกเลิก</button>
+          <button class="btn-pastel-primary" onclick="mpSaveEditedInstallment('${instId}')" style="padding: 8px 20px; border-radius:10px; font-size:12px;">💾 บันทึกการแก้ไข</button>
+        </div>
+      `;
+
+      openModal('✏️ แก้ไขสัญญาผ่อนชำระ', bodyHtml, footerHtml);
+    };
+
+    window.mpSaveEditedInstallment = function(instId) {
+      const inst = state.moneyInstallments.find(i => i.id === instId);
+      if (!inst) return;
+      
+      const name = document.getElementById('editInstName').value.trim();
+      const monthly = parseFloat(document.getElementById('editInstMonthly').value);
+      const total = parseInt(document.getElementById('editInstTotal').value);
+      const paid = parseInt(document.getElementById('editInstPaid').value);
+      const payable = parseFloat(document.getElementById('editInstTotalPayable').value);
+      
+      if (!name || isNaN(monthly) || monthly <= 0 || isNaN(total) || total <= 0 || isNaN(paid) || paid < 0 || isNaN(payable) || payable <= 0) {
+        showToast('⚠️ กรุณากรอกข้อมูลให้ถูกต้อง', 'err');
+        return;
+      }
+      
+      inst.name = name;
+      inst.monthlyPayment = monthly;
+      inst.totalMonths = total;
+      inst.paidMonths = paid;
+      inst.remainingMonths = Math.max(0, total - paid);
+      inst.totalPayable = payable;
+      
+      saveMoneyPod();
+      closeModal();
+      render();
+      showToast('✅ แก้ไขข้อมูลสัญญาสำเร็จ!');
+    };
+
+    window.mpDeleteInstallment = function(instId) {
+      if (confirm('⚠️ คุณแน่ใจที่จะยกเลิกและลบสัญญาผ่อนชำระนี้ใช่หรือไม่?\n(ยอดคงเหลือในบัญชีจะไม่ได้รับผลกระทบ)')) {
+        state.moneyInstallments = state.moneyInstallments.filter(i => i.id !== instId);
+        saveMoneyPod();
+        render();
+        showToast('🗑️ ลบสัญญาผ่อนชำระเรียบร้อย!');
+      }
+    };
+
     window.mpHandlersInitialized = true;
   }
 
@@ -5896,6 +6430,7 @@ function renderMoneyPod() {
                   </div>
                   <div style="display:flex; align-items:center; gap:10px;">
                     <span class="tx-amount ${amtClass}">${amtSign}฿${t.amount.toLocaleString()}</span>
+                    <button class="icon-btn sm" onclick="mpEditTransaction('${t.id}')" style="background:transparent; border:none; color:#4f46e5; font-size:14px; margin-right:4px;">✏️</button>
                     <button class="icon-btn danger sm" onclick="mpDeleteTransaction('${t.id}')" style="background:transparent; border:none; color:#ef4444; font-size:14px;">✕</button>
                   </div>
                 </div>
@@ -6015,6 +6550,8 @@ function renderMoneyPod() {
                 </div>
                 
                 <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
+                  <button class="btn-glass-pastel" onclick="mpEditInstallment('${i.id}')" style="padding:6px 12px; border-color:#4f46e5; color:#4f46e5; font-size:11px;">✏️ แก้ไขสัญญา</button>
+                  <button class="btn-glass-pastel" onclick="mpDeleteInstallment('${i.id}')" style="padding:6px 12px; border-color:#ef4444; color:#ef4444; font-size:11px;">🗑️ ลบสัญญา</button>
                   <button class="btn-glass-pastel" onclick="mpPayInstallment('${i.id}')" style="padding:6px 12px; border-color:var(--primary); color:var(--primary); font-size:11px;">💳 ชำระงวดประจำเดือน</button>
                 </div>
               </div>
@@ -6064,6 +6601,7 @@ function renderMoneyPod() {
                   </div>
                   
                   <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
+                    <button class="btn-glass-pastel" onclick="mpEditGoal('${g.id}')" style="padding:6px 12px; font-size:11px; border-color:#4f46e5; color:#4f46e5;">✏️ แก้ไขเป้าหมาย</button>
                     <button class="btn-glass-pastel" onclick="mpDeleteGoal('${g.id}')" style="padding:6px 12px; font-size:11px; border-color:#ef4444; color:#ef4444; background:rgba(239, 68, 68, 0.05);">🗑️ ลบเป้าหมาย</button>
                     <button class="btn-glass-pastel" onclick="mpDepositGoal('${g.id}')" style="padding:6px 12px; font-size:11px; border-color:var(--primary); color:var(--primary);">💰 ฝากเงินเข้าออม</button>
                   </div>
@@ -6198,6 +6736,23 @@ function renderSettings() {
 
     <div style="margin-top:12px; font-size:11px; color:var(--c-muted);">
       Last Sync: ${state.lastNotionSync ? new Date(state.lastNotionSync).toLocaleString() : 'Never'}
+    </div>
+  </div>
+
+  <div class="settings-card" style="margin-bottom:15px; border-left: 4px solid #4285f4;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+      <div class="settings-label" style="flex:1; min-width:200px;">
+        <div style="font-weight:700; font-size:16px; display:flex; align-items:center; gap:8px;">
+          <span style="font-size:18px;">📅</span>
+          Google Calendar Integration
+        </div>
+        <div style="font-size:12px; color:var(--c-muted); margin-top:4px;">
+          เชื่อมตารางเรียน สอบ และงานส่ง ไปยัง Google Calendar (สร้างปฏิทินแยกอัตโนมัติ)
+        </div>
+      </div>
+      <button class="btn-glass-primary sm" onclick="window.syncToGoogleCalendar()" style="background:#4285f4; border-color:#4285f4; color:white; font-weight:700; border-radius:12px; padding:10px 18px;">
+        ⚡ ซิงค์ตารางเรียน & งาน
+      </button>
     </div>
   </div>
 
@@ -6853,7 +7408,7 @@ window.renderCourseHubUI_Original = (courseId) => {
   const timeSinceStartMins = activeSlot ? (currentTimeVal - activeSlot.startHour) * 60 : -1;
   const attToday = state.attendanceHistory[courseId]?.[now.toISOString().split('T')[0]];
   const sos = analyzeSOS(courseId);
-  const reflection = state.reflections[courseId] || '';
+  const reflection = getReflectionText(courseId);
 
   let attUI = '';
   if (!activeSlot) {
@@ -6913,10 +7468,9 @@ window.renderCourseHubUI_Original = (courseId) => {
   }
 
   document.getElementById('saveAdvHubBtn').onclick = async () => {
-    const val = document.getElementById('reflInput_adv').value;
-    state.reflections[courseId] = val;
-    localStorage.setItem('reflections', JSON.stringify(state.reflections));
-    await fsSet('reflections', courseId, { text: val, updatedAt: new Date().toISOString() });
+    const val = document.getElementById('reflInput_adv').value.trim();
+    if (!val) { showToast('⚠️ กรุณากรอกเนื้อหา', 'err'); return; }
+    await saveReflectionData(courseId, val);
     showToast('✅ บันทึก Reflection สำเร็จ!');
     renderCourseHub(courseId);
   };
@@ -6970,8 +7524,8 @@ function startHyperNotifications() {
 
         // Persistent Reminder (30 min after end if no reflection)
         if (nowMin === endMin + 30) {
-          const refl = state.reflections[c.id];
-          if (!refl) {
+          const refl = getReflectionText(c.id);
+          if (!refl || refl.trim().length < 10) {
             pushNotif(`⚠️ ยังไม่ได้บันทึก Reflection: ${c.nameTh}`, `รีบบันทึกตอนนี้ก่อนจะลืมเนื้อหานะครับ`);
           }
         }
@@ -7419,6 +7973,10 @@ async function setAttendanceStatus(courseId, status, skipGPS = false) {
   const c = findCourseById(courseId);
   let distMeters = null;
 
+  if (!skipGPS && !confirm(`ต้องการเช็คชื่อสถานะ [${status}] ของวิชานี้ใช่หรือไม่?`)) {
+    return;
+  }
+
   const recordAttendance = async (finalStatus) => {
     const now = new Date();
     const dateKey = now.toLocaleDateString('en-CA');
@@ -7446,12 +8004,11 @@ async function setAttendanceStatus(courseId, status, skipGPS = false) {
         openModal('📍 อยู่นอกพื้นที่ห้องเรียน', `
               <div style="text-align:center; padding:10px;">
                 <p>คุณอยู่ห่างจากห้องเรียน <strong>${distMeters} เมตร</strong></p>
-                <p>กรุณาระบุเหตุผลการเช็คอิน:</p>
+                <p style="margin-top:10px; font-weight:700;">กรุณาระบุเหตุผลการเช็คชื่อนอกห้องเรียน เพื่อความโปร่งใส:</p>
+                <textarea id="outOfGeofenceReason" class="glass-input full" placeholder="ทำไมถึงเช็คชื่อบริเวณนี้? (เช่น ติดธุระตึกอื่น, อาจารย์เปลี่ยนห้องเรียน, เจ็บป่วย)" style="height:80px; margin-top:8px; border-radius:10px; font-size:12px; padding:10px; resize:none;"></textarea>
                 <div style="display:flex; flex-direction:column; gap:10px; margin-top:15px;">
-                  <button class="nb-btn full" onclick="closeModal(); setAttendanceStatus('${courseId}', 'เรียนออนไลน์', true)">💻 เรียนออนไลน์</button>
-                  <button class="nb-btn full" onclick="closeModal(); setAttendanceStatus('${courseId}', 'อาจารย์เปลี่ยนห้อง', true)">🚪 อาจารย์เปลี่ยนห้อง</button>
-                  <button class="nb-btn full" onclick="closeModal(); setAttendanceStatus('${courseId}', 'เรียนนอกสถานที่', true)">🌍 เรียนนอกสถานที่</button>
-                  <button class="nb-btn-danger full" onclick="closeModal()">❌ ยกเลิก</button>
+                  <button class="btn-pastel-primary full" onclick="submitCustomCheckinReason('${courseId}', '${status}')" style="border-radius:10px;">💾 ส่งเหตุผลและเช็คชื่อ</button>
+                  <button class="btn-glass-pastel full" onclick="closeModal()" style="border-radius:10px; color:#ef4444; border-color:#ef4444;">❌ ยกเลิก</button>
                 </div>
               </div>
             `);
@@ -7461,12 +8018,11 @@ async function setAttendanceStatus(courseId, status, skipGPS = false) {
       openModal('⚠️ ไม่สามารถเข้าถึง GPS ได้', `
               <div style="text-align:center; padding:10px;">
                 <p>ระบบไม่สามารถตรวจสอบพิกัดได้ (${err.message})</p>
-                <p>กรุณาระบุเหตุผลการเช็คอิน:</p>
+                <p style="margin-top:10px; font-weight:700;">กรุณาระบุเหตุผลการเช็คชื่อ:</p>
+                <textarea id="outOfGeofenceReason" class="glass-input full" placeholder="เหตุผลการเช็คชื่อแบบแมนนวล (เช่น GPS ไม่มีสัญญาณ, เครื่องไม่รองรับ)" style="height:80px; margin-top:8px; border-radius:10px; font-size:12px; padding:10px; resize:none;"></textarea>
                 <div style="display:flex; flex-direction:column; gap:10px; margin-top:15px;">
-                  <button class="nb-btn full" onclick="closeModal(); setAttendanceStatus('${courseId}', 'เรียนออนไลน์', true)">💻 เรียนออนไลน์</button>
-                  <button class="nb-btn full" onclick="closeModal(); setAttendanceStatus('${courseId}', 'อาจารย์เปลี่ยนห้อง', true)">🚪 อาจารย์เปลี่ยนห้อง</button>
-                  <button class="nb-btn full" onclick="closeModal(); setAttendanceStatus('${courseId}', 'เรียนนอกสถานที่', true)">🌍 เรียนนอกสถานที่</button>
-                  <button class="nb-btn-danger full" onclick="closeModal()">❌ ยกเลิก</button>
+                  <button class="btn-pastel-primary full" onclick="submitCustomCheckinReason('${courseId}', '${status}')" style="border-radius:10px;">💾 ส่งเหตุผลและเช็คชื่อ</button>
+                  <button class="btn-glass-pastel full" onclick="closeModal()" style="border-radius:10px; color:#ef4444; border-color:#ef4444;">❌ ยกเลิก</button>
                 </div>
               </div>
             `);
@@ -7476,6 +8032,17 @@ async function setAttendanceStatus(courseId, status, skipGPS = false) {
 
   await recordAttendance(status);
 }
+
+window.submitCustomCheckinReason = async function(courseId, status) {
+  const reasonText = document.getElementById('outOfGeofenceReason')?.value.trim();
+  if (!reasonText) {
+    showToast('⚠️ กรุณากรอกเหตุผลก่อนทำการเช็คชื่อ', 'err');
+    return;
+  }
+  closeModal();
+  const finalStatus = `${status} (นอกพื้นที่: ${reasonText})`;
+  await setAttendanceStatus(courseId, finalStatus, true);
+};
 
 function promptAbsenceReason(courseId) {
   const reason = prompt("กรุณาระบุเหตุผลที่ขาดเรียน (เช่น เจ็บป่วย, ลากิจ, อื่นๆ):");
@@ -7488,6 +8055,7 @@ function promptAbsenceReason(courseId) {
 // EXPOSE TO WINDOW (Fix for iOS/Safari & Module Scoping)
 // ══════════════════════════════════════════════════
 window.render = render;
+window.showToast = showToast;
 window.addTopic = addTopic;
 window.setTopicLevel = setTopicLevel;
 window.deleteTopic = deleteTopic;
@@ -7998,12 +8566,10 @@ window.openPendingReflectionsModal = () => {
 };
 
 window.saveSingleReflection = async (id) => {
-  const val = document.getElementById(`refl_${id}`)?.value;
+  const val = document.getElementById(`refl_${id}`)?.value.trim();
   if (!val) { showToast('⚠️ กรุณากรอกเนื้อหา', 'err'); return; }
 
-  state.reflections[id] = val;
-  localStorage.setItem('reflections', JSON.stringify(state.reflections));
-  await fsSet('reflections', id, { text: val, updatedAt: new Date().toISOString() });
+  await saveReflectionData(id, val);
   showToast('✅ บันทึกสำเร็จ!');
   const remaining = getMissingReflections();
   if (remaining.length > 0) openPendingReflectionsModal();
@@ -9028,3 +9594,31 @@ const NotionHub = {
 };
 
 window.NotionHub = NotionHub;
+
+// ── Google Calendar Sync Frontend Integration ──
+window.syncToGoogleCalendar = function() {
+  showToast('⏳ กำลังซิงค์ข้อมูลกับ Google Calendar...');
+  
+  const exams = Object.values(state.exams || {}).flat();
+  const assignments = Object.values(state.assignments || {}).flat();
+  const courses = Object.values(state.courses || []).filter(c => !c.isArchived);
+
+  const payload = {
+    exams: exams,
+    assignments: assignments,
+    courses: courses
+  };
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res && res.success) {
+        showToast('✅ ' + res.message);
+      } else {
+        showToast('❌ ' + (res.error || 'การซิงค์ล้มเหลว'), 'err');
+      }
+    })
+    .withFailureHandler(err => {
+      showToast('❌ เกิดข้อผิดพลาด: ' + err.message, 'err');
+    })
+    .syncAcademicMilestonesToCalendar(payload);
+};
