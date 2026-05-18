@@ -1271,9 +1271,28 @@ const PDFManager = {
 window.PDFManager = PDFManager;
 
 function getCurrentSemester() {
+  if (!state.semesters || state.semesters.length === 0) return null;
   const now = new Date();
   const dateStr = now.toISOString().split('T')[0];
-  return state.semesters.find(s => dateStr >= s.start && dateStr <= s.end);
+  
+  // 1. Try to find an active semester covering today
+  const active = state.semesters.find(s => dateStr >= s.start && dateStr <= s.end);
+  if (active) return active;
+  
+  // 2. If today is between semesters, find the closest upcoming semester
+  const upcoming = [...state.semesters]
+    .filter(s => s.start > dateStr)
+    .sort((a, b) => a.start.localeCompare(b.start));
+  if (upcoming.length > 0) return upcoming[0];
+  
+  // 3. If all semesters have ended, fall back to the most recent semester that ended
+  const ended = [...state.semesters]
+    .filter(s => s.end < dateStr)
+    .sort((a, b) => b.end.localeCompare(a.end));
+  if (ended.length > 0) return ended[0];
+  
+  // 4. Ultimate fallback: last semester in array
+  return state.semesters[state.semesters.length - 1];
 }
 
 // ══════════════════════════════════════════════════
@@ -7654,7 +7673,17 @@ async function initApp() {
       }
     }, 300000);
 
-    setInterval(() => { if (!state.modal) render(); }, 30000);
+    setInterval(() => {
+      if (state.modal) return;
+      if (document.activeElement && (
+        document.activeElement.tagName === 'INPUT' || 
+        document.activeElement.tagName === 'TEXTAREA' || 
+        document.activeElement.hasAttribute('contenteditable')
+      )) {
+        return; // Skip background re-rendering while the student is actively typing to prevent input focus loss and cursor jumping!
+      }
+      render();
+    }, 30000);
   } catch (e) {
     console.error("Initialization failed:", e);
     render();
