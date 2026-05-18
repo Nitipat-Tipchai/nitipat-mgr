@@ -2553,7 +2553,7 @@ function renderTopNav(gpa, pro, curSem) {
       { id: 'focus', icon: '🍅', label: 'Focus Mode' }, { id: 'club', icon: '🏛', label: 'งานชุมนุม' },
       { id: 'calendar', icon: '🗓', label: 'ปฏิทินการศึกษา' },
       { id: 'money-pod', icon: '🐽', label: 'MoneyPod' },
-      { id: 'internship', icon: '💼', label: 'The Internship Journey 2026' },
+
       { id: 'settings', icon: '⚙️', label: 'ตั้งค่า' }
     ].map(n => `<button class="fm-item ${state.view === n.id ? 'active' : ''}" data-nav="${n.id}">
         <span class="fm-ic">${n.icon}</span><span class="fm-lbl">${n.label}</span>
@@ -2617,7 +2617,7 @@ function renderPage(gpa, pro, curSem) {
     case 'money-pod': return renderMoneyPod();
     case 'calendar': return renderCalendar();
     case 'settings': return renderSettings();
-    case 'internship': return renderInternshipPage();
+
     case 'course-hub': return renderCourseHubPage();
     case 'alarm': return renderAlarmPage();
     default: return renderDashboard(gpa, pro, curSem);
@@ -9546,168 +9546,214 @@ window.syncToGoogleCalendar = function() {
 };
 
 
-// ──────────────────────────────────────────────────
-// 💼 THE INTERNSHIP JOURNEY 2026 MODULE
-// ──────────────────────────────────────────────────
+// โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€
+// ๐’ผ THE INTERNSHIP JOURNEY 2026 MODULE (V2)
+// โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€
 
-// 1. Initial State Setup
 if (!state.internship) {
   state.internship = {
     activePhase: 1,
+    // Phase 1: Application
+    companies: JSON.parse(localStorage.getItem('internship_companies') || '[]'),
+    kanban: JSON.parse(localStorage.getItem('internship_kanban') || '{"interested":[], "applied":[], "interview":[], "accepted":[]}'),
+    resumeUrl: localStorage.getItem('internship_resume_url') || '',
+    portfolioLinks: JSON.parse(localStorage.getItem('internship_portfolio') || '[]'),
+    alumniInsights: JSON.parse(localStorage.getItem('internship_alumni') || '[]'),
+    
+    // Phase 2: Documents & Training
+    orientationAttendance: JSON.parse(localStorage.getItem('internship_orientation') || '[false, false, false, false]'),
+    mockQuizScore: 0,
+    mockQuizCompleted: false,
+    acceptanceFile: localStorage.getItem('internship_acceptance') || '',
+    travelBudget: parseFloat(localStorage.getItem('internship_budget') || '0'),
+    
+    // Phase 3: Work Log
     checkedIn: false,
     checkInTime: null,
     totalHours: parseFloat(localStorage.getItem('internship_total_hours') || '0'),
     dailyLogs: JSON.parse(localStorage.getItem('internship_daily_logs') || '[]'),
-    mockQuizScore: 0,
-    mockQuizCompleted: false,
-    envelopeChecked: JSON.parse(localStorage.getItem('internship_envelope_checked') || '{"env_form":false,"env_time":false,"env_eval":false,"env_book":false}'),
-    companies: JSON.parse(localStorage.getItem('internship_companies') || '[{"id": "c1", "name":"SCG Chemicals", "status":"interested", "note":"เกรดเฉลี่ย > 3.00"}, {"id": "c2", "name":"PTT GC", "status":"applied", "note":"สัมภาษณ์ 10 ก.ย."}]'),
-    kanban: JSON.parse(localStorage.getItem('internship_kanban') || '{"interested":["c1"], "applied":["c2"], "interview":[], "accepted":[]}'),
-    orientationAttendance: JSON.parse(localStorage.getItem('internship_orientation') || '[false, false, false, false]'),
+    skills: JSON.parse(localStorage.getItem('internship_skills') || '{}'),
+    photos: JSON.parse(localStorage.getItem('internship_photos') || '[]'),
     totalAllowance: parseFloat(localStorage.getItem('internship_allowance') || '0'),
-    skills: JSON.parse(localStorage.getItem('internship_skills') || '{"SEM":0, "Communication":0, "Safety":0}'),
+    otHours: parseFloat(localStorage.getItem('internship_ot') || '0'),
+    mentorName: localStorage.getItem('internship_mentor_name') || '',
+    mentorTel: localStorage.getItem('internship_mentor_tel') || '',
+    
+    // Phase 4: Reporting
+    reportSections: JSON.parse(localStorage.getItem('internship_report') || '{"ch1":false, "ch2":false, "ch3":false, "ch4":false, "ch5":false}'),
+    theoryRefs: JSON.parse(localStorage.getItem('internship_theory_refs') || '[]'),
+    problemsLogs: JSON.parse(localStorage.getItem('internship_problems') || '[]'),
+    evalLinks: JSON.parse(localStorage.getItem('internship_eval_links') || '[]'),
+    employerFeedback: localStorage.getItem('internship_feedback') || '',
+    envelopeChecked: JSON.parse(localStorage.getItem('internship_envelope_checked') || '{"env_form":false,"env_time":false,"env_eval":false,"env_book":false}'),
+    exitNote: localStorage.getItem('internship_exit_note') || '',
+    
+    // Phase 5: Welfare & Extras
+    medicalBills: JSON.parse(localStorage.getItem('internship_medical') || '[]'),
+    stressLevel: parseInt(localStorage.getItem('internship_stress') || '0'),
     badges: JSON.parse(localStorage.getItem('internship_badges') || '[]'),
     focusSessions: parseInt(localStorage.getItem('internship_focus_sessions') || '0'),
     contacts: JSON.parse(localStorage.getItem('internship_contacts') || '[]'),
-    futureJobs: JSON.parse(localStorage.getItem('internship_future_jobs') || '[]'),
-    deadlines: JSON.parse(localStorage.getItem('internship_deadlines') || '[{"label":"ยื่นฟอร์ม 101", "date":"2026-05-30"}]'),
-    photos: JSON.parse(localStorage.getItem('internship_photos') || '[]'),
-    mentorName: localStorage.getItem('internship_mentor_name') || 'พี่หมู (QC Dept)',
-    mentorTel: localStorage.getItem('internship_mentor_tel') || '0812345678',
-    reportDueDate: localStorage.getItem('internship_report_due') || '2026-06-30',
-    theoryRefs: JSON.parse(localStorage.getItem('internship_theory_refs') || '[]'),
-    exitNote: localStorage.getItem('internship_exit_note') || '',
-    exitSatisfaction: parseInt(localStorage.getItem('internship_exit_satisfaction') || '0')
+    futureJobs: JSON.parse(localStorage.getItem('internship_future_jobs') || '[]')
   };
 }
 
-// 2. State & Helper Functions
+// 2. State Saving
+window.internSaveState = function() {
+  const s = state.internship;
+  localStorage.setItem('internship_companies', JSON.stringify(s.companies));
+  localStorage.setItem('internship_kanban', JSON.stringify(s.kanban));
+  localStorage.setItem('internship_resume_url', s.resumeUrl);
+  localStorage.setItem('internship_portfolio', JSON.stringify(s.portfolioLinks));
+  localStorage.setItem('internship_alumni', JSON.stringify(s.alumniInsights));
+  
+  localStorage.setItem('internship_orientation', JSON.stringify(s.orientationAttendance));
+  localStorage.setItem('internship_acceptance', s.acceptanceFile);
+  localStorage.setItem('internship_budget', s.travelBudget);
+  
+  localStorage.setItem('internship_total_hours', s.totalHours);
+  localStorage.setItem('internship_daily_logs', JSON.stringify(s.dailyLogs));
+  localStorage.setItem('internship_skills', JSON.stringify(s.skills));
+  localStorage.setItem('internship_photos', JSON.stringify(s.photos));
+  localStorage.setItem('internship_allowance', s.totalAllowance);
+  localStorage.setItem('internship_ot', s.otHours);
+  localStorage.setItem('internship_mentor_name', s.mentorName);
+  localStorage.setItem('internship_mentor_tel', s.mentorTel);
+  
+  localStorage.setItem('internship_report', JSON.stringify(s.reportSections));
+  localStorage.setItem('internship_theory_refs', JSON.stringify(s.theoryRefs));
+  localStorage.setItem('internship_problems', JSON.stringify(s.problemsLogs));
+  localStorage.setItem('internship_eval_links', JSON.stringify(s.evalLinks));
+  localStorage.setItem('internship_feedback', s.employerFeedback);
+  localStorage.setItem('internship_envelope_checked', JSON.stringify(s.envelopeChecked));
+  localStorage.setItem('internship_exit_note', s.exitNote);
+  
+  localStorage.setItem('internship_medical', JSON.stringify(s.medicalBills));
+  localStorage.setItem('internship_stress', s.stressLevel);
+  localStorage.setItem('internship_badges', JSON.stringify(s.badges));
+  localStorage.setItem('internship_focus_sessions', s.focusSessions);
+  localStorage.setItem('internship_contacts', JSON.stringify(s.contacts));
+  localStorage.setItem('internship_future_jobs', JSON.stringify(s.futureJobs));
+};
+
 window.changeInternPhase = function(phaseNum) {
   state.internship.activePhase = phaseNum;
   render();
 };
 
-window.internSaveState = function() {
-  localStorage.setItem('internship_total_hours', state.internship.totalHours);
-  localStorage.setItem('internship_daily_logs', JSON.stringify(state.internship.dailyLogs));
-  localStorage.setItem('internship_companies', JSON.stringify(state.internship.companies));
-  localStorage.setItem('internship_kanban', JSON.stringify(state.internship.kanban));
-  localStorage.setItem('internship_orientation', JSON.stringify(state.internship.orientationAttendance));
-  localStorage.setItem('internship_allowance', state.internship.totalAllowance);
-  localStorage.setItem('internship_skills', JSON.stringify(state.internship.skills));
-  localStorage.setItem('internship_badges', JSON.stringify(state.internship.badges));
-  localStorage.setItem('internship_focus_sessions', state.internship.focusSessions);
-  localStorage.setItem('internship_contacts', JSON.stringify(state.internship.contacts));
-  localStorage.setItem('internship_future_jobs', JSON.stringify(state.internship.futureJobs));
-  localStorage.setItem('internship_deadlines', JSON.stringify(state.internship.deadlines));
-  localStorage.setItem('internship_photos', JSON.stringify(state.internship.photos));
-  localStorage.setItem('internship_mentor_name', state.internship.mentorName);
-  localStorage.setItem('internship_mentor_tel', state.internship.mentorTel);
-  localStorage.setItem('internship_report_due', state.internship.reportDueDate);
-  localStorage.setItem('internship_theory_refs', JSON.stringify(state.internship.theoryRefs));
-  localStorage.setItem('internship_exit_note', state.internship.exitNote);
-  localStorage.setItem('internship_exit_satisfaction', state.internship.exitSatisfaction);
-};
+// ==========================================
+// PHASE 1: Application Logic
+// ==========================================
 
-// -------------------------
-// PHASE 1 LOGIC
-// -------------------------
 window.internAddCompany = function() {
-  const name = prompt("ชื่อบริษัท:");
+  const name = prompt("เธเธทเนเธญเธเธฃเธดเธฉเธฑเธ—:");
   if (!name) return;
-  const note = prompt("โน้ตเพิ่มเติม (เช่น เกรดขั้นต่ำ, เบอร์ HR):") || '';
+  const note = prompt("เธฃเธฒเธขเธฅเธฐเน€เธญเธตเธขเธ” (เน€เธเนเธ เน€เธเธญเธฃเน HR, เน€เธเธดเธเน€เธ”เธทเธญเธ):") || '';
   const id = 'c_' + Date.now();
   state.internship.companies.push({ id, name, status: 'interested', note });
   state.internship.kanban.interested.push(id);
   internSaveState();
   render();
-  showToast("เพิ่มบริษัทใหม่ลงระบบ CRM แล้ว");
+  showToast("โ… เน€เธเธดเนเธกเธเนเธญเธกเธนเธฅเธเธฃเธดเธฉเธฑเธ—เนเธฅเนเธง");
 };
 
 window.internMoveKanban = function(id) {
   const comp = state.internship.companies.find(c => c.id === id);
   if (!comp) return;
-  openModal('ย้ายสถานะ (Kanban)', `
-    <div style="display:flex; flex-direction:column; gap:10px;">
-      <button class="btn-glass sm full" onclick="internUpdateKanbanStatus('${id}', 'interested')">🤔 สนใจ</button>
-      <button class="btn-glass sm full" onclick="internUpdateKanbanStatus('${id}', 'applied')">📤 ส่งเมลแล้ว</button>
-      <button class="btn-glass sm full" onclick="internUpdateKanbanStatus('${id}', 'interview')">💬 รอสัมภาษณ์</button>
-      <button class="btn-glass sm full" onclick="internUpdateKanbanStatus('${id}', 'accepted')">✅ ตอบรับ</button>
+  
+  openModal('๐ เธขเนเธฒเธขเธชเธ–เธฒเธเธฐเธเธฃเธดเธฉเธฑเธ—', \`
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <button class="btn-glass sm full" onclick="window.doInternMoveKanban('\${id}', 'interested')">๐ค” เธชเธเนเธ</button>
+      <button class="btn-glass sm full" onclick="window.doInternMoveKanban('\${id}', 'applied')">๐“ค เธชเนเธเน€เธกเธฅเนเธฅเนเธง</button>
+      <button class="btn-glass sm full" onclick="window.doInternMoveKanban('\${id}', 'interview')">๐’ฌ เธฃเธญเธชเธฑเธกเธ เธฒเธฉเธ“เน</button>
+      <button class="btn-glass-primary sm full" onclick="window.doInternMoveKanban('\${id}', 'accepted')">โ… เธ•เธญเธเธฃเธฑเธ</button>
     </div>
-  `);
+  \`);
 };
 
-window.internUpdateKanbanStatus = function(id, newStatus) {
+window.doInternMoveKanban = function(id, newStatus) {
   const comp = state.internship.companies.find(c => c.id === id);
   if (!comp) return;
   const oldList = state.internship.kanban[comp.status];
   const idx = oldList.indexOf(id);
   if (idx > -1) oldList.splice(idx, 1);
+  
   comp.status = newStatus;
-  if (!state.internship.kanban[newStatus]) state.internship.kanban[newStatus] = [];
   state.internship.kanban[newStatus].push(id);
   internSaveState();
   closeModal();
   render();
 };
 
-window.internCopyGrades = function() {
-  const gradedCourses = Object.values(state.courses || {}).filter(c => c.grade && c.grade !== '' && c.grade !== 'W');
-  const courseTexts = gradedCourses.map(c => `- ${c.code} ${c.name}: ${c.grade}`).join('\\n');
-  const gpax = window.getCumGPA ? window.getCumGPA() : 'N/A';
-  const text = `GPAX ปัจจุบัน: ${gpax}\\n${courseTexts}`;
-  navigator.clipboard.writeText(text).then(() => showToast('📋 คัดลอกข้อมูลเกรดเรียบร้อย!'));
-};
-
-window.internAddDeadline = function() {
-  const label = prompt("ชื่อ Deadline:");
-  if (!label) return;
-  const date = prompt("วันที่ (YYYY-MM-DD):");
-  if (!date) return;
-  state.internship.deadlines.push({label, date});
-  internSaveState();
-  render();
-};
-
-window.internCheckAcademicEligibility = function() {
-  const graded = Object.values(state.courses || {}).filter(c => c.grade && c.grade !== '' && c.grade !== 'W' && c.grade !== 'F');
-  const credits = graded.reduce((acc, c) => acc + (parseFloat(c.credit) || 0), 0);
-  if (credits >= 80) {
-    showToast(`✅ ผ่านเกณฑ์ พร้อมฝึกงาน! (หน่วยกิตสะสม: ${credits})`, 'ok');
-  } else {
-    showToast(`❌ ยังไม่ผ่านเกณฑ์ ขาดอีก ${80 - credits} หน่วยกิต`, 'err');
+window.internSetResumeUrl = function() {
+  const url = prompt("เธเธฃเธญเธเธฅเธดเธเธเน Google Drive เธเธญเธ Resume:", state.internship.resumeUrl);
+  if (url !== null) {
+    state.internship.resumeUrl = url;
+    internSaveState();
+    render();
+    showToast("โ… เธเธฑเธเธ—เธถเธเธฅเธดเธเธเน Resume เน€เธฃเธตเธขเธเธฃเนเธญเธข");
   }
 };
 
-
-window.internCopyPortfolio = function() {
-  const link = "https://drive.google.com/file/d/13iUsIYgNnZQhC6hezwXJO06Re4zAZ8Ri/view";
-  navigator.clipboard.writeText(link).then(() => showToast('🔗 คัดลอกลิงก์ Portfolio แล้ว!'));
+window.internAddPortfolio = function() {
+  const title = prompt("เธเธทเนเธญเธงเธดเธเธฒ / เนเธเธฃเน€เธเธเธ•เน:");
+  if (!title) return;
+  const url = prompt("เธฅเธดเธเธเน Drive เธซเธฃเธทเธญเน€เธงเนเธเธเธฅเธเธฒเธ:");
+  if (url) {
+    state.internship.portfolioLinks.push({title, url});
+    internSaveState();
+    render();
+    showToast("โ… เธเธฑเธเธ—เธถเธเธเธญเธฃเนเธ•เนเธเธฅเธดเนเธญเนเธฅเนเธง");
+  }
 };
 
-window.internGenerateEmail = function() {
-  const comp = prompt("ชื่อบริษัทเป้าหมาย:");
+window.internCopyTranscriptData = function() {
+  const courses = Object.values(state.courses || []).filter(c => !c.isArchived && c.grade && !['W', 'F', '-'].includes(c.grade));
+  let totalCredits = 0;
+  let totalPoints = 0;
+  let lines = [];
+  courses.forEach(c => {
+    let point = 0;
+    if (c.grade === 'A') point = 4;
+    else if (c.grade === 'B+') point = 3.5;
+    else if (c.grade === 'B') point = 3;
+    else if (c.grade === 'C+') point = 2.5;
+    else if (c.grade === 'C') point = 2;
+    else if (c.grade === 'D+') point = 1.5;
+    else if (c.grade === 'D') point = 1;
+    totalCredits += c.credits;
+    totalPoints += point * c.credits;
+    lines.push(\`- \${c.code} \${c.nameEn || c.nameTh}: \${c.grade}\`);
+  });
+  const gpax = totalCredits > 0 ? (totalPoints / totalCredits).toFixed(2) : '0.00';
+  const text = \`GPAX เธเธฑเธเธเธธเธเธฑเธ: \${gpax}\\n\` + lines.join('\\n');
+  navigator.clipboard.writeText(text).then(() => showToast('๐“ เธเธฑเธ”เธฅเธญเธเธเนเธญเธกเธนเธฅเน€เธเธฃเธ”เน€เธฃเธตเธขเธเธฃเนเธญเธข!'));
+};
+
+window.internGenerateAppEmail = function() {
+  const comp = prompt("เธเธทเนเธญเธเธฃเธดเธฉเธฑเธ—เน€เธเนเธฒเธซเธกเธฒเธข:");
   if(!comp) return;
-  const text = `เรียน ทีม HR บริษัท ${comp},
+  const text = \`เน€เธฃเธตเธขเธ เธ—เธตเธก HR เธเธฃเธดเธฉเธฑเธ— \${comp},
 
-ข้าพเจ้า ${STUDENT.nameTh} นิสิตชั้นปีที่ 3 ภาควิชาวิศวกรรมวัสดุ มหาวิทยาลัยเกษตรศาสตร์ 
-มีความประสงค์ขอความอนุเคราะห์เข้าฝึกงานในแผนก... ของบริษัท ${comp} 
-ในระหว่างวันที่ 1 เมษายน - 29 พฤษภาคม 2569
+เธเนเธฒเธเน€เธเนเธฒ \${STUDENT.nameTh} เธเธดเธชเธดเธ•เธเธฑเนเธเธเธตเธ—เธตเน 3 เธ เธฒเธเธงเธดเธเธฒเธงเธดเธจเธงเธเธฃเธฃเธกเธงเธฑเธชเธ”เธธ เธกเธซเธฒเธงเธดเธ—เธขเธฒเธฅเธฑเธขเน€เธเธฉเธ•เธฃเธจเธฒเธชเธ•เธฃเน 
+เธกเธตเธเธงเธฒเธกเธเธฃเธฐเธชเธเธเนเธเธญเธเธงเธฒเธกเธญเธเธธเน€เธเธฃเธฒเธฐเธซเนเน€เธเนเธฒเธเธถเธเธเธฒเธเนเธเธ•เธณเนเธซเธเนเธ [เธฃเธฐเธเธธเธ•เธณเนเธซเธเนเธ] เธเธญเธเธเธฃเธดเธฉเธฑเธ— \${comp} 
+เนเธเธฃเธฐเธซเธงเนเธฒเธเธงเธฑเธเธ—เธตเน 1 เน€เธกเธฉเธฒเธขเธ - 29 เธเธคเธฉเธ เธฒเธเธก 2569
 
-จึงเรียนมาเพื่อโปรดพิจารณา
-ขอแสดงความนับถือ
-${STUDENT.nameTh}`;
-  navigator.clipboard.writeText(text).then(() => showToast('📧 คัดลอกเทมเพลตอีเมลแล้ว!'));
+เธเธถเธเน€เธฃเธตเธขเธเธกเธฒเน€เธเธทเนเธญเนเธเธฃเธ”เธเธดเธเธฒเธฃเธ“เธฒ
+เธเธญเนเธชเธ”เธเธเธงเธฒเธกเธเธฑเธเธ–เธทเธญ
+\${STUDENT.nameTh}\`;
+  navigator.clipboard.writeText(text).then(() => showToast('๐“ง เธเธฑเธ”เธฅเธญเธเน€เธ—เธกเน€เธเธฅเธ•เธญเธตเน€เธกเธฅเนเธฅเนเธง!'));
 };
 
-// -------------------------
-// PHASE 2 LOGIC
-// -------------------------
+// ==========================================
+// PHASE 2: Documents & Training
+// ==========================================
+
 window.internGenerateForm101 = async function() {
-  showToast("⚙️ กำลังประมวลผล PDF ใบคำร้อง 101...", "wait");
+  showToast("โ๏ธ เธเธณเธฅเธฑเธเธเธฃเธฐเธกเธงเธฅเธเธฅ PDF เนเธเธเธณเธฃเนเธญเธ 101...", "wait");
   try {
-    const res = await fetch('./เอกสารฝึกงาน/ใบคำรองหนวยกจการนสต_การฝกงานนสต_vNYe3Kk.pdf');
-    if (!res.ok) throw new Error("ไม่พบไฟล์แบบฟอร์ม");
+    const res = await fetch('./เน€เธญเธเธชเธฒเธฃเธเธถเธเธเธฒเธ/เนเธเธเธณเธฃเธญเธเธซเธเธงเธขเธเธเธเธฒเธฃเธเธชเธ•_เธเธฒเธฃเธเธเธเธฒเธเธเธชเธ•_vNYe3Kk.pdf');
+    if (!res.ok) throw new Error("เนเธกเนเธเธเนเธเธฅเนเนเธเธเธเธญเธฃเนเธก");
     const arrayBuffer = await res.arrayBuffer();
     const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
     const pages = pdfDoc.getPages();
@@ -9719,33 +9765,39 @@ window.internGenerateForm101 = async function() {
     const fontBuffer = await fontRes.arrayBuffer();
     const customFont = await pdfDoc.embedFont(fontBuffer);
 
-    // X,Y coordinates are estimates
     firstPage.drawText(STUDENT.nameTh, { x: 200, y: 700, size: 14, font: customFont, color: PDFLib.rgb(0,0,0) });
     firstPage.drawText(STUDENT.id, { x: 450, y: 700, size: 14, font: customFont, color: PDFLib.rgb(0,0,0) });
+
+    const sigData = localStorage.getItem('internship_signature');
+    if (sigData) {
+      const sigImageBytes = await fetch(sigData).then(res => res.arrayBuffer());
+      const pngImage = await pdfDoc.embedPng(sigImageBytes);
+      firstPage.drawImage(pngImage, { x: 400, y: 200, width: 100, height: 50 });
+    }
 
     const pdfBytes = await pdfDoc.save();
     const blob = new Blob([pdfBytes], { type: "application/pdf" });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `Form101_${STUDENT.id}.pdf`;
+    link.download = \`Form101_\${STUDENT.id}.pdf\`;
     link.click();
-    showToast("✅ สร้างใบคำร้อง 101 สำเร็จ!", "ok");
+    showToast("โ… เธชเธฃเนเธฒเธเนเธเธเธณเธฃเนเธญเธ 101 เธชเธณเน€เธฃเนเธ!", "ok");
   } catch (e) {
     console.error(e);
-    showToast("❌ เกิดข้อผิดพลาดในการสร้าง PDF", "err");
+    showToast("โ เน€เธเธดเธ”เธเนเธญเธเธดเธ”เธเธฅเธฒเธ”เนเธเธเธฒเธฃเธชเธฃเนเธฒเธ PDF", "err");
   }
 };
 
 window.internSignCanvas = function() {
-  openModal("✍️ Digital Signature", `
+  openModal("โ๏ธ Digital Signature", \`
     <div style="text-align:center;">
       <canvas id="sigCanvas" width="300" height="150" style="border:2px solid #000; background:#fff; border-radius:8px; touch-action:none;"></canvas>
       <div style="margin-top:10px; display:flex; gap:10px; justify-content:center;">
-        <button class="btn-glass sm" onclick="internClearSig()">ล้าง</button>
-        <button class="btn-glass-primary sm" onclick="internSaveSig()">บันทึกลายเซ็น</button>
+        <button class="btn-glass sm" onclick="internClearSig()">เธฅเนเธฒเธ</button>
+        <button class="btn-glass-primary sm" onclick="internSaveSig()">เธเธฑเธเธ—เธถเธเธฅเธฒเธขเน€เธเนเธ</button>
       </div>
     </div>
-  `);
+  \`);
   
   setTimeout(() => {
     const canvas = document.getElementById('sigCanvas');
@@ -9776,7 +9828,6 @@ window.internSignCanvas = function() {
     }
     
     function endDraw() { isDrawing = false; }
-    
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
     ctx.strokeStyle = '#000';
@@ -9801,22 +9852,18 @@ window.internSaveSig = function() {
   const dataURL = canvas.toDataURL('image/png');
   localStorage.setItem('internship_signature', dataURL);
   closeModal();
-  showToast("✅ บันทึกลายเซ็นดิจิทัลแล้ว");
+  showToast("โ… เธเธฑเธเธ—เธถเธเธฅเธฒเธขเน€เธเนเธเธ”เธดเธเธดเธ—เธฑเธฅเนเธฅเนเธง");
 };
 
 window.internSyncNotionOrientation = function() {
-  showToast("🔄 กำลังสร้างหน้าบันทึกปฐมนิเทศบน Notion...", "wait");
+  showToast("๐” เธเธณเธฅเธฑเธเธชเธฃเนเธฒเธเธซเธเนเธฒเธเธฑเธเธ—เธถเธเธเธเธกเธเธดเน€เธ—เธจเธเธ Notion...");
   if (typeof google !== 'undefined') {
     google.script.run
-      .withSuccessHandler(() => {
-        showToast("✅ สร้างหน้า Notion สำเร็จ! (Orientation Notes)", "ok");
-      })
-      .withFailureHandler((err) => {
-        showToast("❌ เกิดข้อผิดพลาด: " + err.message, "err");
-      })
-      .syncReflectionToNotion("ORIENTATION_NOTES", "บันทึกการปฐมนิเทศฝึกงาน");
+      .withSuccessHandler(() => showToast("โ… เธชเธฃเนเธฒเธเธซเธเนเธฒ Notion เธชเธณเน€เธฃเนเธ!"))
+      .withFailureHandler(err => showToast("โ เธเนเธญเธเธดเธ”เธเธฅเธฒเธ”: " + err.message, "err"))
+      .syncReflectionToNotion("Orientation", "Orientation Notes Initialized");
   } else {
-    setTimeout(() => showToast("✅ สร้างหน้า Notion สำเร็จ! (Orientation Notes)", "ok"), 1500);
+    setTimeout(() => showToast("โ… เธชเธฃเนเธฒเธเธซเธเนเธฒ Notion เธชเธณเน€เธฃเนเธ! (Orientation Notes)"), 1500);
   }
 };
 
@@ -9830,48 +9877,50 @@ window.internSubmitQuiz = function() {
   const q1 = document.querySelector('input[name="q1"]:checked')?.value;
   const q2 = document.querySelector('input[name="q2"]:checked')?.value;
   if (!q1 || !q2) {
-    showToast('❌ ตอบคำถามให้ครบ', 'err');
+    showToast('โ เธ•เธญเธเธเธณเธ–เธฒเธกเนเธซเนเธเธฃเธ', 'err');
     return;
   }
   if (q1 === '0' && q2 === '0') {
     state.internship.mockQuizScore = 100;
     state.internship.mockQuizCompleted = true;
-    showToast('🎉 ผ่าน 100%!');
+    showToast('๐ เธเนเธฒเธ 100%!');
   } else {
     state.internship.mockQuizScore = 50;
-    showToast('⚠️ คะแนนไม่ถึงเกณฑ์ ทบทวนใหม่นะ', 'err');
+    showToast('โ ๏ธ เธเธฐเนเธเธเนเธกเนเธ–เธถเธเน€เธเธ“เธ‘เน เธ—เธเธ—เธงเธเนเธซเธกเนเธเธฐ', 'err');
   }
   render();
 };
 
+window.internUploadAcceptance = function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  state.internship.acceptanceFile = file.name;
+  internSaveState();
+  showToast("โ… เธญเธฑเธเนเธซเธฅเธ”เนเธเธ•เธญเธเธฃเธฑเธเนเธฅเนเธง");
+  render();
+};
+
 window.internTravelBudget = function() {
-  const daily = parseFloat(prompt("ค่าเดินทางต่อวัน (บาท):") || 0);
+  const daily = parseFloat(prompt("เธเนเธฒเน€เธ”เธดเธเธ—เธฒเธเนเธ-เธเธฅเธฑเธเธ•เนเธญเธงเธฑเธ (เธเธฒเธ—):") || 0);
   if (daily > 0) {
-    const total = daily * 40; // Approx 40 working days
-    showToast(`💰 งบเดินทางตลอด 2 เดือน: ประมาณ ${total.toLocaleString()} บาท`);
+    state.internship.travelBudget = daily * 40; // Approx 40 working days
+    internSaveState();
+    showToast(\`๐’ฐ เธเธเน€เธ”เธดเธเธ—เธฒเธเธ•เธฅเธญเธ” 2 เน€เธ”เธทเธญเธ: เธเธฃเธฐเธกเธฒเธ“ \${(daily * 40).toLocaleString()} เธเธฒเธ—\`);
+    render();
   }
 };
 
-window.internUploadAcceptance = function() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'image/*,application/pdf';
-  input.onchange = e => {
-    showToast("📄 อัปโหลดใบตอบรับเข้าสู่คลังเอกสารเรียบร้อย");
-  };
-  input.click();
-};
+// ==========================================
+// PHASE 3: Work Log Logic
+// ==========================================
 
-// -------------------------
-// PHASE 3 LOGIC
-// -------------------------
 window.internCheckIn = function() {
   if (state.internship.checkedIn) {
     const duration = 8.0; 
     state.internship.totalHours = parseFloat((state.internship.totalHours + duration).toFixed(1));
     state.internship.checkedIn = false;
     state.internship.checkInTime = null;
-    showToast(`✅ ออกงาน! สะสมรวม ${state.internship.totalHours} ชม.`);
+    showToast(\`โ… เธญเธญเธเธเธฒเธ! เธชเธฐเธชเธกเธฃเธงเธก \${state.internship.totalHours} เธเธก.\`);
     internSaveState();
   } else {
     if ("geolocation" in navigator) {
@@ -9879,29 +9928,78 @@ window.internCheckIn = function() {
         (pos) => {
           state.internship.checkedIn = true;
           state.internship.checkInTime = new Date().toLocaleTimeString();
-          showToast(`📍 เช็คอินสำเร็จที่พิกัด ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`);
+          showToast(\`๐“ เน€เธเนเธเธญเธดเธเธ—เธตเนเธเธดเธเธฑเธ” \${pos.coords.latitude.toFixed(4)}, \${pos.coords.longitude.toFixed(4)}\`);
           render();
         },
         (err) => {
-          showToast(`⚠️ ไม่สามารถดึงพิกัดได้ (เช็คอินแบบไม่ใช้ GPS)`);
           state.internship.checkedIn = true;
           state.internship.checkInTime = new Date().toLocaleTimeString();
+          showToast(\`โ ๏ธ เน€เธเนเธเธญเธดเธเนเธเธเนเธกเนเนเธเน GPS (เนเธกเนเนเธ”เนเธฃเธฑเธเธญเธเธธเธเธฒเธ•)\`);
           render();
         }
       );
     } else {
       state.internship.checkedIn = true;
       state.internship.checkInTime = new Date().toLocaleTimeString();
-      showToast("🚀 เข้างานแล้ว!");
+      showToast("๐€ เน€เธเนเธฒเธเธฒเธเนเธฅเนเธง!");
     }
   }
   render();
 };
 
+window.internAddOT = function() {
+  const ot = parseFloat(prompt("เธเธฑเนเธงเนเธกเธ OT เธงเธฑเธเธเธตเน:") || 0);
+  if (ot > 0) {
+    state.internship.otHours += ot;
+    state.internship.totalHours += ot;
+    internSaveState();
+    showToast(\`๐•’ เน€เธเธดเนเธก OT \${ot} เธเธก. เนเธฅเนเธง\`);
+    render();
+  }
+};
+
+window.internGenerateWorkLog = async function() {
+  if (state.internship.dailyLogs.length === 0) {
+    showToast("โ ๏ธ เนเธกเนเธกเธตเธเนเธญเธกเธนเธฅเธฅเธเน€เธงเธฅเธฒ", "err");
+    return;
+  }
+  showToast("โ๏ธ เธเธณเธฅเธฑเธเธชเธฃเนเธฒเธ PDF เนเธเธฅเธเน€เธงเธฅเธฒ...", "wait");
+  try {
+    const pdfDoc = await PDFLib.PDFDocument.create();
+    pdfDoc.registerFontkit(window.fontkit);
+    const fontRes = await fetch('https://cdn.jsdelivr.net/gh/lazywasabi/thai-web-fonts@2/fonts/Sarabun/Sarabun-Regular.ttf');
+    const fontBuffer = await fontRes.arrayBuffer();
+    const sarabun = await pdfDoc.embedFont(fontBuffer);
+    
+    let page = pdfDoc.addPage([595, 842]);
+    page.drawText('เนเธเธฅเธเน€เธงเธฅเธฒเธเธเธดเธเธฑเธ•เธดเธเธฒเธ (Work Log)', { x: 200, y: 800, size: 16, font: sarabun });
+    page.drawText(\`เธเธทเนเธญ: \${STUDENT.nameTh} (\${STUDENT.id})\`, { x: 50, y: 770, size: 12, font: sarabun });
+    page.drawText(\`เธเธฑเนเธงเนเธกเธเธฃเธงเธก: \${state.internship.totalHours} เธเธก. (เธฃเธงเธก OT \${state.internship.otHours} เธเธก.)\`, { x: 50, y: 750, size: 12, font: sarabun });
+    
+    let yPos = 700;
+    for (const log of state.internship.dailyLogs) {
+      if (yPos < 50) { page = pdfDoc.addPage([595, 842]); yPos = 800; }
+      page.drawText(\`\${log.date}: \${log.text.substring(0, 80)}\`, { x: 60, y: yPos, size: 10, font: sarabun });
+      yPos -= 25;
+    }
+    
+    const pdfBytes = await pdfDoc.save();
+    const blob = new Blob([pdfBytes], { type: "application/pdf" });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = \`WorkLog_\${STUDENT.id}.pdf\`;
+    link.click();
+    showToast("๐“ เธชเธฃเนเธฒเธเนเธเธฅเธเน€เธงเธฅเธฒเธชเธณเน€เธฃเนเธ!", "ok");
+  } catch (e) {
+    console.error(e);
+    showToast("โ เธชเธฃเนเธฒเธ PDF เธฅเนเธกเน€เธซเธฅเธง", "err");
+  }
+};
+
 window.internAddReflection = function() {
   const text = document.getElementById('internReflectionInput')?.value.trim();
   if (!text) {
-    showToast('❌ กรุณากรอกบันทึกการทำงาน', 'err');
+    showToast('โ เธเธฃเธธเธ“เธฒเธเธฃเธญเธเธเธฑเธเธ—เธถเธเธเธฒเธฃเธ—เธณเธเธฒเธ', 'err');
     return;
   }
   const dateStr = new Date().toISOString().split('T')[0];
@@ -9909,853 +10007,754 @@ window.internAddReflection = function() {
   document.getElementById('internReflectionInput').value = '';
   internSaveState();
   
-  // Call backend Notion proxy
   if (typeof google !== 'undefined') {
-    google.script.run.syncReflectionToNotion("INTERNSHIP_PAGE", text);
+    google.script.run
+      .withSuccessHandler(() => showToast('๐“ เธเธ”เธเธฑเธเธ—เธถเธเนเธฅเธฐ Sync เธฅเธ Notion เธชเธณเน€เธฃเนเธ!'))
+      .withFailureHandler(err => showToast("โ เธเนเธญเธเธดเธ”เธเธฅเธฒเธ” Notion: " + err.message, "err"))
+      .syncReflectionToNotion("Daily Log", text);
+  } else {
+    showToast('๐“ เธเธ”เธเธฑเธเธ—เธถเธเธชเธณเน€เธฃเนเธ!');
   }
-  showToast('📝 จดบันทึกสำเร็จ! ซิงก์ลง Notion แล้ว');
   render();
-};
-
-window.internAddAllowance = function() {
-  const amount = parseFloat(prompt("จำนวนเงินเบี้ยเลี้ยงที่ได้รับ (บาท):") || 0);
-  if (amount > 0) {
-    state.internship.totalAllowance += amount;
-    internSaveState();
-    showToast(`💰 บันทึกเบี้ยเลี้ยง +${amount}฿ สำเร็จ`);
-    render();
-  }
 };
 
 window.internTagSkill = function(skill) {
   state.internship.skills[skill] = (state.internship.skills[skill] || 0) + 1;
   internSaveState();
-  showToast(`📈 บันทึกการใช้ทักษะ ${skill} วันนี้`);
+  showToast(\`๐“ เธเธฑเธเธ—เธถเธเธ—เธฑเธเธฉเธฐ \${skill} เนเธฅเนเธง\`);
   render();
 };
 
-window.internLunchRoulette = function() {
-  const places = ["ร้านป้าหัวมุม", "โรงอาหารโรงงาน", "ร้านข้าวมันไก่", "ร้านก๋วยเตี๋ยว", "7-Eleven"];
-  const res = places[Math.floor(Math.random() * places.length)];
-  openModal("🎲 Lunch Roulette", `<div style="text-align:center; font-size:20px; font-weight:800;">วันนี้ไปกิน...<br><span style="color:var(--c-accent); font-size:28px;">${res}</span>!</div>`);
+window.internAddPhoto = function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(event) {
+    state.internship.photos.unshift({
+      dataUrl: event.target.result,
+      date: new Date().toLocaleDateString(),
+      caption: prompt("เธเธณเธเธฃเธฃเธขเธฒเธขเธ เธฒเธ (เธ–เนเธฒเธกเธต):") || ''
+    });
+    internSaveState();
+    render();
+    showToast("๐“ธ เธเธฑเธเธ—เธถเธเธฃเธนเธเธ เธฒเธเน€เธฃเธตเธขเธเธฃเนเธญเธข");
+  };
+  reader.readAsDataURL(file);
 };
 
-window.internContactMentor = function() {
-  window.location.href = 'tel:0812345678';
-};
-
-window.internGenerateWorkLog = async function() {
-  showToast("⚙️ กำลังสร้าง PDF ใบลงเวลา...", "wait");
-  try {
-    const pdfDoc = await PDFLib.PDFDocument.create();
-    pdfDoc.registerFontkit(window.fontkit);
-    const fontRes = await fetch('https://cdn.jsdelivr.net/gh/lazywasabi/thai-web-fonts@2/fonts/Sarabun/Sarabun-Regular.ttf');
-    const fontBuffer = await fontRes.arrayBuffer();
-    const customFont = await pdfDoc.embedFont(fontBuffer);
-    
-    let page = pdfDoc.addPage([595.28, 841.89]); // A4
-    page.drawText('บันทึกเวลาปฏิบัติงาน (Work Log)', { x: 50, y: 800, size: 18, font: customFont });
-    
-    let y = 760;
-    page.drawText('วันที่', { x: 50, y, size: 14, font: customFont });
-    page.drawText('รายละเอียด / เวลาเข้า-ออก', { x: 150, y, size: 14, font: customFont });
-    y -= 25;
-    
-    for (const log of state.internship.dailyLogs) {
-      if (y < 50) {
-        page = pdfDoc.addPage([595.28, 841.89]);
-        y = 800;
-      }
-      page.drawText(log.date || '', { x: 50, y, size: 12, font: customFont });
-      page.drawText(log.text.substring(0, 50) + (log.text.length > 50 ? '...' : ''), { x: 150, y, size: 12, font: customFont });
-      y -= 20;
-    }
-    
-    const pdfBytes = await pdfDoc.save();
-    const blob = new Blob([pdfBytes], { type: "application/pdf" });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `WorkLog_2569.pdf`;
-    link.click();
-    showToast("📄 สร้างใบลงเวลา_2569.pdf สำเร็จ!", "ok");
-  } catch(e) {
-    console.error(e);
-    showToast("❌ สร้าง PDF ล้มเหลว", "err");
+window.internAddAllowance = function() {
+  const amount = parseFloat(prompt("เธเธณเธเธงเธเน€เธเธดเธเน€เธเธตเนเธขเน€เธฅเธตเนเธขเธ / เธฃเธฒเธขเธเนเธฒเธข เธงเธฑเธเธเธตเน (+ เธฃเธฑเธ, - เธเนเธฒเธข):") || 0);
+  if (amount !== 0) {
+    state.internship.totalAllowance += amount;
+    internSaveState();
+    showToast(\`๐’ฐ เธญเธฑเธเน€เธ”เธ•เน€เธเธตเนเธขเน€เธฅเธตเนเธขเธ (\${amount > 0 ? '+' : ''}\${amount}เธฟ)\`);
+    render();
   }
 };
 
-window.internAddPhoto = function() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'image/*';
-  input.onchange = e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(event) {
-      const caption = prompt("คำบรรยายรูปภาพ:") || '';
-      const dateStr = new Date().toISOString().split('T')[0];
-      state.internship.photos.push({date: dateStr, dataUrl: event.target.result, caption});
-      internSaveState();
-      render();
-    };
-    reader.readAsDataURL(file);
-  };
-  input.click();
+window.internLunchRoulette = function() {
+  const places = ["เธเนเธฒเธงเนเธเธเนเธฃเธเธชเธฑเธ", "เธเนเธงเธขเน€เธ•เธตเนเธขเธงเน€เธฃเธทเธญเธซเธเนเธฒเนเธฃเธเธเธฒเธ", "เธฃเนเธฒเธเธญเธฒเธซเธฒเธฃเธ•เธฒเธกเธชเธฑเนเธเธเนเธฒเน€เธเนเธ", "7-Eleven", "เนเธฃเธเธญเธฒเธซเธฒเธฃเธชเธงเธฑเธชเธ”เธดเธเธฒเธฃ"];
+  const res = places[Math.floor(Math.random() * places.length)];
+  openModal("๐ฒ Lunch Roulette", \`<div style="text-align:center; font-size:20px; font-weight:800;">เธกเธทเนเธญเน€เธ—เธตเนเธขเธเธเธตเนเนเธเธเธดเธ...<br><span style="color:var(--c-accent); font-size:28px;">\${res}</span>!</div>\`);
 };
 
 window.internEditMentor = function() {
-  openModal('แก้ไขข้อมูลพี่เลี้ยง', `
-    <div style="display:flex; flex-direction:column; gap:10px;">
-      <input type="text" id="mentorNameInput" class="glass-input" value="${state.internship.mentorName || ''}" placeholder="ชื่อพี่เลี้ยง">
-      <input type="text" id="mentorTelInput" class="glass-input" value="${state.internship.mentorTel || ''}" placeholder="เบอร์โทรศัพท์">
-      <button class="btn-glass-primary full" onclick="internSaveMentor()">บันทึก</button>
-    </div>
-  `);
+  const name = prompt("เธเธทเนเธญเธเธตเนเน€เธฅเธตเนเธขเธ:", state.internship.mentorName);
+  if (name !== null) {
+    const tel = prompt("เน€เธเธญเธฃเนเนเธ—เธฃ:", state.internship.mentorTel);
+    state.internship.mentorName = name;
+    state.internship.mentorTel = tel || '';
+    internSaveState();
+    render();
+  }
 };
 
-window.internSaveMentor = function() {
-  state.internship.mentorName = document.getElementById('mentorNameInput').value;
-  state.internship.mentorTel = document.getElementById('mentorTelInput').value;
+// ==========================================
+// PHASE 4: Reporting Logic
+// ==========================================
+window.internToggleReportSection = function(key) {
+  state.internship.reportSections[key] = !state.internship.reportSections[key];
   internSaveState();
-  closeModal();
   render();
 };
 
-// -------------------------
-// PHASE 4 LOGIC
-// -------------------------
 window.internToggleEnvelope = function(key) {
   state.internship.envelopeChecked[key] = !state.internship.envelopeChecked[key];
   internSaveState();
   render();
 };
 
-window.internAutoSummarizeReflections = function() {
-  if (state.internship.dailyLogs.length === 0) {
-    showToast('❌ ไม่มีบันทึกรายวัน', 'err');
-    return;
-  }
-  showToast('⚙️ กำลังวิเคราะห์ AI Summary...', 'wait');
-  if (typeof google !== 'undefined') {
-    google.script.run
-      .withSuccessHandler((summary) => {
-        openModal('📝 สรุปบันทึกการทำงานรายสัปดาห์', `
-          <div style="padding:10px;">
-            <textarea class="glass-textarea" style="width:100%; height:150px; font-size:12px; font-family:inherit; padding:10px; border:2px solid #000; border-radius:8px;" readonly>${summary}</textarea>
-            <button class="btn-glass-primary sm full" style="margin-top:10px;" onclick="navigator.clipboard.writeText(document.querySelector('.glass-textarea').value); showToast('📋 คัดลอกแล้ว');">📋 คัดลอก</button>
-          </div>
-        `);
-      })
-      .withFailureHandler((err) => {
-        showToast("❌ เกิดข้อผิดพลาดในการประมวลผล AI: " + err.message, "err");
-      })
-      .summarizeWithAnthropic(JSON.stringify(state.internship.dailyLogs));
-  } else {
-    setTimeout(() => {
-      const summary = "ตลอดช่วงสัปดาห์นี้ ข้าพเจ้าได้มีโอกาสศึกษาและปฏิบัติงานด้านการควบคุมคุณภาพวัสดุ...";
-      openModal('📝 สรุปบันทึกการทำงานรายสัปดาห์', `
-        <div style="padding:10px;">
-          <textarea class="glass-textarea" style="width:100%; height:120px;" readonly>${summary}</textarea>
-          <button class="btn-glass-primary sm full" style="margin-top:10px;" onclick="navigator.clipboard.writeText(\`${summary}\`); showToast('📋 คัดลอกแล้ว');">📋 คัดลอก</button>
-        </div>
-      `);
-    }, 1000);
+window.internAddTheoryRef = function() {
+  const title = prompt("เธเธทเนเธญเธ—เธคเธฉเธเธต (เน€เธเนเธ Hardness Testing):");
+  if (!title) return;
+  const url = prompt("เธฅเธดเธเธเนเธญเนเธฒเธเธญเธดเธ (Wikipedia / Paper):");
+  if (url) {
+    state.internship.theoryRefs.push({title, url});
+    internSaveState();
+    render();
+    showToast("๐“ เน€เธเธดเนเธกเธ—เธคเธฉเธเธตเธญเนเธฒเธเธญเธดเธเนเธฅเนเธง");
   }
 };
 
 window.internAddProblemLog = function() {
-  const prob = prompt("ปัญหาที่พบในการทำงาน:");
-  const sol = prompt("วิธีการแก้ไข:");
-  if(prob && sol) {
-    showToast("📝 บันทึกปัญหาและวิธีแก้ลง Log เรียบร้อย");
+  const prob = prompt("เธเธฑเธเธซเธฒเน€เธเธเธฒเธฐเธซเธเนเธฒเธ—เธตเนเธเธ:");
+  if (!prob) return;
+  const sol = prompt("เธงเธดเธเธตเธเธฒเธฃเนเธเนเนเธ:");
+  if (sol) {
+    state.internship.problemsLogs.push({prob, sol});
+    internSaveState();
+    render();
+    showToast("๐“ เธเธฑเธเธ—เธถเธเธเธฑเธเธซเธฒเน€เธเนเธฒ Log เนเธฅเนเธง");
   }
 };
 
-window.internSendEvalLink = function() {
-  const link = "https://forms.gle/mocklink";
-  navigator.clipboard.writeText(link).then(() => showToast("🔗 คัดลอกลิงก์ประเมินผลสำหรับส่งให้ HR แล้ว"));
+window.internAddEvalLink = function() {
+  const title = prompt("เธเธทเนเธญเนเธเธเธเธฃเธฐเน€เธกเธดเธ (เน€เธเนเธ เธเธฃเธฐเน€เธกเธดเธเนเธ”เธขเธเธตเนเน€เธฅเธตเนเธขเธ):");
+  if (!title) return;
+  const url = prompt("เธฅเธดเธเธเน Google Form:");
+  if (url) {
+    state.internship.evalLinks.push({title, url});
+    internSaveState();
+    render();
+    showToast("๐“ เน€เธเธดเนเธกเธฅเธดเธเธเนเนเธเธเธเธฃเธฐเน€เธกเธดเธเนเธฅเนเธง");
+  }
+};
+
+window.internSaveFeedback = function() {
+  const el = document.getElementById('employerFeedbackInput');
+  if (el) {
+    state.internship.employerFeedback = el.value;
+    internSaveState();
+    showToast("๐“ เธเธฑเธเธ—เธถเธเธเนเธญเน€เธชเธเธญเนเธเธฐเธเธฒเธเธเธตเนเน€เธฅเธตเนเธขเธเนเธฅเนเธง");
+  }
 };
 
 window.internBackupDrive = function() {
-  showToast("🔄 กำลังอัปโหลดไฟล์รายงานทั้งหมดขึ้น Google Drive (Finished_Internship)...", "wait");
+  showToast("๐” เธเธณเธฅเธฑเธเน€เธ•เธฃเธตเธขเธกเธชเธณเธฃเธญเธเนเธเธฅเนเธฃเธฒเธขเธเธฒเธเธเธ Google Drive...");
   if (typeof google !== 'undefined') {
+    const dataString = JSON.stringify(state.internship, null, 2);
     google.script.run
-      .withSuccessHandler(() => {
-        showToast("☁️ สำรองข้อมูลขึ้น Cloud สำเร็จ!", "ok");
-      })
-      .withFailureHandler((err) => {
-        showToast("❌ เกิดข้อผิดพลาด: " + err.message, "err");
-      })
-      .backupInternshipData(JSON.stringify(state.internship));
+      .withSuccessHandler(() => showToast("โ๏ธ เธชเธณเธฃเธญเธเธฃเธฒเธขเธเธฒเธเธเธถเนเธ Cloud เธชเธกเธเธนเธฃเธ“เน!", "ok"))
+      .withFailureHandler(err => showToast("โ เธเนเธญเธเธดเธ”เธเธฅเธฒเธ”: " + err.message, "err"))
+      .backupInternshipData(dataString);
   } else {
-    setTimeout(() => showToast("☁️ สำรองข้อมูลขึ้น Cloud สำเร็จ!", "ok"), 2000);
-  }
-};
-
-window.internAddTheoryRef = function() {
-  const title = prompt("ชื่อทฤษฎี/อ้างอิง:");
-  if (!title) return;
-  const url = prompt("URL:");
-  state.internship.theoryRefs.push({title, url});
-  internSaveState();
-  render();
-};
-
-window.internCopyTheoryRef = function(idx) {
-  const ref = state.internship.theoryRefs[idx];
-  if(ref) {
-    navigator.clipboard.writeText(ref.title).then(() => showToast("คัดลอก: " + ref.title));
-  }
-};
-
-window.internDeleteTheoryRef = function(idx) {
-  if (confirm("ลบรายการนี้?")) {
-    state.internship.theoryRefs.splice(idx, 1);
-    internSaveState();
-    render();
+    setTimeout(() => showToast("โ๏ธ เธชเธณเธฃเธญเธเธฃเธฒเธขเธเธฒเธเธเธถเนเธ Cloud เธชเธณเน€เธฃเนเธ! (Simulation)", "ok"), 2000);
   }
 };
 
 window.internSaveExitNote = function() {
-  state.internship.exitNote = document.getElementById('exitNoteInput').value;
-  internSaveState();
-  showToast("บันทึก Note สำเร็จ");
+  const el = document.getElementById('exitNoteInput');
+  if (el) {
+    state.internship.exitNote = el.value;
+    internSaveState();
+    showToast("๐“ เธเธฑเธเธ—เธถเธเธเธงเธฒเธกเธเธฃเธฐเธ—เธฑเธเนเธเนเธฅเนเธง");
+  }
 };
 
-window.internSetSatisfaction = function(val) {
-  state.internship.exitSatisfaction = val;
-  internSaveState();
-  render();
-};
+// ==========================================
+// PHASE 5: Welfare & Extras Logic
+// ==========================================
 
-// -------------------------
-// PHASE 5 LOGIC
-// -------------------------
 window.internTriggerSOS = function() {
-  if (confirm('🚨 เกิดอุบัติเหตุฉุกเฉิน! ระบบจะโทรออกไปยังหน่วยกิจการนิสิต (02-797-0969) ทันที')) {
+  if (confirm('๐จ เธขเธทเธเธขเธฑเธเธเธฒเธฃเนเธ—เธฃเธเธธเธเน€เธเธดเธเนเธเธขเธฑเธเธซเธเนเธงเธขเธเธดเธเธเธฒเธฃเธเธดเธชเธดเธ•เธเธ“เธฐ (02-797-0969)?')) {
     window.location.href = 'tel:027970969';
   }
 };
 
-window.internSimulateOcrScanner = function() {
-  showToast('🔍 กำลังสแกนใบเสร็จด้วย AI OCR...');
-  setTimeout(() => {
-    openModal('📄 ผลวิเคราะห์ใบเสร็จการรักษาพยาบาล', `
-      <div style="text-align:center; padding:10px;">
-        <div style="font-size:32px; margin-bottom:10px;">🏥</div>
-        <div style="font-weight:800; font-size:16px;">โรงพยาบาลวิภาราม</div>
-        <div style="font-size:14px; color:var(--c-accent);">ยอดชำระจริง: 1,200.00 บาท</div>
-        <div style="font-size:11px; margin-top:8px; color:#15803d; border:1px solid #16a34a; padding:8px; border-radius:6px; background:rgba(34,197,94,0.1);">
-          ✅ สามารถเบิกรับเงินช่วยเหลือจากกองทุนสวัสดิภาพนิสิตได้! (โควตา OPD สูงสุด 2,000 บาท)
-        </div>
-      </div>
-    `);
-  }, 1200);
+window.internClaimWizard = function() {
+  openModal('๐‘ เธเธฑเนเธเธ•เธญเธเธเธฒเธฃเน€เธเธฅเธกเธเธฃเธฐเธเธฑเธเธเธญเธเธ—เธธเธเธชเธงเธฑเธชเธ”เธดเธ เธฒเธ', \`
+    <div style="font-size:12px; line-height:1.6; padding:0 10px;">
+      <p style="font-weight:800; color:var(--c-accent);">เธชเธดเธ—เธเธดเน€เธเธดเธเธเนเธฒเธฃเธฑเธเธฉเธฒเธเธขเธฒเธเธฒเธฅ:</p>
+      <ul style="padding-left:20px; margin-top:0;">
+        <li>เธเธฒเธ”เน€เธเนเธ/เน€เธเนเธเธเนเธงเธข เธฃเธฐเธซเธงเนเธฒเธเธเธถเธเธเธฒเธ</li>
+        <li>เน€เธเธดเธเนเธ”เนเธ•เธฒเธกเธเนเธฒเธขเธเธฃเธดเธ (OPD) เนเธกเนเน€เธเธดเธ 2,000 เธเธฒเธ—/เธเธฃเธฑเนเธ</li>
+        <li>เธฃเธงเธกเธเธฑเธเนเธกเนเน€เธเธดเธ 8,000 เธเธฒเธ—เธ•เนเธญเธเธตเธเธฒเธฃเธจเธถเธเธฉเธฒ</li>
+      </ul>
+      <p style="font-weight:800; color:var(--c-accent); margin-top:10px;">เน€เธญเธเธชเธฒเธฃเธเธฃเธฐเธเธญเธเธเธฒเธฃเน€เธเธฅเธก:</p>
+      <ul style="padding-left:20px; margin-top:0;">
+        <li>1. เนเธเน€เธชเธฃเนเธเธฃเธฑเธเน€เธเธดเธเธเธเธฑเธเธเธฃเธดเธ</li>
+        <li>2. เนเธเธฃเธฑเธเธฃเธญเธเนเธเธ—เธขเนเธเธเธฑเธเธเธฃเธดเธ</li>
+        <li>3. เธชเธณเน€เธเธฒเธเธฑเธ•เธฃเธเธดเธชเธดเธ• / เธเธฑเธ•เธฃเธเธฃเธฐเธเธฒเธเธ</li>
+        <li>4. เธชเธณเน€เธเธฒเธซเธเนเธฒเธชเธกเธธเธ”เธเธฑเธเธเธตเน€เธเธดเธเธเธฒเธ</li>
+      </ul>
+    </div>
+  \`);
+};
+
+window.internUploadMedicalBill = function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    state.internship.medicalBills.push({
+      dataUrl: ev.target.result,
+      date: new Date().toLocaleDateString()
+    });
+    internSaveState();
+    render();
+    showToast("โ… เธญเธฑเธเนเธซเธฅเธ”เธชเธณเน€เธเธฒเนเธเน€เธชเธฃเนเธเนเธฅเนเธง (เธญเธขเนเธฒเธฅเธทเธกเน€เธเนเธเธ•เธฑเธงเธเธฃเธดเธเนเธงเน!)");
+  };
+  reader.readAsDataURL(file);
 };
 
 window.internMentalCheck = function() {
-  const val = prompt("ให้คะแนนความเครียดสัปดาห์นี้ (1-10):");
-  if(val) {
-    if(parseInt(val) > 7) showToast("⚠️ ความเครียดสูง! ลองพักผ่อนและปรึกษาพี่เลี้ยงดูนะ", "err");
-    else showToast("💚 สภาพจิตใจปกติ สู้ๆ กับการฝึกงาน!");
+  const val = parseInt(prompt("เธเธฃเธฐเน€เธกเธดเธเธฃเธฐเธ”เธฑเธเธเธงเธฒเธกเน€เธเธฃเธตเธขเธ”เธเธฒเธเธเธฒเธฃเธเธถเธเธเธฒเธ (1 = เธเธดเธฅเธกเธฒเธ, 10 = เนเธกเนเนเธซเธงเนเธฅเนเธง):", state.internship.stressLevel || 5));
+  if (val >= 1 && val <= 10) {
+    state.internship.stressLevel = val;
+    internSaveState();
+    render();
+    if (val >= 8) showToast("โ ๏ธ เธฃเธฐเธ”เธฑเธเธเธงเธฒเธกเน€เธเธฃเธตเธขเธ”เธชเธนเธเธกเธฒเธ เนเธเธฐเธเธณเนเธซเนเธเธฃเธถเธเธฉเธฒเธญเธฒเธเธฒเธฃเธขเนเธเธดเน€เธ—เธจเธซเธฃเธทเธญเธเธตเนเน€เธฅเธตเนเธขเธเนเธ”เธขเธ”เนเธงเธ", "err");
+    else showToast("๐’ เธเธฑเธเธ—เธถเธเธชเธ–เธฒเธเธฐเธเธดเธ•เนเธเน€เธฃเธตเธขเธเธฃเนเธญเธข");
   }
 };
 
-window.internClaimWizard = function() {
-  openModal('🚑 Injury Claim Wizard', `
-    <div style="text-align:left; font-size:12px; line-height:1.6;">
-      <h4 style="margin:0 0 10px; font-size:14px; color:var(--c-rust);">ขั้นตอนการเคลมค่ารักษา</h4>
-      <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox"> 1. ถ่ายรูปบาดเจ็บและสถานที่เกิดเหตุ</label>
-      <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox"> 2. เก็บใบเสร็จตัวจริง (ขอใบรับรองแพทย์)</label>
-      <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox"> 3. ยื่นเรื่องต่อภาควิชาภายใน 30 วัน</label>
-      <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox"> 4. รอการพิจารณาอนุมัติ 60 วัน</label>
-    </div>
-  `);
-};
-
-// -------------------------
-// BONUS LOGIC
-// -------------------------
 window.internStartFocus = function() {
   state.internship.focusSessions++;
   internSaveState();
-  showToast("🍅 เริ่มจับเวลา Pomodoro 25 นาทีสำหรับเขียนรายงาน!");
-  // Hook into existing timer if available
+  showToast("๐… เน€เธฃเธดเนเธกเธเธฑเธเน€เธงเธฅเธฒ Pomodoro 25 เธเธฒเธ—เธตเธชเธณเธซเธฃเธฑเธเน€เธเธตเธขเธเธฃเธฒเธขเธเธฒเธ!");
   if(typeof window.startFocusTimer === 'function') window.startFocusTimer();
-};
-
-window.internAddContact = function() {
-  const name = prompt("ชื่อเพื่อน / คอนเนคชัน:");
-  if(name) {
-    state.internship.contacts.push(name);
-    internSaveState();
-    showToast("🤝 บันทึก Contact เรียบร้อย");
-  }
-};
-
-window.internAddFutureJob = function() {
-  const position = prompt("ตำแหน่งงาน:");
-  if (!position) return;
-  const company = prompt("บริษัท:");
-  if (!company) return;
-  const url = prompt("URL ที่ประกาศรับ:");
-  state.internship.futureJobs.push({position, company, url});
-  internSaveState();
   render();
 };
 
-window.internDeleteFutureJob = function(idx) {
-  if (confirm("ลบรายการนี้?")) {
-    state.internship.futureJobs.splice(idx, 1);
+window.internAddContact = function() {
+  const name = prompt("เธเธทเนเธญเธเธนเนเธ•เธดเธ”เธ•เนเธญ (เน€เธเนเธ เธเธตเน A เนเธเธเธ QC):");
+  if (!name) return;
+  const link = prompt("เธเนเธญเธเธ—เธฒเธเธ•เธดเธ”เธ•เนเธญ (Line ID / LinkedIn):");
+  state.internship.contacts.push({name, link});
+  internSaveState();
+  render();
+  showToast("๐ค เธเธฑเธเธ—เธถเธเน€เธเธฃเธทเธญเธเนเธฒเธขเนเธฅเนเธง");
+};
+
+window.internAddFutureJob = function() {
+  const position = prompt("เธ•เธณเนเธซเธเนเธเธเธฒเธเธ—เธตเนเน€เธฅเนเธเนเธงเน:");
+  if (!position) return;
+  const company = prompt("เธเธฃเธดเธฉเธฑเธ—:");
+  if (company) {
+    state.internship.futureJobs.push({position, company, url: prompt("เธฅเธดเธเธเนเธเธฃเธฐเธเธฒเธจเธฃเธฑเธเธชเธกเธฑเธเธฃ:")});
     internSaveState();
     render();
+    showToast("๐‘” เธเธฑเธเธ—เธถเธเน€เธเนเธฒเธซเธกเธฒเธขเธเธฒเธฃเธ—เธณเธเธฒเธเนเธฅเนเธง");
   }
 };
 
-window.internGratitudeReminder = function() {
-  openModal('🙏 Gratitude Email Template', `
-    <div style="text-align:left;">
-      <p style="font-size:12px; margin-bottom:10px;">เทมเพลตอีเมลขอบคุณพี่เลี้ยง <strong>${state.internship.mentorName || 'พี่เลี้ยง'}</strong></p>
-      <textarea id="gratitudeText" class="glass-textarea" style="width:100%; height:120px;" readonly>เรียน ${state.internship.mentorName || 'พี่เลี้ยง'},
+window.internGenerateThankYou = function() {
+  const text = \`เน€เธฃเธตเธขเธ \${state.internship.mentorName || 'เธเธตเนเน€เธฅเธตเนเธขเธ'},
       
-ขอขอบพระคุณอย่างยิ่งสำหรับความกรุณาและการดูแลตลอดการฝึกงานที่ผ่านมา ผม/ดิฉันได้รับประสบการณ์ที่มีค่ามากมาย
-หากมีโอกาสหวังว่าจะได้ร่วมงานกันอีกครั้ง
+เธเธญเธเธญเธเธเธฃเธฐเธเธธเธ“เธญเธขเนเธฒเธเธขเธดเนเธเธชเธณเธซเธฃเธฑเธเธเธงเธฒเธกเธเธฃเธธเธ“เธฒเนเธฅเธฐเธเธฒเธฃเธ”เธนเนเธฅเธ•เธฅเธญเธ”เธฃเธฐเธขเธฐเน€เธงเธฅเธฒเธเธฒเธฃเธเธถเธเธเธฒเธ เธเธก/เธ”เธดเธเธฑเธเนเธ”เนเธฃเธฑเธเธเธฃเธฐเธชเธเธเธฒเธฃเธ“เน เธ—เธฑเธเธฉเธฐ เนเธฅเธฐเธเธณเนเธเธฐเธเธณเธ—เธตเนเธกเธตเธเธธเธ“เธเนเธฒเธกเธฒเธเธกเธฒเธข เธเธถเนเธเธเธฐเน€เธเนเธเธเธฃเธฐเนเธขเธเธเนเธญเธขเนเธฒเธเธขเธดเนเธเธ•เนเธญเธเธฒเธฃเธเธฃเธฐเธเธญเธเธญเธฒเธเธตเธเนเธเธญเธเธฒเธเธ•
+เธซเธงเธฑเธเน€เธเนเธเธญเธขเนเธฒเธเธขเธดเนเธเธงเนเธฒเธเธฐเธกเธตเนเธญเธเธฒเธชเนเธ”เนเธฃเนเธงเธกเธเธฒเธเธเธฑเธเธญเธตเธเธเธฃเธฑเนเธ
 
-ขอแสดงความนับถือ
-${STUDENT.nameTh}</textarea>
-      <button class="btn-glass-primary sm full" style="margin-top:10px;" onclick="navigator.clipboard.writeText(document.getElementById('gratitudeText').value); showToast('📋 คัดลอกแล้ว'); closeModal();">📋 คัดลอก</button>
-    </div>
-  `);
-};
-window.internStartFocus = function() {
-  state.internship.focusSessions++;
-  internSaveState();
-  showToast("🍅 เริ่มจับเวลา Pomodoro 25 นาทีสำหรับเขียนรายงาน!");
-  // Hook into existing timer if available
-  if(typeof window.startFocusTimer === 'function') window.startFocusTimer();
-};
-
-window.internAddContact = function() {
-  const name = prompt("ชื่อเพื่อน / คอนเนคชัน:");
-  if(name) {
-    state.internship.contacts.push(name);
-    internSaveState();
-    showToast("🤝 บันทึก Contact เรียบร้อย");
-  }
+เธเธญเนเธชเธ”เธเธเธงเธฒเธกเธเธฑเธเธ–เธทเธญ
+\${STUDENT.nameTh}\`;
+  navigator.clipboard.writeText(text).then(() => showToast('๐“ เธเธฑเธ”เธฅเธญเธเน€เธ—เธกเน€เธเธฅเธ•เธญเธตเน€เธกเธฅเธเธญเธเธเธธเธ“เนเธฅเนเธง!'));
 };
 
 
-// ──────────────────────────────────────────────────
-// UI RENDERER
-// ──────────────────────────────────────────────────
+// ==========================================
+// RENDERER FUNCTION (Separated in next step)
+// ==========================================
+
 window.renderInternshipPage = function() {
   const iState = state.internship;
-  const progressPercent = Math.min((iState.totalHours / 240) * 100, 100).toFixed(1);
-  const envelopeValues = Object.values(iState.envelopeChecked);
-  const envelopeCompletedCount = envelopeValues.filter(Boolean).length;
   
-  // Phase 1 - Kanban rendering helper
+  // Logic Helpers
+  const courses = Object.values(state.courses || []).filter(c => !c.isArchived && c.grade && !['W', 'F', '-'].includes(c.grade));
+  const earnedCredits = courses.reduce((sum, c) => sum + c.credits, 0);
+  const isAcademicallyEligible = earnedCredits >= 60; 
+
+  const envelopeCompletedCount = Object.values(iState.envelopeChecked).filter(Boolean).length;
+  
   const renderKanbanCol = (title, statusId) => {
     const list = iState.kanban[statusId] || [];
-    return `
+    return \`
       <div style="flex:1; min-width:140px; background:rgba(255,255,255,0.4); border:1.5px solid #000; border-radius:6px; padding:8px;">
-        <div style="font-weight:800; font-size:12px; margin-bottom:8px; text-align:center;">${title}</div>
+        <div style="font-weight:800; font-size:12px; margin-bottom:8px; text-align:center;">\${title}</div>
         <div style="display:flex; flex-direction:column; gap:6px;">
-          ${list.map(id => {
+          \${list.map(id => {
             const c = iState.companies.find(x => x.id === id);
             if(!c) return '';
-            return `
-              <div class="glass-card" style="padding:6px; font-size:11px; border:1px solid #000; background:#fff; cursor:pointer;" onclick="internMoveKanban('${id}')">
-                <div style="font-weight:700;">${c.name}</div>
-                <div style="opacity:0.7; font-size:10px; margin-top:4px;">${c.note}</div>
+            return \`
+              <div class="glass-card" style="padding:6px; font-size:11px; border:1px solid #000; background:#fff; cursor:pointer;" onclick="internMoveKanban('\${id}')">
+                <div style="font-weight:700;">\${c.name}</div>
+                <div style="opacity:0.7; font-size:10px; margin-top:4px;">\${c.note}</div>
               </div>
-            `;
+            \`;
           }).join('')}
         </div>
       </div>
-    `;
+    \`;
   };
 
-  const renderDeadlines = () => {
-    return iState.deadlines.map((d) => {
-      const daysLeft = Math.ceil((new Date(d.date) - new Date()) / (1000 * 60 * 60 * 24));
-      const badge = daysLeft <= 3 ? `<span style="background:#ef4444; color:#fff; padding:2px 6px; border-radius:4px; font-size:9px;">เหลือ ${daysLeft} วัน</span>` : `<span style="opacity:0.7;">เหลือ ${daysLeft} วัน</span>`;
-      return `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px dashed #cbd5e1; font-size:11px;">
-        <span>${d.label}</span>
-        <div style="display:flex; align-items:center; gap:6px;">${badge} <span style="font-size:10px;">${d.date}</span></div>
-      </div>`;
-    }).join('');
-  };
-
-  const recentLogsCount = iState.dailyLogs.filter(l => {
-    const d = new Date(l.date);
-    const now = new Date();
-    return (now - d) / (1000 * 60 * 60 * 24) <= 7;
-  }).length;
   const hasOT = iState.dailyLogs.some(l => {
     const d = new Date(l.date);
-    const now = new Date();
-    return ((now - d) / (1000 * 60 * 60 * 24) <= 7) && l.text.includes("OT");
+    return ((new Date() - d) / (1000 * 60 * 60 * 24) <= 7) && (l.text.toLowerCase().includes("ot") || l.text.includes("เนเธญเธ—เธต"));
   });
-  const wlBalanceStatus = (recentLogsCount >= 6 || hasOT) ? `<span style="color:#ef4444;">⚠️ พักผ่อนบ้างนะ</span>` : `<span style="color:#22c55e;">💚 ปกติ</span>`;
-
-  const reportDaysLeft = Math.ceil((new Date(iState.reportDueDate) - new Date()) / (1000 * 60 * 60 * 24));
-  const reportCountdown = reportDaysLeft <= 7 ? `<span style="color:#ef4444;">เหลือ ${reportDaysLeft} วัน</span>` : `เหลือ ${reportDaysLeft} วัน`;
-
   
-  return `
+  return \`
     <div class="page-wrap" style="padding-bottom:120px;">
       <div class="page-header-row" style="margin-bottom:20px;">
         <h1 class="page-title" style="display:flex; align-items:center; gap:10px; font-size:24px;">
-          <span style="font-size:28px;">💼</span> The Internship Journey 2026
+          <span style="font-size:28px;">๐’ผ</span> The Internship Journey 2026
         </h1>
       </div>
 
       <!-- Navigation Tabs -->
       <div class="glass-card" style="display:flex; gap:8px; padding:8px; border:2.5px solid #000; box-shadow: 4px 4px 0px #000; margin-bottom:20px; overflow-x:auto; white-space:nowrap; scrollbar-width: none;">
-        <button class="btn-glass sm ${iState.activePhase === 1 ? 'active' : ''}" onclick="changeInternPhase(1)" style="flex:1; font-weight:800;">1. ยื่นสมัคร</button>
-        <button class="btn-glass sm ${iState.activePhase === 2 ? 'active' : ''}" onclick="changeInternPhase(2)" style="flex:1; font-weight:800;">2. อบรม</button>
-        <button class="btn-glass sm ${iState.activePhase === 3 ? 'active' : ''}" onclick="changeInternPhase(3)" style="flex:1; font-weight:800;">3. ปฏิบัติงาน</button>
-        <button class="btn-glass sm ${iState.activePhase === 4 ? 'active' : ''}" onclick="changeInternPhase(4)" style="flex:1; font-weight:800;">4. รายงาน</button>
-        <button class="btn-glass sm ${iState.activePhase === 5 ? 'active' : ''}" onclick="changeInternPhase(5)" style="flex:1; font-weight:800; color:var(--c-rust);">5. ฉุกเฉิน</button>
-        <button class="btn-glass sm ${iState.activePhase === 6 ? 'active' : ''}" onclick="changeInternPhase(6)" style="flex:1; font-weight:800; color:#8b5cf6;">⭐ โบนัส</button>
+        <button class="btn-glass sm \${iState.activePhase === 1 ? 'active' : ''}" onclick="changeInternPhase(1)" style="flex:1; font-weight:800;">1. เธขเธทเนเธเธชเธกเธฑเธเธฃ</button>
+        <button class="btn-glass sm \${iState.activePhase === 2 ? 'active' : ''}" onclick="changeInternPhase(2)" style="flex:1; font-weight:800;">2. เธญเธเธฃเธก</button>
+        <button class="btn-glass sm \${iState.activePhase === 3 ? 'active' : ''}" onclick="changeInternPhase(3)" style="flex:1; font-weight:800;">3. เธเธเธดเธเธฑเธ•เธดเธเธฒเธ</button>
+        <button class="btn-glass sm \${iState.activePhase === 4 ? 'active' : ''}" onclick="changeInternPhase(4)" style="flex:1; font-weight:800;">4. เธฃเธฒเธขเธเธฒเธ</button>
+        <button class="btn-glass sm \${iState.activePhase === 5 ? 'active' : ''}" onclick="changeInternPhase(5)" style="flex:1; font-weight:800; color:var(--c-rust);">5. เธชเธงเธฑเธชเธ”เธดเธเธฒเธฃ</button>
       </div>
 
-      <!-- General Stats Widget -->
-      <div class="glass-card" style="border:2.5px solid #000; box-shadow: 4px 4px 0px #000; padding:15px; margin-bottom:20px; display:flex; align-items:center; gap:15px;">
-        <div style="flex:1;">
-          <div style="font-size:11px; font-weight:800; color:var(--c-muted); text-transform:uppercase;">ชั่วโมงสะสม</div>
-          <div style="font-size:32px; font-weight:900; color:#22c55e; margin:2px 0; line-height:1;">${iState.totalHours} <span style="font-size:14px;">/ 240 ชม.</span></div>
-          <div style="width:100%; height:8px; background:#e2e8f0; border:1px solid #000; border-radius:4px; overflow:hidden;">
-            <div style="width:${progressPercent}%; height:100%; background:#22c55e;"></div>
-          </div>
-        </div>
-        <div style="flex:1; display:flex; flex-direction:column; gap:6px; font-size:11px; font-weight:700;">
-          <div style="display:flex; justify-content:space-between; border-bottom:1px dashed #cbd5e1; padding-bottom:4px;"><span>💰 เบี้ยเลี้ยง:</span> <span style="color:#2563eb;">${iState.totalAllowance.toLocaleString()} ฿</span></div>
-          <div style="display:flex; justify-content:space-between; border-bottom:1px dashed #cbd5e1; padding-bottom:4px;"><span>📝 Log สะสม:</span> <span>${iState.dailyLogs.length} วัน</span></div>
-          <div style="display:flex; justify-content:space-between;"><span>🎓 เกณฑ์วิชา:</span> <span style="color:#22c55e;">ผ่านแล้ว</span></div>
-        </div>
-      </div>
-
-      <!-- Phase-Specific Panels -->
-      ${iState.activePhase === 1 ? `
+      \${iState.activePhase === 1 ? \`
         <!-- Phase 1: Preparation & Application -->
         <div class="glass-card" style="border:2.5px solid #000; box-shadow: 4px 4px 0px #000; padding:15px; margin-bottom:20px;">
-          <h3 style="font-weight:900; font-size:16px; margin:0 0 10px; color:var(--c-accent);">📥 Phase 1: Preparation & Application</h3>
+          <h3 style="font-weight:900; font-size:16px; margin:0 0 10px; color:var(--c-accent);">๐“ฅ Phase 1: Preparation & Application</h3>
           
-          <!-- Application Kanban -->
+          <div class="glass-card" style="border:1px solid \${isAcademicallyEligible ? '#22c55e' : '#ef4444'}; background:\${isAcademicallyEligible ? 'rgba(34,197,94,0.05)' : 'rgba(239,68,68,0.05)'}; padding:10px; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div style="font-weight:800; font-size:12px; margin-bottom:4px;">๐“ Academic Check (เธเธฑเนเธเธ•เนเธณ 60 เธเธ.)</div>
+              <div style="font-size:11px;">เธซเธเนเธงเธขเธเธดเธ•เธชเธฐเธชเธกเธ—เธตเนเธเนเธฒเธ: <strong style="color:\${isAcademicallyEligible ? '#22c55e' : '#ef4444'}">\${earnedCredits} เธเธ.</strong></div>
+            </div>
+            \${isAcademicallyEligible ? '<span style="font-size:20px;">โ…</span>' : '<span style="font-size:20px;">โ</span>'}
+          </div>
+
           <div style="margin-bottom:20px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-              <div style="font-weight:800; font-size:13px;">🏢 Company CRM & Kanban</div>
-              <button class="btn-glass sm" onclick="internAddCompany()">+ เพิ่มบริษัท</button>
+              <div style="font-weight:800; font-size:13px;">๐ข Company CRM & Kanban</div>
+              <button class="btn-glass sm" onclick="internAddCompany()">+ เน€เธเธดเนเธกเธเธฃเธดเธฉเธฑเธ—</button>
             </div>
             <div style="display:flex; gap:10px; overflow-x:auto; padding-bottom:10px;">
-              ${renderKanbanCol('🤔 สนใจ', 'interested')}
-              ${renderKanbanCol('📤 ส่งเมลแล้ว', 'applied')}
-              ${renderKanbanCol('💬 รอสัมภาษณ์', 'interview')}
-              ${renderKanbanCol('✅ ตอบรับ', 'accepted')}
+              \${renderKanbanCol('๐ค” เธชเธเนเธ', 'interested')}
+              \${renderKanbanCol('๐“ค เธชเนเธเน€เธกเธฅเนเธฅเนเธง', 'applied')}
+              \${renderKanbanCol('๐’ฌ เธฃเธญเธชเธฑเธกเธ เธฒเธฉเธ“เน', 'interview')}
+              \${renderKanbanCol('โ… เธ•เธญเธเธฃเธฑเธ', 'accepted')}
             </div>
           </div>
 
-          <!-- Tools Grid -->
-          <div class="widget-grid" style="gap:10px; margin-bottom:20px;">
-            <div class="glass-card" style="border:2px solid #000; padding:12px; background:#f8fafc;">
-              <div style="font-weight:800; font-size:12px; margin-bottom:6px;">📑 Transcript Automator</div>
-              <button class="btn-glass-primary sm full" onclick="internCopyGrades()">📋 ก๊อปปี้วิชาพื้นฐาน</button>
-            </div>
-            <div class="glass-card" style="border:2px solid #000; padding:12px; background:#f8fafc;">
-              <div style="font-weight:800; font-size:12px; margin-bottom:6px;">📧 Email Templates</div>
-              <button class="btn-glass-primary sm full" onclick="internGenerateEmail()">✍️ สร้างเมลขอความอนุเคราะห์</button>
-            </div>
-            <div class="glass-card" style="border:2px solid #000; padding:12px; background:#f8fafc;">
-              <div style="font-weight:800; font-size:12px; margin-bottom:6px;">🎨 Portfolio Archive</div>
-              <button class="btn-glass sm full" onclick="internCopyPortfolio()">🔗 ก๊อปปี้ลิงก์ Drive ผลงาน</button>
-            </div>
-            <div class="glass-card" style="border:2px solid #000; padding:12px; background:#f8fafc;">
-              <div style="font-weight:800; font-size:12px; margin-bottom:6px;">🗄️ Internship Archive</div>
-              <button class="btn-glass sm full" onclick="showToast('รีวิวรุ่นพี่: Dow Chemical (Polymer) รับเกรด 3.00, Hoya Lens รับ 2.50')">🔍 ค้นหารีวิวบริษัทรุ่นพี่</button>
-            </div>
-          </div>
-
-          <!-- Deadlines -->
-          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:20px;">
-            <div style="font-weight:800; font-size:12px; margin-bottom:8px; display:flex; justify-content:space-between;">
-              <span>📅 Deadlines & Alerts</span>
-              <button class="btn-glass sm" style="padding:2px 6px;" onclick="internAddDeadline()">+ เพิ่ม</button>
-            </div>
-            ${renderDeadlines()}
-          </div>
-          
-          <!-- Academic Check -->
-          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#f8fafc; display:flex; justify-content:space-between; align-items:center;">
-            <div style="font-weight:800; font-size:12px;">🎓 Academic Check</div>
-            <button class="btn-glass-primary sm" onclick="internCheckAcademicEligibility()">ตรวจสอบคุณสมบัติ</button>
-          </div>
-        </div>
-      ` : ''}
-
-      ${iState.activePhase === 2 ? `
-        <!-- Phase 2: Official Process & Orientation -->
-        <div class="glass-card" style="border:2.5px solid #000; box-shadow: 4px 4px 0px #000; padding:15px; margin-bottom:20px;">
-          <h3 style="font-weight:900; font-size:16px; margin:0 0 10px; color:var(--c-accent);">🏫 Phase 2: Official Process & Orientation</h3>
-          
           <div class="widget-grid" style="gap:10px; margin-bottom:15px;">
             <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff;">
-              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">📄 Form 101 Auto-fill</div>
-              <button class="btn-glass-primary sm full" onclick="internGenerateForm101()">🖨️ สร้าง PDF ใบคำร้อง</button>
+              <div style="font-weight:800; font-size:12px; margin-bottom:6px;">๐“‘ Transcript Data Automator</div>
+              <button class="btn-glass-primary sm full" onclick="internCopyTranscriptData()">๐“ เธเธฑเธ”เธฅเธญเธเธเนเธญเธกเธนเธฅเน€เธเธฃเธ”</button>
             </div>
             <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff;">
-              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">✍️ Digital Signature Canvas</div>
-              <button class="btn-glass-primary sm full" onclick="internSignCanvas()">🖋️ วาดลายเซ็น</button>
+              <div style="font-weight:800; font-size:12px; margin-bottom:6px;">๐“ง Email Templates</div>
+              <button class="btn-glass-primary sm full" onclick="internGenerateAppEmail()">โ๏ธ เธฃเนเธฒเธเธญเธตเน€เธกเธฅเธเธญเธเธงเธฒเธกเธญเธเธธเน€เธเธฃเธฒเธฐเธซเน</button>
+            </div>
+          </div>
+
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:800; font-size:12px;">๐“ Resume Cloud Interface</div>
+            <button class="btn-glass sm" onclick="internSetResumeUrl()">\${iState.resumeUrl ? 'เธญเธฑเธเน€เธ”เธ•เธฅเธดเธเธเน' : 'เน€เธเธดเนเธกเธฅเธดเธเธเน'}</button>
+          </div>
+
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px;">
+            <div style="font-weight:800; font-size:12px; margin-bottom:8px; display:flex; justify-content:space-between;">
+              <span>๐จ Portfolio Archive</span>
+              <button class="btn-glass sm" style="padding:2px 6px;" onclick="internAddPortfolio()">+ เน€เธเธดเนเธก</button>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              \${iState.portfolioLinks.map(p => \`
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:6px; border:1px solid #e2e8f0; border-radius:6px; font-size:11px;">
+                  <a href="\${p.url}" target="_blank" style="text-decoration:none; color:var(--primary); font-weight:700;">\${p.title}</a>
+                </div>
+              \`).join('')}
+            </div>
+          </div>
+
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#f8fafc; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:800; font-size:12px;">โฐ Deadline Notification</div>
+            <div style="font-size:11px; font-weight:700; color:#ef4444;">เธขเธทเนเธเน€เธญเธเธชเธฒเธฃ 30 เธ.เธข. 68</div>
+          </div>
+
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#f8fafc; text-align:center;">
+            <div style="font-weight:800; font-size:12px; margin-bottom:6px;">๐“ Alumni Insight (เธชเธ–เธดเธ•เธดเธฃเธธเนเธเธเธตเน)</div>
+            <div style="font-size:11px;">SCG (เน€เธเธฃเธ” > 3.00), PTT (เธฃเธฑเธ 2 เธเธ)</div>
+          </div>
+        </div>
+      \` : ''}
+
+      \${iState.activePhase === 2 ? \`
+        <!-- Phase 2: Documents & Training -->
+        <div class="glass-card" style="border:2.5px solid #000; box-shadow: 4px 4px 0px #000; padding:15px; margin-bottom:20px;">
+          <h3 style="font-weight:900; font-size:16px; margin:0 0 10px; color:var(--c-accent);">๐ซ Phase 2: Documents & Training</h3>
+          
+          <div class="glass-card" style="border:2px solid #000; padding:0; background:#fff; margin-bottom:15px; overflow:hidden;">
+            <div style="padding:10px 12px; background:#f8fafc; font-weight:800; font-size:13px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="this.nextElementSibling.classList.toggle('hidden')">
+              <span>๐“– Rule Cheat Sheet</span>
+              <span>โ–ผ</span>
+            </div>
+            <div class="hidden" style="padding:12px; font-size:11px; border-top:1px solid #e2e8f0; line-height:1.6;">
+              <strong>เธฃเธฐเน€เธเธตเธขเธเธ—เธตเนเธชเธณเธเธฑเธ:</strong><br>
+              1. เธฅเธฒเธเนเธงเธข/เธฅเธฒเธเธดเธ: เธ•เนเธญเธเนเธเนเธเธเธตเนเน€เธฅเธตเนเธขเธเธฅเนเธงเธเธซเธเนเธฒ เนเธฅเธฐเน€เธเธตเธขเธเนเธเธฅเธฒ<br>
+              2. เน€เธฅเนเธกเธฃเธฒเธขเธเธฒเธ: เธชเนเธเธ เธฒเธขเนเธ 1 เธชเธฑเธเธ”เธฒเธซเนเธซเธฅเธฑเธเธชเธดเนเธเธชเธธเธ”เธเธฒเธฃเธเธถเธเธเธฒเธ<br>
+            </div>
+          </div>
+
+          <div class="widget-grid" style="gap:10px; margin-bottom:15px;">
+            <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff;">
+              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">๐“ Form 101 Auto-fill</div>
+              <button class="btn-glass-primary sm full" onclick="internGenerateForm101()">๐–จ๏ธ เธชเธฃเนเธฒเธ PDF เนเธเธเธณเธฃเนเธญเธ</button>
+            </div>
+            <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff;">
+              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">โ๏ธ Signature Canvas</div>
+              <button class="btn-glass-primary sm full" onclick="internSignCanvas()">๐–๏ธ เธงเธฒเธ”เธฅเธฒเธขเน€เธเนเธ</button>
             </div>
             <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff;">
               <div style="font-weight:800; font-size:12px; margin-bottom:8px;"> Notion Orientation Sync</div>
-              <button class="btn-glass sm full" onclick="internSyncNotionOrientation()">🔗 สร้างสมุดจดอบรม</button>
+              <button class="btn-glass sm full" onclick="internSyncNotionOrientation()">๐”— เธชเธฃเนเธฒเธเธชเธกเธธเธ”เธเธ”เธญเธเธฃเธก</button>
             </div>
             <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff;">
-              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">💰 Travel Budget Planner</div>
-              <button class="btn-glass sm full" onclick="internTravelBudget()">🧮 คำนวณงบเดินทาง</button>
+              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">๐’ฐ Travel Budget Planner</div>
+              <button class="btn-glass sm full" onclick="internTravelBudget()">๐งฎ เธเธณเธเธงเธ“เธเธเน€เธ”เธดเธเธ—เธฒเธ</button>
             </div>
           </div>
 
           <div class="glass-card" style="border:2px solid #000; padding:12px; background:rgba(255,255,255,0.6); margin-bottom:15px;">
-            <div style="font-weight:800; font-size:13px; margin-bottom:8px;">📢 Orientation Tracker (4 ครั้ง)</div>
+            <div style="font-weight:800; font-size:13px; margin-bottom:8px;">๐“ข Orientation Tracker</div>
             <div style="display:flex; flex-direction:column; gap:6px; font-size:11px; font-weight:700;">
-              ${['ครั้งที่ 1 (ส.ค.)', 'ครั้งที่ 2 (ต.ค.)', 'ครั้งที่ 3 (ธ.ค.)', 'ครั้งที่ 4 (มี.ค.)'].map((title, i) => `
+              \${['เธเธฃเธฑเนเธเธ—เธตเน 1', 'เธเธฃเธฑเนเธเธ—เธตเน 2', 'เธเธฃเธฑเนเธเธ—เธตเน 3', 'เธเธฃเธฑเนเธเธ—เธตเน 4'].map((title, i) => \`
                 <label style="display:flex; align-items:center; gap:6px;">
-                  <input type="checkbox" ${iState.orientationAttendance[i] ? 'checked' : ''} onchange="internToggleOrientation(${i})"> ${title}
+                  <input type="checkbox" \${iState.orientationAttendance[i] ? 'checked' : ''} onchange="internToggleOrientation(\${i})"> \${title}
                 </label>
-              `).join('')}
+              \`).join('')}
             </div>
           </div>
 
-          <!-- Rule Cheat Sheet -->
-          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px;">
-            <div style="font-weight:800; font-size:12px; margin-bottom:8px;">📜 Rule Cheat Sheet</div>
-            <div style="display:flex; flex-direction:column; gap:6px; font-size:11px;">
-              <details style="background:#f8fafc; padding:8px; border-radius:6px; border:1px solid #e2e8f0;"><summary style="font-weight:700;">🚫 ห้ามลาเกิน 3 วัน</summary><div style="margin-top:4px; opacity:0.8;">ลาป่วย ลากิจ รวมกันห้ามเกิน 3 วันทำการ (หากเกินต้องพิจารณาซ้ำ)</div></details>
-              <details style="background:#f8fafc; padding:8px; border-radius:6px; border:1px solid #e2e8f0;"><summary style="font-weight:700;">👔 การแต่งกาย</summary><div style="margin-top:4px; opacity:0.8;">ต้องสวมชุดนิสิตถูกระเบียบ หรือชุดยูนิฟอร์มที่บริษัทอนุญาตเท่านั้น</div></details>
-              <details style="background:#f8fafc; padding:8px; border-radius:6px; border:1px solid #e2e8f0;"><summary style="font-weight:700;">🕒 เวลาเข้าออกงาน</summary><div style="margin-top:4px; opacity:0.8;">ต้องปฏิบัติตามเวลาของบริษัทอย่างเคร่งครัด ห้ามมาสาย</div></details>
-              <details style="background:#f8fafc; padding:8px; border-radius:6px; border:1px solid #e2e8f0;"><summary style="font-weight:700;">📚 การส่งรายงาน</summary><div style="margin-top:4px; opacity:0.8;">ต้องส่งรายงานฉบับสมบูรณ์ภายใน 30 วันหลังสิ้นสุดการฝึกงาน</div></details>
-            </div>
-          </div>
-
-          <!-- Insurance Quick-Link -->
-          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-            <div>
-              <div style="font-weight:800; font-size:12px;">🛡️ Insurance Quick-Link</div>
-              <div style="font-size:10px; font-weight:700; color:#15803d;">OPD 2,000 / IPD 20,000</div>
-            </div>
-            <button class="btn-glass sm" onclick="window.location.href='tel:024972201'">📞 ภาควิชา</button>
-          </div>
-
-          <!-- Mock Quiz Master -->
-          <div class="glass-card" style="border:2px solid #000; padding:15px; background:#fff;">
+          <div class="glass-card" style="border:2px solid #000; padding:15px; background:#fff; margin-bottom:15px;">
             <div style="font-weight:900; font-size:13px; margin-bottom:10px; display:flex; justify-content:space-between;">
-              <span>🧮 Mock Quiz Master</span>
-              ${iState.mockQuizCompleted ? '<span style="color:#22c55e;">ผ่านแล้ว 100%</span>' : '<span style="color:#f97316;">ยังไม่สอบ</span>'}
+              <span>๐งฎ Mock Quiz Master</span>
+              \${iState.mockQuizCompleted ? '<span style="color:#22c55e;">เธเนเธฒเธเนเธฅเนเธง 100%</span>' : '<span style="color:#f97316;">เธขเธฑเธเนเธกเนเธชเธญเธ</span>'}
             </div>
             <div style="display:flex; flex-direction:column; gap:12px; font-size:11px; font-weight:700; margin-bottom:10px;">
               <div>
-                <p style="margin:0 0 4px;">1. หากจำเป็นต้องลากิจ ต้องทำอย่างไร?</p>
-                <label style="margin-right:15px;"><input type="radio" name="q1" value="0" ${iState.mockQuizCompleted ? 'checked' : ''}> แจ้งพี่เลี้ยงและส่งใบลา</label>
-                <label><input type="radio" name="q1" value="1"> ไม่ต้องแจ้งใคร</label>
+                <p style="margin:0 0 4px;">1. เธซเธฒเธเธเธณเน€เธเนเธเธ•เนเธญเธเธฅเธฒเธเธดเธ เธ•เนเธญเธเธ—เธณเธญเธขเนเธฒเธเนเธฃ?</p>
+                <label style="margin-right:15px;"><input type="radio" name="q1" value="0" \${iState.mockQuizCompleted ? 'checked' : ''}> เนเธเนเธเธเธตเนเน€เธฅเธตเนเธขเธเนเธฅเธฐเธชเนเธเนเธเธฅเธฒ</label>
+                <label><input type="radio" name="q1" value="1"> เนเธกเนเธ•เนเธญเธเนเธเนเธเนเธเธฃ</label>
               </div>
               <div>
-                <p style="margin:0 0 4px;">2. จำนวนวันที่อนุญาตให้ลาป่วยสูงสุด?</p>
-                <label style="margin-right:15px;"><input type="radio" name="q2" value="0" ${iState.mockQuizCompleted ? 'checked' : ''}> ไม่เกิน 3 วัน</label>
-                <label><input type="radio" name="q2" value="1"> 7 วัน</label>
+                <p style="margin:0 0 4px;">2. เธเธณเธเธงเธเธงเธฑเธเธ—เธตเนเธญเธเธธเธเธฒเธ•เนเธซเนเธฅเธฒเธเนเธงเธขเธชเธนเธเธชเธธเธ”?</p>
+                <label style="margin-right:15px;"><input type="radio" name="q2" value="0" \${iState.mockQuizCompleted ? 'checked' : ''}> เนเธกเนเน€เธเธดเธ 3 เธงเธฑเธ</label>
+                <label><input type="radio" name="q2" value="1"> 7 เธงเธฑเธ</label>
               </div>
             </div>
-            <button class="btn-glass-primary sm full" onclick="internSubmitQuiz()">🔥 ยืนยันคำตอบ</button>
+            <button class="btn-glass-primary sm full" onclick="internSubmitQuiz()">๐”ฅ เธขเธทเธเธขเธฑเธเธเธณเธ•เธญเธ</button>
+          </div>
+
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:800; font-size:12px;">๐“ค Acceptance Letter Uploader</div>
+            <div>
+              <button class="btn-glass sm" onclick="document.getElementById('acceptanceUpload').click()">\${iState.acceptanceFile ? 'เธญเธฑเธเน€เธ”เธ•เนเธเธฅเน' : 'เธญเธฑเธเนเธซเธฅเธ”'}</button>
+              <input type="file" id="acceptanceUpload" style="display:none;" onchange="internUploadAcceptance(event)">
+            </div>
+          </div>
+
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:800; font-size:12px;">๐งญ Faculty Navigator</div>
+            <button class="btn-glass sm" onclick="window.open('https://maps.google.com/?q=14.0697,100.6057', '_blank')">เน€เธเธดเธ” Google Maps</button>
+          </div>
+
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:800; font-size:12px;">๐ก๏ธ Insurance Quick-Link</div>
+            <button class="btn-glass-primary sm" onclick="window.location.href='tel:027970999'">เนเธ—เธฃเธเธธเธเน€เธเธดเธ</button>
           </div>
         </div>
-      ` : ''}
+      \` : ''}
 
-      ${iState.activePhase === 3 ? `
+      \${iState.activePhase === 3 ? \`
         <!-- Phase 3: During Internship -->
         <div class="glass-card" style="border:2.5px solid #000; box-shadow: 4px 4px 0px #000; padding:15px; margin-bottom:20px;">
-          <h3 style="font-weight:900; font-size:16px; margin:0 0 10px; color:var(--c-accent);">🛠️ Phase 3: During Internship</h3>
+          <h3 style="font-weight:900; font-size:16px; margin:0 0 10px; color:var(--c-accent);">๐ ๏ธ Phase 3: Work Log & Daily Ops</h3>
           
+          <div class="glass-card" style="border:2px solid #000; background:#f8fafc; padding:15px; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div style="font-weight:800; font-size:14px; margin-bottom:4px;">โฑ๏ธ เธเธฑเนเธงเนเธกเธเธชเธฐเธชเธก: \${iState.totalHours} เธเธก.</div>
+              <div style="font-size:11px;">(เธฃเธงเธก OT \${iState.otHours} เธเธก.)</div>
+            </div>
+            <button class="btn-glass sm" onclick="internAddOT()">+ เน€เธเธดเนเธก OT</button>
+          </div>
+
           <div class="widget-grid" style="gap:10px; margin-bottom:15px;">
-            <!-- Check-in -->
-            <div class="glass-card" style="border:2px solid #000; padding:15px; text-align:center; background:${iState.checkedIn ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.6)'};">
-              <div style="font-weight:800; font-size:13px; margin-bottom:10px;">📍 Smart Check-in (GPS)</div>
-              <button class="btn-glass-primary" onclick="internCheckIn()" style="background:${iState.checkedIn ? '#ef4444' : '#22c55e'}; border-color:#000; color:#fff; font-weight:900; width:120px; height:45px; font-size:14px;">
-                ${iState.checkedIn ? '⏹️ Clock Out' : '▶️ Clock In'}
+            <div class="glass-card" style="border:2px solid #000; padding:15px; text-align:center; background:\${iState.checkedIn ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.6)'};">
+              <div style="font-weight:800; font-size:13px; margin-bottom:10px;">๐“ Smart Check-in</div>
+              <button class="btn-glass-primary" onclick="internCheckIn()" style="background:\${iState.checkedIn ? '#ef4444' : '#22c55e'}; border-color:#000; color:#fff; font-weight:900; width:120px; height:45px; font-size:14px;">
+                \${iState.checkedIn ? 'โน๏ธ Clock Out' : 'โ–ถ๏ธ Clock In'}
               </button>
               <div style="font-size:10px; margin-top:8px; font-weight:700;">
-                ${iState.checkedIn ? `<span style="color:#22c55e;">เข้างาน: ${iState.checkInTime}</span>` : 'ยังไม่ได้ลงเวลา'}
+                \${iState.checkedIn ? \`<span style="color:#22c55e;">เน€เธเนเธฒเธเธฒเธ: \${iState.checkInTime}</span>\` : 'เธขเธฑเธเนเธกเนเนเธ”เนเธฅเธเน€เธงเธฅเธฒ'}
               </div>
             </div>
 
-            <!-- Skills & Allowance -->
             <div style="display:flex; flex-direction:column; gap:10px;">
               <div class="glass-card" style="border:2px solid #000; padding:10px; background:#fff; text-align:center;">
-                <div style="font-weight:800; font-size:12px; margin-bottom:4px;">💰 บันทึกเบี้ยเลี้ยง</div>
-                <button class="btn-glass sm full" onclick="internAddAllowance()">+ บันทึกรายได้วันนี้</button>
+                <div style="font-weight:800; font-size:12px; margin-bottom:4px;">๐’ฐ เธเธฑเธเธ—เธถเธเน€เธเธตเนเธขเน€เธฅเธตเนเธขเธ</div>
+                <div style="font-size:10px; margin-bottom:4px; color:var(--primary);">เธชเธฐเธชเธก: \${iState.totalAllowance.toLocaleString()} เธฟ</div>
+                <button class="btn-glass sm full" onclick="internAddAllowance()">+ เธเธฑเธเธ—เธถเธเธฃเธฒเธขเธฃเธฑเธ/เธเนเธฒเธข</button>
               </div>
               <div class="glass-card" style="border:2px solid #000; padding:10px; background:#fff; text-align:center;">
-                <div style="font-weight:800; font-size:12px; margin-bottom:4px;">🎲 Lunch Roulette</div>
-                <button class="btn-glass sm full" onclick="internLunchRoulette()">สุ่มร้านอาหาร</button>
+                <div style="font-weight:800; font-size:12px; margin-bottom:4px;">๐ฒ Lunch Roulette</div>
+                <button class="btn-glass sm full" onclick="internLunchRoulette()">เธชเธธเนเธกเธฃเนเธฒเธเธญเธฒเธซเธฒเธฃ</button>
               </div>
             </div>
           </div>
 
           <div class="glass-card" style="border:2px solid #000; padding:12px; background:#f8fafc; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
             <div>
-              <div style="font-weight:800; font-size:12px;">📞 ${iState.mentorName || 'พี่เลี้ยง'}</div>
-              <div style="font-size:10px;">${iState.mentorTel || '-'}</div>
+              <div style="font-weight:800; font-size:12px;">๐“ \${iState.mentorName || 'เธเธตเนเน€เธฅเธตเนเธขเธ'} (Mentor Contact Card)</div>
+              <div style="font-size:10px;">\${iState.mentorTel || '-'}</div>
             </div>
             <div style="display:flex; gap:6px;">
-              <button class="btn-glass sm" onclick="internEditMentor()">✏️</button>
-              <button class="btn-glass-primary sm" onclick="internContactMentor()">โทร</button>
+              <button class="btn-glass sm" onclick="internEditMentor()">โ๏ธ</button>
             </div>
           </div>
 
-          <!-- WL Balance & Photo Diary -->
+          <!-- Photo Diary & W/L -->
           <div class="widget-grid" style="gap:10px; margin-bottom:15px;">
             <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; text-align:center;">
-              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">⚖️ W/L Balance</div>
-              <div style="font-size:12px; font-weight:700;">${wlBalanceStatus}</div>
+              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">โ–๏ธ Workload Analysis</div>
+              <div style="font-size:12px; font-weight:700;">\${hasOT ? 'โ ๏ธ เธเธฒเธเธซเธเธฑเธ (เธกเธต OT)' : 'โ… เธชเธกเธ”เธธเธฅเธ”เธต'}</div>
             </div>
             <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; text-align:center;">
-              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">📸 Photo Diary</div>
-              <button class="btn-glass sm full" onclick="internAddPhoto()">+ เพิ่มรูปภาพ</button>
+              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">๐“ธ Photo Evidence Diary</div>
+              <button class="btn-glass sm full" onclick="document.getElementById('photoUpload').click()">+ เธญเธฑเธเนเธซเธฅเธ”เธฃเธนเธเธ—เธณเธเธฒเธ</button>
+              <input type="file" id="photoUpload" style="display:none;" accept="image/*" onchange="internAddPhoto(event)">
             </div>
           </div>
 
-          <!-- Photo thumbnails -->
-          ${iState.photos && iState.photos.length > 0 ? `
-          <div style="display:flex; gap:10px; overflow-x:auto; margin-bottom:15px; padding-bottom:5px;">
-            ${iState.photos.map(p => `
-              <div class="glass-card" style="min-width:100px; border:1px solid #000; padding:4px; background:#fff;">
-                <img src="${p.dataUrl}" style="width:100px; height:70px; object-fit:cover; border-radius:4px;">
-                <div style="font-size:9px; text-align:center; margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${p.caption || p.date}</div>
-              </div>
-            `).join('')}
-          </div>` : ''}
-
-          <!-- Skill Tagging -->
-          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px;">
-            <div style="font-weight:800; font-size:12px; margin-bottom:8px;">🏷️ Skill Tagging</div>
-            <div style="display:flex; gap:6px; flex-wrap:wrap;">
-              <button class="btn-glass sm" onclick="internTagSkill('SEM')">🔬 SEM</button>
-              <button class="btn-glass sm" onclick="internTagSkill('Hardness')">🔩 Hardness</button>
-              <button class="btn-glass sm" onclick="internTagSkill('Safety')">🦺 Safety</button>
-              <button class="btn-glass sm" onclick="internTagSkill('Excel')">📊 Excel</button>
-            </div>
-          </div>
-
-          <!-- Notion reflection daily input -->
-          <div class="glass-card" style="border:2px solid #000; padding:15px; background:#fff;">
-            <div style="font-weight:800; font-size:13px; margin-bottom:8px;">📒 Notion Daily Reflection</div>
-            <textarea class="glass-textarea" id="internReflectionInput" style="width:100%; height:60px; font-size:12px; padding:8px; border:2px solid #000; border-radius:6px; margin-bottom:8px;" placeholder="วันนี้ทำอะไรบ้าง..."></textarea>
-            <button class="btn-glass-primary sm full" onclick="internAddReflection()">📝 บันทึก & Sync</button>
-          </div>
-
-          <!-- Daily Reflection Logs -->
-          <div style="margin-top:15px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-              <div style="font-weight:800; font-size:12px;">📋 บันทึกย้อนหลัง & เอกสาร</div>
-              <button class="btn-glass sm" onclick="internGenerateWorkLog()">📄 เจน PDF ใบลงเวลา</button>
-            </div>
-            <div style="display:flex; flex-direction:column; gap:8px; max-height:120px; overflow-y:auto; padding-right:4px;">
-              ${iState.dailyLogs.map(l => `
-                <div class="glass-card" style="border:1.5px solid #000; padding:8px; font-size:11px; background:rgba(255,255,255,0.8);">
-                  <strong style="color:var(--c-accent);">${l.date}</strong>: ${l.text}
+          \${iState.photos.length > 0 ? \`
+            <div style="display:flex; gap:10px; overflow-x:auto; margin-bottom:15px;">
+              \${iState.photos.map(p => \`
+                <div class="glass-card" style="min-width:100px; padding:4px; border:1px solid #000; background:#fff;">
+                  <img src="\${p.dataUrl}" style="width:100px; height:70px; object-fit:cover; border-radius:4px;">
+                  <div style="font-size:9px; text-align:center; margin-top:4px; overflow:hidden;">\${p.caption || p.date}</div>
                 </div>
-              `).join('')}
+              \`).join('')}
+            </div>
+          \` : ''}
+
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px;">
+            <div style="font-weight:800; font-size:12px; margin-bottom:8px;">๐ท๏ธ Skill Tagging</div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <button class="btn-glass sm" onclick="internTagSkill('Safety')">๐ฆบ Safety (\${iState.skills['Safety'] || 0})</button>
+              <button class="btn-glass sm" onclick="internTagSkill('QC/QA')">๐” QC/QA (\${iState.skills['QC/QA'] || 0})</button>
+              <button class="btn-glass sm" onclick="internTagSkill('Data')">๐“ Data (\${iState.skills['Data'] || 0})</button>
+              <button class="btn-glass sm" onclick="internTagSkill('Comm.')">๐’ฌ Comm. (\${iState.skills['Comm.'] || 0})</button>
+            </div>
+          </div>
+
+          <div class="glass-card" style="border:2px solid #000; padding:15px; background:#fff;">
+            <div style="font-weight:800; font-size:13px; margin-bottom:8px;">๐“’ Notion Daily Reflection</div>
+            <textarea class="glass-textarea" id="internReflectionInput" style="width:100%; height:60px; font-size:12px; padding:8px; border:2px solid #000; border-radius:6px; margin-bottom:8px;" placeholder="เธงเธฑเธเธเธตเนเธ—เธณเธญเธฐเนเธฃเธเนเธฒเธ..."></textarea>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <button class="btn-glass sm" onclick="internGenerateWorkLog()">๐“ PDF เธฅเธเน€เธงเธฅเธฒ</button>
+              <button class="btn-glass-primary sm" onclick="internAddReflection()">๐“ เธเธฑเธเธ—เธถเธ & Sync</button>
+            </div>
+            
+            <div style="margin-top:15px; display:flex; flex-direction:column; gap:8px; max-height:120px; overflow-y:auto;">
+              \${iState.dailyLogs.map(l => \`
+                <div class="glass-card" style="border:1.5px solid #000; padding:8px; font-size:11px; background:rgba(255,255,255,0.8);">
+                  <strong style="color:var(--c-accent);">\${l.date}</strong>: \${l.text}
+                </div>
+              \`).join('')}
             </div>
           </div>
         </div>
-      ` : ''}
+      \` : ''}
 
-      ${iState.activePhase === 4 ? `
+      \${iState.activePhase === 4 ? \`
         <!-- Phase 4: Reporting & Evaluation -->
         <div class="glass-card" style="border:2.5px solid #000; box-shadow: 4px 4px 0px #000; padding:15px; margin-bottom:20px;">
-          <h3 style="font-weight:900; font-size:16px; margin:0 0 10px; color:var(--c-accent);">✍️ Phase 4: Reporting & Evaluation</h3>
+          <h3 style="font-weight:900; font-size:16px; margin:0 0 10px; color:var(--c-accent);">โ๏ธ Phase 4: Reporting & Evaluation</h3>
           
           <div class="widget-grid" style="gap:10px; margin-bottom:15px;">
-            <!-- Envelope checklist -->
             <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff;">
-              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">📦 เอกสารปิดผนึก (${envelopeCompletedCount}/4)</div>
+              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">๐“ฆ Final Document Checklist (\${envelopeCompletedCount}/4)</div>
               <div style="display:flex; flex-direction:column; gap:6px; font-size:11px; font-weight:700;">
-                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" ${iState.envelopeChecked.env_form ? 'checked' : ''} onchange="internToggleEnvelope('env_form')"> ใบคำร้อง</label>
-                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" ${iState.envelopeChecked.env_time ? 'checked' : ''} onchange="internToggleEnvelope('env_time')"> ใบลงเวลา</label>
-                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" ${iState.envelopeChecked.env_eval ? 'checked' : ''} onchange="internToggleEnvelope('env_eval')"> ใบประเมิน</label>
-                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" ${iState.envelopeChecked.env_book ? 'checked' : ''} onchange="internToggleEnvelope('env_book')"> เล่มรายงาน</label>
+                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" \${iState.envelopeChecked.env_form ? 'checked' : ''} onchange="internToggleEnvelope('env_form')"> เนเธเธเธณเธฃเนเธญเธ</label>
+                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" \${iState.envelopeChecked.env_time ? 'checked' : ''} onchange="internToggleEnvelope('env_time')"> เนเธเธฅเธเน€เธงเธฅเธฒ</label>
+                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" \${iState.envelopeChecked.env_eval ? 'checked' : ''} onchange="internToggleEnvelope('env_eval')"> เนเธเธเธฃเธฐเน€เธกเธดเธ</label>
+                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" \${iState.envelopeChecked.env_book ? 'checked' : ''} onchange="internToggleEnvelope('env_book')"> เน€เธฅเนเธกเธฃเธฒเธขเธเธฒเธ</label>
               </div>
             </div>
 
-            <!-- Auto consolidator & Links -->
-            <div style="display:flex; flex-direction:column; gap:10px;">
-              <div class="glass-card" style="border:2px solid #000; padding:10px; background:#fff; text-align:center;">
-                <div style="font-weight:800; font-size:12px; margin-bottom:4px;">🤖 AI Auto-Summary</div>
-                <button class="btn-glass-primary sm full" onclick="internAutoSummarizeReflections()">สรุปรายสัปดาห์</button>
-              </div>
-              <div class="glass-card" style="border:2px solid #000; padding:10px; background:#fff; text-align:center;">
-                <div style="font-weight:800; font-size:12px; margin-bottom:4px;">📊 ลิงก์ประเมินผล</div>
-                <button class="btn-glass sm full" onclick="internSendEvalLink()">ก๊อปปี้ลิงก์ให้พี่เลี้ยง</button>
+            <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff;">
+              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">๐“‘ Report Structure Checklist</div>
+              <div style="display:flex; flex-direction:column; gap:6px; font-size:11px; font-weight:700;">
+                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" \${iState.reportSections.ch1 ? 'checked' : ''} onchange="internToggleReportSection('ch1')"> เธเธ—เธ—เธตเน 1: เธเธ—เธเธณ</label>
+                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" \${iState.reportSections.ch2 ? 'checked' : ''} onchange="internToggleReportSection('ch2')"> เธเธ—เธ—เธตเน 2: เธ—เธคเธฉเธเธต</label>
+                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" \${iState.reportSections.ch3 ? 'checked' : ''} onchange="internToggleReportSection('ch3')"> เธเธ—เธ—เธตเน 3: เธงเธดเธเธตเธเธฒเธฃ</label>
+                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" \${iState.reportSections.ch4 ? 'checked' : ''} onchange="internToggleReportSection('ch4')"> เธเธ—เธ—เธตเน 4: เธเธฅเธเธฒเธฃเธ—เธ”เธฅเธญเธ</label>
+                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" \${iState.reportSections.ch5 ? 'checked' : ''} onchange="internToggleReportSection('ch5')"> เธเธ—เธ—เธตเน 5: เธชเธฃเธธเธเธเธฅ</label>
               </div>
             </div>
           </div>
 
-          <!-- Report submission -->
           <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
-            <div style="font-weight:800; font-size:12px;">⏳ Report Submission</div>
-            <div style="font-size:12px; font-weight:700;">${reportCountdown}</div>
+            <div style="font-weight:800; font-size:12px;">โณ Submission Countdown</div>
+            <div style="font-size:12px; font-weight:700;">เธชเนเธเธ เธฒเธขเนเธ 1 เธชเธฑเธเธ”เธฒเธซเนเธซเธฅเธฑเธเธเธ</div>
           </div>
 
-          <!-- Theory Ref -->
           <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px;">
             <div style="font-weight:800; font-size:12px; margin-bottom:8px; display:flex; justify-content:space-between;">
-              <span>📚 Ref. Theory Library</span>
-              <button class="btn-glass sm" style="padding:2px 6px;" onclick="internAddTheoryRef()">+ เพิ่ม</button>
+              <span>๐“ Ref. Theory Library</span>
+              <button class="btn-glass sm" style="padding:2px 6px;" onclick="internAddTheoryRef()">+ เน€เธเธดเนเธก</button>
             </div>
             <div style="display:flex; flex-direction:column; gap:6px;">
-              ${iState.theoryRefs.map((r, idx) => `
-                <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:6px; border:1px solid #e2e8f0; border-radius:6px; font-size:11px;">
-                  <a href="${r.url}" target="_blank" style="text-decoration:none; color:var(--primary); font-weight:700;">${r.title}</a>
-                  <div style="display:flex; gap:4px;">
-                    <button class="btn-glass sm" style="padding:2px 6px;" onclick="internCopyTheoryRef(${idx})">📋</button>
-                    <button class="btn-glass sm" style="padding:2px 6px; color:#ef4444;" onclick="internDeleteTheoryRef(${idx})">🗑️</button>
-                  </div>
+              \${iState.theoryRefs.map(r => \`
+                <div style="background:#f8fafc; padding:6px; border:1px solid #e2e8f0; border-radius:6px; font-size:11px;">
+                  <a href="\${r.url}" target="_blank" style="color:var(--primary); font-weight:700;">\${r.title}</a>
                 </div>
-              `).join('')}
+              \`).join('')}
             </div>
           </div>
 
-          <!-- Exit Interview Note -->
           <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px;">
-            <div style="font-weight:800; font-size:12px; margin-bottom:8px;">📝 Exit Interview Note</div>
-            <textarea id="exitNoteInput" class="glass-textarea" style="width:100%; height:60px; font-size:11px; padding:6px; margin-bottom:8px;" placeholder="ความประทับใจ หรือข้อเสนอแนะ...">${iState.exitNote}</textarea>
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <div style="font-size:16px;">
-                ${[1,2,3,4,5].map(v => `<span style="cursor:pointer; opacity:${iState.exitSatisfaction >= v ? '1' : '0.3'};" onclick="internSetSatisfaction(${v})">⭐</span>`).join('')}
-              </div>
-              <button class="btn-glass-primary sm" onclick="internSaveExitNote()">บันทึก</button>
+            <div style="font-weight:800; font-size:12px; margin-bottom:8px; display:flex; justify-content:space-between;">
+              <span>โ ๏ธ Problem & Solution Log</span>
+              <button class="btn-glass sm" style="padding:2px 6px;" onclick="internAddProblemLog()">+ เน€เธเธดเนเธก</button>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              \${iState.problemsLogs.map(p => \`
+                <div style="background:#f8fafc; padding:6px; border:1px solid #e2e8f0; border-radius:6px; font-size:11px;">
+                  <strong>P:</strong> \${p.prob} <br>
+                  <strong>S:</strong> \${p.sol}
+                </div>
+              \`).join('')}
             </div>
           </div>
 
-          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#f8fafc; margin-bottom:15px;">
-            <div style="font-weight:800; font-size:12px; margin-bottom:6px;">⚠️ Problem & Solution Log</div>
-            <button class="btn-glass sm full" onclick="internAddProblemLog()">+ บันทึกปัญหาที่พบเพื่อเขียนรายงาน</button>
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px;">
+            <div style="font-weight:800; font-size:12px; margin-bottom:8px; display:flex; justify-content:space-between;">
+              <span>๐“ Evaluation Link Manager</span>
+              <button class="btn-glass sm" style="padding:2px 6px;" onclick="internAddEvalLink()">+ เน€เธเธดเนเธกเธฅเธดเธเธเน</button>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              \${iState.evalLinks.map(l => \`
+                <div style="background:#f8fafc; padding:6px; border:1px solid #e2e8f0; border-radius:6px; font-size:11px;">
+                  <a href="\${l.url}" target="_blank" style="color:var(--primary); font-weight:700;">\${l.title}</a>
+                </div>
+              \`).join('')}
+            </div>
+          </div>
+
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px;">
+            <div style="font-weight:800; font-size:12px; margin-bottom:8px;">๐’ฌ Employer Feedback Capture</div>
+            <textarea id="employerFeedbackInput" class="glass-textarea" style="width:100%; height:60px; font-size:11px; padding:6px; margin-bottom:8px;" placeholder="เธเธณเธงเธดเธเธฒเธฃเธ“เน/เธเธณเนเธเธฐเธเธณเธเธฒเธเธเธตเนเน€เธฅเธตเนเธขเธ..."></textarea>
+            <button class="btn-glass-primary sm full" onclick="internSaveFeedback()">เธเธฑเธเธ—เธถเธ Feedback</button>
+          </div>
+
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px;">
+            <div style="font-weight:800; font-size:12px; margin-bottom:8px;">๐“ Exit Interview Note</div>
+            <textarea id="exitNoteInput" class="glass-textarea" style="width:100%; height:60px; font-size:11px; padding:6px; margin-bottom:8px;" placeholder="เธเธงเธฒเธกเธเธฃเธฐเธ—เธฑเธเนเธ เธซเธฃเธทเธญเธเนเธญเน€เธชเธเธญเนเธเธฐ...">\${iState.exitNote}</textarea>
+            <button class="btn-glass-primary sm full" onclick="internSaveExitNote()">เธเธฑเธเธ—เธถเธ Exit Note</button>
           </div>
 
           <div class="glass-card" style="border:2px solid #000; padding:12px; background:#f8fafc; display:flex; justify-content:space-between; align-items:center;">
-            <div style="font-weight:800; font-size:12px;">☁️ Digital Copy Archive</div>
-            <button class="btn-glass-primary sm" onclick="internBackupDrive()">สำรองไฟล์ขึ้น Drive</button>
+            <div style="font-weight:800; font-size:12px;">โ๏ธ Digital Report Archive</div>
+            <button class="btn-glass-primary sm" onclick="internBackupDrive()">เธชเธณเธฃเธญเธเนเธเธฅเนเธเธถเนเธ Drive</button>
           </div>
         </div>
-      ` : ''}
+      \` : ''}
 
-      ${iState.activePhase === 5 ? `
-        <!-- Phase 5: Welfare & SOS -->
+      \${iState.activePhase === 5 ? \`
+        <!-- Phase 5: Welfare & Extras -->
         <div class="glass-card" style="border:2.5px solid #000; box-shadow: 4px 4px 0px #000; padding:15px; margin-bottom:20px; border-left: 6px solid var(--c-rust);">
-          <h3 style="font-weight:900; font-size:16px; margin:0 0 10px; color:var(--c-rust);">🏥 Phase 5: Welfare & Emergency</h3>
+          <h3 style="font-weight:900; font-size:16px; margin:0 0 10px; color:var(--c-rust);">๐ฅ Phase 5: Welfare & Extras</h3>
           
           <div class="widget-grid" style="gap:15px; margin-bottom:15px;">
             <!-- SOS button -->
             <div class="glass-card" style="border:2px solid #000; padding:15px; display:flex; flex-direction:column; justify-content:center; align-items:center; background:rgba(239,68,68,0.05);">
-              <div style="font-weight:900; font-size:13px; color:var(--c-rust); margin-bottom:10px;">🚨 ปุ่มฉุกเฉิน (SOS Call)</div>
+              <div style="font-weight:900; font-size:13px; color:var(--c-rust); margin-bottom:10px;">๐จ Faculty SOS Button</div>
               <button class="btn-glass-primary" onclick="internTriggerSOS()" style="background:#ef4444; border-color:#000; color:#fff; font-weight:900; width:90px; height:90px; border-radius:50%; font-size:20px; box-shadow:0px 0px 15px rgba(239,68,68,0.4); animation: pulse-sos 2s infinite;">
                 SOS
               </button>
             </div>
 
-            <!-- OCR Receipt Scanner -->
+            <!-- Manual Receipt Upload -->
             <div class="glass-card" style="border:2px solid #000; padding:15px; display:flex; flex-direction:column; justify-content:center; background:#fff;">
-              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">🏥 Receipt Scanner & Claim</div>
-              <button class="btn-glass-primary sm full" onclick="internSimulateOcrScanner()">📷 สแกนใบเสร็จเคลมประกัน</button>
-              <div style="margin-top:10px; font-size:10px; font-weight:700; color:#15803d;">* OPD เบิกได้สูงสุด 2,000 บาท</div>
+              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">๐ฅ Medical Bill Scanner</div>
+              <button class="btn-glass-primary sm full" onclick="document.getElementById('medicalBillUpload').click()">๐“ท เธญเธฑเธเนเธซเธฅเธ”เนเธเน€เธชเธฃเนเธ</button>
+              <input type="file" id="medicalBillUpload" style="display:none;" accept="image/*" onchange="internUploadMedicalBill(event)">
+              <div style="margin-top:10px; font-size:10px; font-weight:700; color:#15803d;">* เธ–เนเธฒเธขเธ เธฒเธเน€เธเนเธเน€เธเนเธเธซเธฅเธฑเธเธเธฒเธ (เนเธกเนเนเธเน AI OCR)</div>
             </div>
           </div>
-
-          <!-- Claim Wizard & Faculty Navigator -->
-          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
-            <div style="font-weight:800; font-size:12px;">🚑 Injury Claim Wizard</div>
-            <button class="btn-glass sm" onclick="internClaimWizard()">ดูขั้นตอนเคลม</button>
-          </div>
-
-          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
-            <div style="font-weight:800; font-size:12px;">🧭 Faculty Navigator</div>
-            <button class="btn-glass sm" onclick="window.open('https://maps.google.com/?q=14.0697,100.6057', '_blank')">เปิด Google Maps</button>
-          </div>
-
-          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
-            <div style="font-weight:800; font-size:12px;">🧭 ค้นหาสถานพยาบาลใกล้พิกัด</div>
-            <button class="btn-glass sm" onclick="window.open('https://www.google.com/maps/search/hospital', '_blank')">เปิด Maps</button>
-          </div>
-
-          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#f8fafc;">
-            <div style="font-weight:800; font-size:12px; margin-bottom:8px;">🧠 Mental Health Check</div>
-            <button class="btn-glass sm full" onclick="internMentalCheck()">📝 ทำแบบประเมินความเครียด</button>
-          </div>
-        </div>
-      ` : ''}
-
-      ${iState.activePhase === 6 ? `
-        <!-- Bonus Phase -->
-        <div class="glass-card" style="border:2.5px solid #000; box-shadow: 4px 4px 0px #000; padding:15px; margin-bottom:20px; border-left: 6px solid #8b5cf6;">
-          <h3 style="font-weight:900; font-size:16px; margin:0 0 10px; color:#8b5cf6;">⭐ Bonus: Gamification & Network</h3>
           
-          <div class="widget-grid" style="gap:10px; margin-bottom:15px;">
-            <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; text-align:center;">
-              <div style="font-size:32px; margin-bottom:5px;">🍅</div>
-              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">Focus Timer (รายงาน)</div>
-              <button class="btn-glass-primary sm full" onclick="internStartFocus()">เริ่มจับเวลา 25 นาที</button>
+          \${iState.medicalBills && iState.medicalBills.length > 0 ? \`
+            <div style="margin-bottom:15px; display:flex; gap:10px; overflow-x:auto;">
+              \${iState.medicalBills.map((b, idx) => \`
+                <div class="glass-card" style="min-width:100px; padding:5px; text-align:center;">
+                  <img src="\${b.dataUrl}" style="width:100px; height:70px; object-fit:cover; border-radius:4px;">
+                  <div style="font-size:9px; margin-top:4px;">\${b.date}</div>
+                </div>
+              \`).join('')}
             </div>
-            <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; text-align:center;">
-              <div style="font-size:32px; margin-bottom:5px;">🤝</div>
-              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">Networking Sync</div>
-              <button class="btn-glass sm full" onclick="internAddContact()">+ บันทึก Contact</button>
-            </div>
+          \` : ''}
+
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:800; font-size:12px;">๐‘ Injury Claim Wizard</div>
+            <button class="btn-glass sm" onclick="internClaimWizard()">เธ”เธนเธเธฑเนเธเธ•เธญเธเน€เธเธฅเธก</button>
+          </div>
+
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:800; font-size:12px;">๐งญ Hospital Locator</div>
+            <button class="btn-glass sm" onclick="window.open('https://www.google.com/maps/search/hospital', '_blank')">เน€เธเธดเธ” Maps</button>
           </div>
 
           <div class="glass-card" style="border:2px solid #000; padding:12px; background:#f8fafc; margin-bottom:15px;">
-            <div style="font-weight:800; font-size:12px; margin-bottom:8px;">🏆 Internship Badges</div>
+            <div style="font-weight:800; font-size:12px; margin-bottom:8px;">๐ง  Internship Stress Level</div>
+            <div style="font-size:12px; margin-bottom:8px;">เธฃเธฐเธ”เธฑเธเธเธงเธฒเธกเน€เธเธฃเธตเธขเธ”เธเธฑเธเธเธธเธเธฑเธ: \${iState.stressLevel}/10</div>
+            <button class="btn-glass sm full" onclick="internMentalCheck()">๐“ เธเธฃเธฐเน€เธกเธดเธเธเธงเธฒเธกเน€เธเธฃเธตเธขเธ”เนเธซเธกเน</button>
+          </div>
+
+          <!-- Bonus: Gamification & Extras -->
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#f8fafc; margin-bottom:15px;">
+            <div style="font-weight:800; font-size:12px; margin-bottom:8px;">๐ Achievement Badges</div>
             <div style="display:flex; gap:8px;">
-              <div style="opacity: ${iState.totalHours > 0 ? '1' : '0.4'}; text-align:center;">
-                <div style="font-size:24px;">🌱</div>
+              <div style="opacity: \${iState.totalHours > 0 ? '1' : '0.4'}; text-align:center;">
+                <div style="font-size:24px;">๐ฑ</div>
                 <div style="font-size:10px; font-weight:700;">First Step</div>
               </div>
-              <div style="opacity: ${iState.dailyLogs.length >= 5 ? '1' : '0.4'}; text-align:center;">
-                <div style="font-size:24px;">📝</div>
+              <div style="opacity: \${iState.dailyLogs.length >= 5 ? '1' : '0.4'}; text-align:center;">
+                <div style="font-size:24px;">๐“</div>
                 <div style="font-size:10px; font-weight:700;">Doc King</div>
               </div>
             </div>
           </div>
 
-          <!-- Future Job Bookmark -->
+          <div class="widget-grid" style="gap:10px; margin-bottom:15px;">
+            <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; text-align:center;">
+              <div style="font-size:32px; margin-bottom:5px;">๐…</div>
+              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">Focus Timer</div>
+              <button class="btn-glass-primary sm full" onclick="internStartFocus()">เน€เธฃเธดเนเธก 25 เธเธฒเธ—เธต</button>
+            </div>
+            <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; text-align:center;">
+              <div style="font-size:32px; margin-bottom:5px;">๐ค</div>
+              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">Networking Sync</div>
+              <button class="btn-glass sm full" onclick="internAddContact()">+ เธเธฑเธเธ—เธถเธ Contact</button>
+            </div>
+          </div>
+
           <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px;">
             <div style="font-weight:800; font-size:12px; margin-bottom:8px; display:flex; justify-content:space-between;">
-              <span>👔 Future Job Bookmark</span>
-              <button class="btn-glass sm" style="padding:2px 6px;" onclick="internAddFutureJob()">+ เพิ่ม</button>
+              <span>๐‘” Career Path Bookmark</span>
+              <button class="btn-glass sm" style="padding:2px 6px;" onclick="internAddFutureJob()">+ เน€เธเธดเนเธก</button>
             </div>
             <div style="display:flex; flex-direction:column; gap:6px;">
-              ${iState.futureJobs.map((j, idx) => `
-                <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:6px; border:1px solid #e2e8f0; border-radius:6px; font-size:11px;">
-                  <div>
-                    <div style="font-weight:700; color:var(--primary);">${j.position}</div>
-                    <div style="opacity:0.7; font-size:9px;">${j.company}</div>
-                  </div>
-                  <div style="display:flex; gap:4px;">
-                    <a href="${j.url}" target="_blank" class="btn-glass sm" style="padding:2px 6px; text-decoration:none;">🔗</a>
-                    <button class="btn-glass sm" style="padding:2px 6px; color:#ef4444;" onclick="internDeleteFutureJob(${idx})">🗑️</button>
-                  </div>
+              \${iState.futureJobs.map(j => \`
+                <div style="background:#f8fafc; padding:6px; border:1px solid #e2e8f0; border-radius:6px; font-size:11px;">
+                  <a href="\${j.url}" target="_blank" style="color:var(--primary); font-weight:700;">\${j.position} - \${j.company}</a>
                 </div>
-              `).join('')}
+              \`).join('')}
             </div>
           </div>
-          
+
           <div class="glass-card" style="border:2px solid #000; padding:12px; background:#f8fafc;">
-            <div style="font-weight:800; font-size:12px; margin-bottom:8px;">🙏 Gratitude Reminder</div>
-            <button class="btn-glass sm full" onclick="internGratitudeReminder()">ร่างอีเมลขอบคุณพี่เลี้ยง</button>
+            <div style="font-weight:800; font-size:12px; margin-bottom:8px;">๐ Thank-you Letter Automator</div>
+            <button class="btn-glass sm full" onclick="internGenerateThankYou()">เธฃเนเธฒเธเธญเธตเน€เธกเธฅเธเธญเธเธเธธเธ“เธเธตเนเน€เธฅเธตเนเธขเธ</button>
           </div>
         </div>
-      ` : ''}
+      \` : ''}
     </div>
 
     <style>
@@ -10765,5 +10764,6 @@ window.renderInternshipPage = function() {
         100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
       }
     </style>
-  `;
+  \`;
 };
+
