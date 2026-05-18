@@ -9541,6 +9541,7 @@ window.syncToGoogleCalendar = function() {
     })
     .withFailureHandler(err => {
       showToast('❌ เกิดข้อผิดพลาด: ' + err.message, 'err');
+    })
     .syncAcademicMilestonesToCalendar(payload);
 };
 
