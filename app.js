@@ -9569,7 +9569,15 @@ if (!state.internship) {
     badges: JSON.parse(localStorage.getItem('internship_badges') || '[]'),
     focusSessions: parseInt(localStorage.getItem('internship_focus_sessions') || '0'),
     contacts: JSON.parse(localStorage.getItem('internship_contacts') || '[]'),
-    futureJobs: JSON.parse(localStorage.getItem('internship_future_jobs') || '[]')
+    futureJobs: JSON.parse(localStorage.getItem('internship_future_jobs') || '[]'),
+    deadlines: JSON.parse(localStorage.getItem('internship_deadlines') || '[{"label":"ยื่นฟอร์ม 101", "date":"2026-05-30"}]'),
+    photos: JSON.parse(localStorage.getItem('internship_photos') || '[]'),
+    mentorName: localStorage.getItem('internship_mentor_name') || 'พี่หมู (QC Dept)',
+    mentorTel: localStorage.getItem('internship_mentor_tel') || '0812345678',
+    reportDueDate: localStorage.getItem('internship_report_due') || '2026-06-30',
+    theoryRefs: JSON.parse(localStorage.getItem('internship_theory_refs') || '[]'),
+    exitNote: localStorage.getItem('internship_exit_note') || '',
+    exitSatisfaction: parseInt(localStorage.getItem('internship_exit_satisfaction') || '0')
   };
 }
 
@@ -9591,6 +9599,14 @@ window.internSaveState = function() {
   localStorage.setItem('internship_focus_sessions', state.internship.focusSessions);
   localStorage.setItem('internship_contacts', JSON.stringify(state.internship.contacts));
   localStorage.setItem('internship_future_jobs', JSON.stringify(state.internship.futureJobs));
+  localStorage.setItem('internship_deadlines', JSON.stringify(state.internship.deadlines));
+  localStorage.setItem('internship_photos', JSON.stringify(state.internship.photos));
+  localStorage.setItem('internship_mentor_name', state.internship.mentorName);
+  localStorage.setItem('internship_mentor_tel', state.internship.mentorTel);
+  localStorage.setItem('internship_report_due', state.internship.reportDueDate);
+  localStorage.setItem('internship_theory_refs', JSON.stringify(state.internship.theoryRefs));
+  localStorage.setItem('internship_exit_note', state.internship.exitNote);
+  localStorage.setItem('internship_exit_satisfaction', state.internship.exitSatisfaction);
 };
 
 // -------------------------
@@ -9608,26 +9624,61 @@ window.internAddCompany = function() {
   showToast("เพิ่มบริษัทใหม่ลงระบบ CRM แล้ว");
 };
 
-window.internMoveKanban = function(id, newStatus) {
+window.internMoveKanban = function(id) {
   const comp = state.internship.companies.find(c => c.id === id);
   if (!comp) return;
-  
-  // Remove from old
+  openModal('ย้ายสถานะ (Kanban)', `
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <button class="btn-glass sm full" onclick="internUpdateKanbanStatus('${id}', 'interested')">🤔 สนใจ</button>
+      <button class="btn-glass sm full" onclick="internUpdateKanbanStatus('${id}', 'applied')">📤 ส่งเมลแล้ว</button>
+      <button class="btn-glass sm full" onclick="internUpdateKanbanStatus('${id}', 'interview')">💬 รอสัมภาษณ์</button>
+      <button class="btn-glass sm full" onclick="internUpdateKanbanStatus('${id}', 'accepted')">✅ ตอบรับ</button>
+    </div>
+  `);
+};
+
+window.internUpdateKanbanStatus = function(id, newStatus) {
+  const comp = state.internship.companies.find(c => c.id === id);
+  if (!comp) return;
   const oldList = state.internship.kanban[comp.status];
   const idx = oldList.indexOf(id);
   if (idx > -1) oldList.splice(idx, 1);
-  
-  // Add to new
   comp.status = newStatus;
+  if (!state.internship.kanban[newStatus]) state.internship.kanban[newStatus] = [];
   state.internship.kanban[newStatus].push(id);
   internSaveState();
+  closeModal();
   render();
 };
 
 window.internCopyGrades = function() {
-  const text = "GPAX ปัจจุบัน: 3.42\\n- 01202111 Calculus I: B+\\n- 01203111 General Chemistry: A\\n- 01208111 Eng Drawing: B\\n- 01205211 Materials Science: A";
+  const gradedCourses = Object.values(state.courses || {}).filter(c => c.grade && c.grade !== '' && c.grade !== 'W');
+  const courseTexts = gradedCourses.map(c => `- ${c.code} ${c.name}: ${c.grade}`).join('\\n');
+  const gpax = window.getCumGPA ? window.getCumGPA() : 'N/A';
+  const text = `GPAX ปัจจุบัน: ${gpax}\\n${courseTexts}`;
   navigator.clipboard.writeText(text).then(() => showToast('📋 คัดลอกข้อมูลเกรดเรียบร้อย!'));
 };
+
+window.internAddDeadline = function() {
+  const label = prompt("ชื่อ Deadline:");
+  if (!label) return;
+  const date = prompt("วันที่ (YYYY-MM-DD):");
+  if (!date) return;
+  state.internship.deadlines.push({label, date});
+  internSaveState();
+  render();
+};
+
+window.internCheckAcademicEligibility = function() {
+  const graded = Object.values(state.courses || {}).filter(c => c.grade && c.grade !== '' && c.grade !== 'W' && c.grade !== 'F');
+  const credits = graded.reduce((acc, c) => acc + (parseFloat(c.credit) || 0), 0);
+  if (credits >= 80) {
+    showToast(`✅ ผ่านเกณฑ์ พร้อมฝึกงาน! (หน่วยกิตสะสม: ${credits})`, 'ok');
+  } else {
+    showToast(`❌ ยังไม่ผ่านเกณฑ์ ขาดอีก ${80 - credits} หน่วยกิต`, 'err');
+  }
+};
+
 
 window.internCopyPortfolio = function() {
   const link = "https://drive.google.com/file/d/13iUsIYgNnZQhC6hezwXJO06Re4zAZ8Ri/view";
@@ -9754,8 +9805,19 @@ window.internSaveSig = function() {
 };
 
 window.internSyncNotionOrientation = function() {
-  showToast("🔄 กำลังสร้างหน้าบันทึกปฐมนิเทศบน Notion...");
-  setTimeout(() => showToast("✅ สร้างหน้า Notion สำเร็จ! (Orientation Notes)"), 1500);
+  showToast("🔄 กำลังสร้างหน้าบันทึกปฐมนิเทศบน Notion...", "wait");
+  if (typeof google !== 'undefined') {
+    google.script.run
+      .withSuccessHandler(() => {
+        showToast("✅ สร้างหน้า Notion สำเร็จ! (Orientation Notes)", "ok");
+      })
+      .withFailureHandler((err) => {
+        showToast("❌ เกิดข้อผิดพลาด: " + err.message, "err");
+      })
+      .syncReflectionToNotion("ORIENTATION_NOTES", "บันทึกการปฐมนิเทศฝึกงาน");
+  } else {
+    setTimeout(() => showToast("✅ สร้างหน้า Notion สำเร็จ! (Orientation Notes)", "ok"), 1500);
+  }
 };
 
 window.internToggleOrientation = function(idx) {
@@ -9884,7 +9946,80 @@ window.internContactMentor = function() {
 
 window.internGenerateWorkLog = async function() {
   showToast("⚙️ กำลังสร้าง PDF ใบลงเวลา...", "wait");
-  setTimeout(() => showToast("📄 สร้างใบลงเวลา_2569.pdf พร้อมประทับตราสำเร็จ!", "ok"), 1500);
+  try {
+    const pdfDoc = await PDFLib.PDFDocument.create();
+    pdfDoc.registerFontkit(window.fontkit);
+    const fontRes = await fetch('https://cdn.jsdelivr.net/gh/lazywasabi/thai-web-fonts@2/fonts/Sarabun/Sarabun-Regular.ttf');
+    const fontBuffer = await fontRes.arrayBuffer();
+    const customFont = await pdfDoc.embedFont(fontBuffer);
+    
+    let page = pdfDoc.addPage([595.28, 841.89]); // A4
+    page.drawText('บันทึกเวลาปฏิบัติงาน (Work Log)', { x: 50, y: 800, size: 18, font: customFont });
+    
+    let y = 760;
+    page.drawText('วันที่', { x: 50, y, size: 14, font: customFont });
+    page.drawText('รายละเอียด / เวลาเข้า-ออก', { x: 150, y, size: 14, font: customFont });
+    y -= 25;
+    
+    for (const log of state.internship.dailyLogs) {
+      if (y < 50) {
+        page = pdfDoc.addPage([595.28, 841.89]);
+        y = 800;
+      }
+      page.drawText(log.date || '', { x: 50, y, size: 12, font: customFont });
+      page.drawText(log.text.substring(0, 50) + (log.text.length > 50 ? '...' : ''), { x: 150, y, size: 12, font: customFont });
+      y -= 20;
+    }
+    
+    const pdfBytes = await pdfDoc.save();
+    const blob = new Blob([pdfBytes], { type: "application/pdf" });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `WorkLog_2569.pdf`;
+    link.click();
+    showToast("📄 สร้างใบลงเวลา_2569.pdf สำเร็จ!", "ok");
+  } catch(e) {
+    console.error(e);
+    showToast("❌ สร้าง PDF ล้มเหลว", "err");
+  }
+};
+
+window.internAddPhoto = function() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(event) {
+      const caption = prompt("คำบรรยายรูปภาพ:") || '';
+      const dateStr = new Date().toISOString().split('T')[0];
+      state.internship.photos.push({date: dateStr, dataUrl: event.target.result, caption});
+      internSaveState();
+      render();
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+};
+
+window.internEditMentor = function() {
+  openModal('แก้ไขข้อมูลพี่เลี้ยง', `
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <input type="text" id="mentorNameInput" class="glass-input" value="${state.internship.mentorName || ''}" placeholder="ชื่อพี่เลี้ยง">
+      <input type="text" id="mentorTelInput" class="glass-input" value="${state.internship.mentorTel || ''}" placeholder="เบอร์โทรศัพท์">
+      <button class="btn-glass-primary full" onclick="internSaveMentor()">บันทึก</button>
+    </div>
+  `);
+};
+
+window.internSaveMentor = function() {
+  state.internship.mentorName = document.getElementById('mentorNameInput').value;
+  state.internship.mentorTel = document.getElementById('mentorTelInput').value;
+  internSaveState();
+  closeModal();
+  render();
 };
 
 // -------------------------
@@ -9901,16 +10036,32 @@ window.internAutoSummarizeReflections = function() {
     showToast('❌ ไม่มีบันทึกรายวัน', 'err');
     return;
   }
-  showToast('⚙️ กำลังวิเคราะห์ AI Summary...');
-  setTimeout(() => {
-    const summary = "ตลอดช่วงสัปดาห์นี้ ข้าพเจ้าได้มีโอกาสศึกษาและปฏิบัติงานด้านการควบคุมคุณภาพวัสดุ ร่วมถึงสังเกตการดำเนินงานของสายการผลิตในโรงงาน โดยมีกิจกรรมหลักคือ การศึกษาขั้นตอนความปลอดภัยและทดสอบโครงสร้างทางจุลภาค";
-    openModal('📝 สรุปบันทึกการทำงานรายสัปดาห์', `
-      <div style="padding:10px;">
-        <textarea class="glass-textarea" style="width:100%; height:120px;" readonly>${summary}</textarea>
-        <button class="btn-glass-primary sm full" style="margin-top:10px;" onclick="navigator.clipboard.writeText(\`${summary}\`); showToast('📋 คัดลอกแล้ว');">📋 คัดลอก</button>
-      </div>
-    `);
-  }, 1000);
+  showToast('⚙️ กำลังวิเคราะห์ AI Summary...', 'wait');
+  if (typeof google !== 'undefined') {
+    google.script.run
+      .withSuccessHandler((summary) => {
+        openModal('📝 สรุปบันทึกการทำงานรายสัปดาห์', `
+          <div style="padding:10px;">
+            <textarea class="glass-textarea" style="width:100%; height:150px; font-size:12px; font-family:inherit; padding:10px; border:2px solid #000; border-radius:8px;" readonly>${summary}</textarea>
+            <button class="btn-glass-primary sm full" style="margin-top:10px;" onclick="navigator.clipboard.writeText(document.querySelector('.glass-textarea').value); showToast('📋 คัดลอกแล้ว');">📋 คัดลอก</button>
+          </div>
+        `);
+      })
+      .withFailureHandler((err) => {
+        showToast("❌ เกิดข้อผิดพลาดในการประมวลผล AI: " + err.message, "err");
+      })
+      .summarizeWithAnthropic(JSON.stringify(state.internship.dailyLogs));
+  } else {
+    setTimeout(() => {
+      const summary = "ตลอดช่วงสัปดาห์นี้ ข้าพเจ้าได้มีโอกาสศึกษาและปฏิบัติงานด้านการควบคุมคุณภาพวัสดุ...";
+      openModal('📝 สรุปบันทึกการทำงานรายสัปดาห์', `
+        <div style="padding:10px;">
+          <textarea class="glass-textarea" style="width:100%; height:120px;" readonly>${summary}</textarea>
+          <button class="btn-glass-primary sm full" style="margin-top:10px;" onclick="navigator.clipboard.writeText(\`${summary}\`); showToast('📋 คัดลอกแล้ว');">📋 คัดลอก</button>
+        </div>
+      `);
+    }, 1000);
+  }
 };
 
 window.internAddProblemLog = function() {
@@ -9927,8 +10078,55 @@ window.internSendEvalLink = function() {
 };
 
 window.internBackupDrive = function() {
-  showToast("🔄 กำลังอัปโหลดไฟล์รายงานทั้งหมดขึ้น Google Drive (Finished_Internship)...");
-  setTimeout(() => showToast("☁️ สำรองข้อมูลขึ้น Cloud สำเร็จ!", "ok"), 2000);
+  showToast("🔄 กำลังอัปโหลดไฟล์รายงานทั้งหมดขึ้น Google Drive (Finished_Internship)...", "wait");
+  if (typeof google !== 'undefined') {
+    google.script.run
+      .withSuccessHandler(() => {
+        showToast("☁️ สำรองข้อมูลขึ้น Cloud สำเร็จ!", "ok");
+      })
+      .withFailureHandler((err) => {
+        showToast("❌ เกิดข้อผิดพลาด: " + err.message, "err");
+      })
+      .backupInternshipData(JSON.stringify(state.internship));
+  } else {
+    setTimeout(() => showToast("☁️ สำรองข้อมูลขึ้น Cloud สำเร็จ!", "ok"), 2000);
+  }
+};
+
+window.internAddTheoryRef = function() {
+  const title = prompt("ชื่อทฤษฎี/อ้างอิง:");
+  if (!title) return;
+  const url = prompt("URL:");
+  state.internship.theoryRefs.push({title, url});
+  internSaveState();
+  render();
+};
+
+window.internCopyTheoryRef = function(idx) {
+  const ref = state.internship.theoryRefs[idx];
+  if(ref) {
+    navigator.clipboard.writeText(ref.title).then(() => showToast("คัดลอก: " + ref.title));
+  }
+};
+
+window.internDeleteTheoryRef = function(idx) {
+  if (confirm("ลบรายการนี้?")) {
+    state.internship.theoryRefs.splice(idx, 1);
+    internSaveState();
+    render();
+  }
+};
+
+window.internSaveExitNote = function() {
+  state.internship.exitNote = document.getElementById('exitNoteInput').value;
+  internSaveState();
+  showToast("บันทึก Note สำเร็จ");
+};
+
+window.internSetSatisfaction = function(val) {
+  state.internship.exitSatisfaction = val;
+  internSaveState();
+  render();
 };
 
 // -------------------------
@@ -9964,9 +10162,72 @@ window.internMentalCheck = function() {
   }
 };
 
+window.internClaimWizard = function() {
+  openModal('🚑 Injury Claim Wizard', `
+    <div style="text-align:left; font-size:12px; line-height:1.6;">
+      <h4 style="margin:0 0 10px; font-size:14px; color:var(--c-rust);">ขั้นตอนการเคลมค่ารักษา</h4>
+      <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox"> 1. ถ่ายรูปบาดเจ็บและสถานที่เกิดเหตุ</label>
+      <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox"> 2. เก็บใบเสร็จตัวจริง (ขอใบรับรองแพทย์)</label>
+      <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox"> 3. ยื่นเรื่องต่อภาควิชาภายใน 30 วัน</label>
+      <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox"> 4. รอการพิจารณาอนุมัติ 60 วัน</label>
+    </div>
+  `);
+};
+
 // -------------------------
 // BONUS LOGIC
 // -------------------------
+window.internStartFocus = function() {
+  state.internship.focusSessions++;
+  internSaveState();
+  showToast("🍅 เริ่มจับเวลา Pomodoro 25 นาทีสำหรับเขียนรายงาน!");
+  // Hook into existing timer if available
+  if(typeof window.startFocusTimer === 'function') window.startFocusTimer();
+};
+
+window.internAddContact = function() {
+  const name = prompt("ชื่อเพื่อน / คอนเนคชัน:");
+  if(name) {
+    state.internship.contacts.push(name);
+    internSaveState();
+    showToast("🤝 บันทึก Contact เรียบร้อย");
+  }
+};
+
+window.internAddFutureJob = function() {
+  const position = prompt("ตำแหน่งงาน:");
+  if (!position) return;
+  const company = prompt("บริษัท:");
+  if (!company) return;
+  const url = prompt("URL ที่ประกาศรับ:");
+  state.internship.futureJobs.push({position, company, url});
+  internSaveState();
+  render();
+};
+
+window.internDeleteFutureJob = function(idx) {
+  if (confirm("ลบรายการนี้?")) {
+    state.internship.futureJobs.splice(idx, 1);
+    internSaveState();
+    render();
+  }
+};
+
+window.internGratitudeReminder = function() {
+  openModal('🙏 Gratitude Email Template', `
+    <div style="text-align:left;">
+      <p style="font-size:12px; margin-bottom:10px;">เทมเพลตอีเมลขอบคุณพี่เลี้ยง <strong>${state.internship.mentorName || 'พี่เลี้ยง'}</strong></p>
+      <textarea id="gratitudeText" class="glass-textarea" style="width:100%; height:120px;" readonly>เรียน ${state.internship.mentorName || 'พี่เลี้ยง'},
+      
+ขอขอบพระคุณอย่างยิ่งสำหรับความกรุณาและการดูแลตลอดการฝึกงานที่ผ่านมา ผม/ดิฉันได้รับประสบการณ์ที่มีค่ามากมาย
+หากมีโอกาสหวังว่าจะได้ร่วมงานกันอีกครั้ง
+
+ขอแสดงความนับถือ
+${STUDENT.nameTh}</textarea>
+      <button class="btn-glass-primary sm full" style="margin-top:10px;" onclick="navigator.clipboard.writeText(document.getElementById('gratitudeText').value); showToast('📋 คัดลอกแล้ว'); closeModal();">📋 คัดลอก</button>
+    </div>
+  `);
+};
 window.internStartFocus = function() {
   state.internship.focusSessions++;
   internSaveState();
@@ -10005,7 +10266,7 @@ window.renderInternshipPage = function() {
             const c = iState.companies.find(x => x.id === id);
             if(!c) return '';
             return `
-              <div class="glass-card" style="padding:6px; font-size:11px; border:1px solid #000; background:#fff; cursor:pointer;" onclick="internMoveKanban('${id}', prompt('ย้ายไปสถานะ (interested, applied, interview, accepted):', '${c.status}'))">
+              <div class="glass-card" style="padding:6px; font-size:11px; border:1px solid #000; background:#fff; cursor:pointer;" onclick="internMoveKanban('${id}')">
                 <div style="font-weight:700;">${c.name}</div>
                 <div style="opacity:0.7; font-size:10px; margin-top:4px;">${c.note}</div>
               </div>
@@ -10015,6 +10276,33 @@ window.renderInternshipPage = function() {
       </div>
     `;
   };
+
+  const renderDeadlines = () => {
+    return iState.deadlines.map((d) => {
+      const daysLeft = Math.ceil((new Date(d.date) - new Date()) / (1000 * 60 * 60 * 24));
+      const badge = daysLeft <= 3 ? `<span style="background:#ef4444; color:#fff; padding:2px 6px; border-radius:4px; font-size:9px;">เหลือ ${daysLeft} วัน</span>` : `<span style="opacity:0.7;">เหลือ ${daysLeft} วัน</span>`;
+      return `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px dashed #cbd5e1; font-size:11px;">
+        <span>${d.label}</span>
+        <div style="display:flex; align-items:center; gap:6px;">${badge} <span style="font-size:10px;">${d.date}</span></div>
+      </div>`;
+    }).join('');
+  };
+
+  const recentLogsCount = iState.dailyLogs.filter(l => {
+    const d = new Date(l.date);
+    const now = new Date();
+    return (now - d) / (1000 * 60 * 60 * 24) <= 7;
+  }).length;
+  const hasOT = iState.dailyLogs.some(l => {
+    const d = new Date(l.date);
+    const now = new Date();
+    return ((now - d) / (1000 * 60 * 60 * 24) <= 7) && l.text.includes("OT");
+  });
+  const wlBalanceStatus = (recentLogsCount >= 6 || hasOT) ? `<span style="color:#ef4444;">⚠️ พักผ่อนบ้างนะ</span>` : `<span style="color:#22c55e;">💚 ปกติ</span>`;
+
+  const reportDaysLeft = Math.ceil((new Date(iState.reportDueDate) - new Date()) / (1000 * 60 * 60 * 24));
+  const reportCountdown = reportDaysLeft <= 7 ? `<span style="color:#ef4444;">เหลือ ${reportDaysLeft} วัน</span>` : `เหลือ ${reportDaysLeft} วัน`;
+
   
   return `
     <div class="page-wrap" style="padding-bottom:120px;">
@@ -10071,7 +10359,7 @@ window.renderInternshipPage = function() {
           </div>
 
           <!-- Tools Grid -->
-          <div class="widget-grid" style="gap:10px;">
+          <div class="widget-grid" style="gap:10px; margin-bottom:20px;">
             <div class="glass-card" style="border:2px solid #000; padding:12px; background:#f8fafc;">
               <div style="font-weight:800; font-size:12px; margin-bottom:6px;">📑 Transcript Automator</div>
               <button class="btn-glass-primary sm full" onclick="internCopyGrades()">📋 ก๊อปปี้วิชาพื้นฐาน</button>
@@ -10088,6 +10376,21 @@ window.renderInternshipPage = function() {
               <div style="font-weight:800; font-size:12px; margin-bottom:6px;">🗄️ Internship Archive</div>
               <button class="btn-glass sm full" onclick="showToast('รีวิวรุ่นพี่: Dow Chemical (Polymer) รับเกรด 3.00, Hoya Lens รับ 2.50')">🔍 ค้นหารีวิวบริษัทรุ่นพี่</button>
             </div>
+          </div>
+
+          <!-- Deadlines -->
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:20px;">
+            <div style="font-weight:800; font-size:12px; margin-bottom:8px; display:flex; justify-content:space-between;">
+              <span>📅 Deadlines & Alerts</span>
+              <button class="btn-glass sm" style="padding:2px 6px;" onclick="internAddDeadline()">+ เพิ่ม</button>
+            </div>
+            ${renderDeadlines()}
+          </div>
+          
+          <!-- Academic Check -->
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#f8fafc; display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:800; font-size:12px;">🎓 Academic Check</div>
+            <button class="btn-glass-primary sm" onclick="internCheckAcademicEligibility()">ตรวจสอบคุณสมบัติ</button>
           </div>
         </div>
       ` : ''}
@@ -10125,6 +10428,26 @@ window.renderInternshipPage = function() {
                 </label>
               `).join('')}
             </div>
+          </div>
+
+          <!-- Rule Cheat Sheet -->
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px;">
+            <div style="font-weight:800; font-size:12px; margin-bottom:8px;">📜 Rule Cheat Sheet</div>
+            <div style="display:flex; flex-direction:column; gap:6px; font-size:11px;">
+              <details style="background:#f8fafc; padding:8px; border-radius:6px; border:1px solid #e2e8f0;"><summary style="font-weight:700;">🚫 ห้ามลาเกิน 3 วัน</summary><div style="margin-top:4px; opacity:0.8;">ลาป่วย ลากิจ รวมกันห้ามเกิน 3 วันทำการ (หากเกินต้องพิจารณาซ้ำ)</div></details>
+              <details style="background:#f8fafc; padding:8px; border-radius:6px; border:1px solid #e2e8f0;"><summary style="font-weight:700;">👔 การแต่งกาย</summary><div style="margin-top:4px; opacity:0.8;">ต้องสวมชุดนิสิตถูกระเบียบ หรือชุดยูนิฟอร์มที่บริษัทอนุญาตเท่านั้น</div></details>
+              <details style="background:#f8fafc; padding:8px; border-radius:6px; border:1px solid #e2e8f0;"><summary style="font-weight:700;">🕒 เวลาเข้าออกงาน</summary><div style="margin-top:4px; opacity:0.8;">ต้องปฏิบัติตามเวลาของบริษัทอย่างเคร่งครัด ห้ามมาสาย</div></details>
+              <details style="background:#f8fafc; padding:8px; border-radius:6px; border:1px solid #e2e8f0;"><summary style="font-weight:700;">📚 การส่งรายงาน</summary><div style="margin-top:4px; opacity:0.8;">ต้องส่งรายงานฉบับสมบูรณ์ภายใน 30 วันหลังสิ้นสุดการฝึกงาน</div></details>
+            </div>
+          </div>
+
+          <!-- Insurance Quick-Link -->
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <div>
+              <div style="font-weight:800; font-size:12px;">🛡️ Insurance Quick-Link</div>
+              <div style="font-size:10px; font-weight:700; color:#15803d;">OPD 2,000 / IPD 20,000</div>
+            </div>
+            <button class="btn-glass sm" onclick="window.location.href='tel:024972201'">📞 ภาควิชา</button>
           </div>
 
           <!-- Mock Quiz Master -->
@@ -10181,9 +10504,38 @@ window.renderInternshipPage = function() {
           </div>
 
           <div class="glass-card" style="border:2px solid #000; padding:12px; background:#f8fafc; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
-            <div style="font-weight:800; font-size:12px;">📞 Mentor Contact Card</div>
-            <button class="btn-glass sm" onclick="internContactMentor()">โทรหาพี่เลี้ยงด่วน</button>
+            <div>
+              <div style="font-weight:800; font-size:12px;">📞 ${iState.mentorName || 'พี่เลี้ยง'}</div>
+              <div style="font-size:10px;">${iState.mentorTel || '-'}</div>
+            </div>
+            <div style="display:flex; gap:6px;">
+              <button class="btn-glass sm" onclick="internEditMentor()">✏️</button>
+              <button class="btn-glass-primary sm" onclick="internContactMentor()">โทร</button>
+            </div>
           </div>
+
+          <!-- WL Balance & Photo Diary -->
+          <div class="widget-grid" style="gap:10px; margin-bottom:15px;">
+            <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; text-align:center;">
+              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">⚖️ W/L Balance</div>
+              <div style="font-size:12px; font-weight:700;">${wlBalanceStatus}</div>
+            </div>
+            <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; text-align:center;">
+              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">📸 Photo Diary</div>
+              <button class="btn-glass sm full" onclick="internAddPhoto()">+ เพิ่มรูปภาพ</button>
+            </div>
+          </div>
+
+          <!-- Photo thumbnails -->
+          ${iState.photos && iState.photos.length > 0 ? `
+          <div style="display:flex; gap:10px; overflow-x:auto; margin-bottom:15px; padding-bottom:5px;">
+            ${iState.photos.map(p => `
+              <div class="glass-card" style="min-width:100px; border:1px solid #000; padding:4px; background:#fff;">
+                <img src="${p.dataUrl}" style="width:100px; height:70px; object-fit:cover; border-radius:4px;">
+                <div style="font-size:9px; text-align:center; margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${p.caption || p.date}</div>
+              </div>
+            `).join('')}
+          </div>` : ''}
 
           <!-- Skill Tagging -->
           <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px;">
@@ -10250,6 +10602,43 @@ window.renderInternshipPage = function() {
             </div>
           </div>
 
+          <!-- Report submission -->
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:800; font-size:12px;">⏳ Report Submission</div>
+            <div style="font-size:12px; font-weight:700;">${reportCountdown}</div>
+          </div>
+
+          <!-- Theory Ref -->
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px;">
+            <div style="font-weight:800; font-size:12px; margin-bottom:8px; display:flex; justify-content:space-between;">
+              <span>📚 Ref. Theory Library</span>
+              <button class="btn-glass sm" style="padding:2px 6px;" onclick="internAddTheoryRef()">+ เพิ่ม</button>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              ${iState.theoryRefs.map((r, idx) => `
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:6px; border:1px solid #e2e8f0; border-radius:6px; font-size:11px;">
+                  <a href="${r.url}" target="_blank" style="text-decoration:none; color:var(--primary); font-weight:700;">${r.title}</a>
+                  <div style="display:flex; gap:4px;">
+                    <button class="btn-glass sm" style="padding:2px 6px;" onclick="internCopyTheoryRef(${idx})">📋</button>
+                    <button class="btn-glass sm" style="padding:2px 6px; color:#ef4444;" onclick="internDeleteTheoryRef(${idx})">🗑️</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Exit Interview Note -->
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px;">
+            <div style="font-weight:800; font-size:12px; margin-bottom:8px;">📝 Exit Interview Note</div>
+            <textarea id="exitNoteInput" class="glass-textarea" style="width:100%; height:60px; font-size:11px; padding:6px; margin-bottom:8px;" placeholder="ความประทับใจ หรือข้อเสนอแนะ...">${iState.exitNote}</textarea>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-size:16px;">
+                ${[1,2,3,4,5].map(v => `<span style="cursor:pointer; opacity:${iState.exitSatisfaction >= v ? '1' : '0.3'};" onclick="internSetSatisfaction(${v})">⭐</span>`).join('')}
+              </div>
+              <button class="btn-glass-primary sm" onclick="internSaveExitNote()">บันทึก</button>
+            </div>
+          </div>
+
           <div class="glass-card" style="border:2px solid #000; padding:12px; background:#f8fafc; margin-bottom:15px;">
             <div style="font-weight:800; font-size:12px; margin-bottom:6px;">⚠️ Problem & Solution Log</div>
             <button class="btn-glass sm full" onclick="internAddProblemLog()">+ บันทึกปัญหาที่พบเพื่อเขียนรายงาน</button>
@@ -10282,6 +10671,17 @@ window.renderInternshipPage = function() {
               <button class="btn-glass-primary sm full" onclick="internSimulateOcrScanner()">📷 สแกนใบเสร็จเคลมประกัน</button>
               <div style="margin-top:10px; font-size:10px; font-weight:700; color:#15803d;">* OPD เบิกได้สูงสุด 2,000 บาท</div>
             </div>
+          </div>
+
+          <!-- Claim Wizard & Faculty Navigator -->
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:800; font-size:12px;">🚑 Injury Claim Wizard</div>
+            <button class="btn-glass sm" onclick="internClaimWizard()">ดูขั้นตอนเคลม</button>
+          </div>
+
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:800; font-size:12px;">🧭 Faculty Navigator</div>
+            <button class="btn-glass sm" onclick="window.open('https://maps.google.com/?q=14.0697,100.6057', '_blank')">เปิด Google Maps</button>
           </div>
 
           <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
@@ -10328,9 +10728,31 @@ window.renderInternshipPage = function() {
             </div>
           </div>
 
+          <!-- Future Job Bookmark -->
+          <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff; margin-bottom:15px;">
+            <div style="font-weight:800; font-size:12px; margin-bottom:8px; display:flex; justify-content:space-between;">
+              <span>👔 Future Job Bookmark</span>
+              <button class="btn-glass sm" style="padding:2px 6px;" onclick="internAddFutureJob()">+ เพิ่ม</button>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              ${iState.futureJobs.map((j, idx) => `
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:6px; border:1px solid #e2e8f0; border-radius:6px; font-size:11px;">
+                  <div>
+                    <div style="font-weight:700; color:var(--primary);">${j.position}</div>
+                    <div style="opacity:0.7; font-size:9px;">${j.company}</div>
+                  </div>
+                  <div style="display:flex; gap:4px;">
+                    <a href="${j.url}" target="_blank" class="btn-glass sm" style="padding:2px 6px; text-decoration:none;">🔗</a>
+                    <button class="btn-glass sm" style="padding:2px 6px; color:#ef4444;" onclick="internDeleteFutureJob(${idx})">🗑️</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          
           <div class="glass-card" style="border:2px solid #000; padding:12px; background:#f8fafc;">
             <div style="font-weight:800; font-size:12px; margin-bottom:8px;">🙏 Gratitude Reminder</div>
-            <button class="btn-glass sm full" onclick="showToast('📧 เตือนความจำ: อย่าลืมส่งอีเมลขอบคุณพี่เลี้ยงในวันสุดท้าย!')">ตั้งเตือนส่งเมลขอบคุณ</button>
+            <button class="btn-glass sm full" onclick="internGratitudeReminder()">ร่างอีเมลขอบคุณพี่เลี้ยง</button>
           </div>
         </div>
       ` : ''}
