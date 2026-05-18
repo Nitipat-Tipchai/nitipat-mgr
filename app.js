@@ -9637,15 +9637,15 @@ window.internCopyPortfolio = function() {
 window.internGenerateEmail = function() {
   const comp = prompt("ชื่อบริษัทเป้าหมาย:");
   if(!comp) return;
-  const text = \`เรียน ทีม HR บริษัท \${comp},
+  const text = `เรียน ทีม HR บริษัท ${comp},
 
-ข้าพเจ้า \${STUDENT.nameTh} นิสิตชั้นปีที่ 3 ภาควิชาวิศวกรรมวัสดุ มหาวิทยาลัยเกษตรศาสตร์ 
-มีความประสงค์ขอความอนุเคราะห์เข้าฝึกงานในแผนก... ของบริษัท \${comp} 
+ข้าพเจ้า ${STUDENT.nameTh} นิสิตชั้นปีที่ 3 ภาควิชาวิศวกรรมวัสดุ มหาวิทยาลัยเกษตรศาสตร์ 
+มีความประสงค์ขอความอนุเคราะห์เข้าฝึกงานในแผนก... ของบริษัท ${comp} 
 ในระหว่างวันที่ 1 เมษายน - 29 พฤษภาคม 2569
 
 จึงเรียนมาเพื่อโปรดพิจารณา
 ขอแสดงความนับถือ
-\${STUDENT.nameTh}\`;
+${STUDENT.nameTh}`;
   navigator.clipboard.writeText(text).then(() => showToast('📧 คัดลอกเทมเพลตอีเมลแล้ว!'));
 };
 
@@ -9676,7 +9676,7 @@ window.internGenerateForm101 = async function() {
     const blob = new Blob([pdfBytes], { type: "application/pdf" });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = \`Form101_\${STUDENT.id}.pdf\`;
+    link.download = `Form101_${STUDENT.id}.pdf`;
     link.click();
     showToast("✅ สร้างใบคำร้อง 101 สำเร็จ!", "ok");
   } catch (e) {
@@ -9686,7 +9686,7 @@ window.internGenerateForm101 = async function() {
 };
 
 window.internSignCanvas = function() {
-  openModal("✍️ Digital Signature", \`
+  openModal("✍️ Digital Signature", `
     <div style="text-align:center;">
       <canvas id="sigCanvas" width="300" height="150" style="border:2px solid #000; background:#fff; border-radius:8px; touch-action:none;"></canvas>
       <div style="margin-top:10px; display:flex; gap:10px; justify-content:center;">
@@ -9694,7 +9694,7 @@ window.internSignCanvas = function() {
         <button class="btn-glass-primary sm" onclick="internSaveSig()">บันทึกลายเซ็น</button>
       </div>
     </div>
-  \`);
+  `);
   
   setTimeout(() => {
     const canvas = document.getElementById('sigCanvas');
@@ -9786,7 +9786,7 @@ window.internTravelBudget = function() {
   const daily = parseFloat(prompt("ค่าเดินทางต่อวัน (บาท):") || 0);
   if (daily > 0) {
     const total = daily * 40; // Approx 40 working days
-    showToast(\`💰 งบเดินทางตลอด 2 เดือน: ประมาณ \${total.toLocaleString()} บาท\`);
+    showToast(`💰 งบเดินทางตลอด 2 เดือน: ประมาณ ${total.toLocaleString()} บาท`);
   }
 };
 
@@ -9809,7 +9809,7 @@ window.internCheckIn = function() {
     state.internship.totalHours = parseFloat((state.internship.totalHours + duration).toFixed(1));
     state.internship.checkedIn = false;
     state.internship.checkInTime = null;
-    showToast(\`✅ ออกงาน! สะสมรวม \${state.internship.totalHours} ชม.\`);
+    showToast(`✅ ออกงาน! สะสมรวม ${state.internship.totalHours} ชม.`);
     internSaveState();
   } else {
     if ("geolocation" in navigator) {
@@ -9817,11 +9817,11 @@ window.internCheckIn = function() {
         (pos) => {
           state.internship.checkedIn = true;
           state.internship.checkInTime = new Date().toLocaleTimeString();
-          showToast(\`📍 เช็คอินสำเร็จที่พิกัด \${pos.coords.latitude.toFixed(4)}, \${pos.coords.longitude.toFixed(4)}\`);
+          showToast(`📍 เช็คอินสำเร็จที่พิกัด ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`);
           render();
         },
         (err) => {
-          showToast(\`⚠️ ไม่สามารถดึงพิกัดได้ (เช็คอินแบบไม่ใช้ GPS)\`);
+          showToast(`⚠️ ไม่สามารถดึงพิกัดได้ (เช็คอินแบบไม่ใช้ GPS)`);
           state.internship.checkedIn = true;
           state.internship.checkInTime = new Date().toLocaleTimeString();
           render();
@@ -9860,7 +9860,7 @@ window.internAddAllowance = function() {
   if (amount > 0) {
     state.internship.totalAllowance += amount;
     internSaveState();
-    showToast(\`💰 บันทึกเบี้ยเลี้ยง +\${amount}฿ สำเร็จ\`);
+    showToast(`💰 บันทึกเบี้ยเลี้ยง +${amount}฿ สำเร็จ`);
     render();
   }
 };
@@ -9868,14 +9868,14 @@ window.internAddAllowance = function() {
 window.internTagSkill = function(skill) {
   state.internship.skills[skill] = (state.internship.skills[skill] || 0) + 1;
   internSaveState();
-  showToast(\`📈 บันทึกการใช้ทักษะ \${skill} วันนี้\`);
+  showToast(`📈 บันทึกการใช้ทักษะ ${skill} วันนี้`);
   render();
 };
 
 window.internLunchRoulette = function() {
   const places = ["ร้านป้าหัวมุม", "โรงอาหารโรงงาน", "ร้านข้าวมันไก่", "ร้านก๋วยเตี๋ยว", "7-Eleven"];
   const res = places[Math.floor(Math.random() * places.length)];
-  openModal("🎲 Lunch Roulette", \`<div style="text-align:center; font-size:20px; font-weight:800;">วันนี้ไปกิน...<br><span style="color:var(--c-accent); font-size:28px;">\${res}</span>!</div>\`);
+  openModal("🎲 Lunch Roulette", `<div style="text-align:center; font-size:20px; font-weight:800;">วันนี้ไปกิน...<br><span style="color:var(--c-accent); font-size:28px;">${res}</span>!</div>`);
 };
 
 window.internContactMentor = function() {
@@ -9904,12 +9904,12 @@ window.internAutoSummarizeReflections = function() {
   showToast('⚙️ กำลังวิเคราะห์ AI Summary...');
   setTimeout(() => {
     const summary = "ตลอดช่วงสัปดาห์นี้ ข้าพเจ้าได้มีโอกาสศึกษาและปฏิบัติงานด้านการควบคุมคุณภาพวัสดุ ร่วมถึงสังเกตการดำเนินงานของสายการผลิตในโรงงาน โดยมีกิจกรรมหลักคือ การศึกษาขั้นตอนความปลอดภัยและทดสอบโครงสร้างทางจุลภาค";
-    openModal('📝 สรุปบันทึกการทำงานรายสัปดาห์', \`
+    openModal('📝 สรุปบันทึกการทำงานรายสัปดาห์', `
       <div style="padding:10px;">
-        <textarea class="glass-textarea" style="width:100%; height:120px;" readonly>\${summary}</textarea>
-        <button class="btn-glass-primary sm full" style="margin-top:10px;" onclick="navigator.clipboard.writeText(\\\`\${summary}\\\`); showToast('📋 คัดลอกแล้ว');">📋 คัดลอก</button>
+        <textarea class="glass-textarea" style="width:100%; height:120px;" readonly>${summary}</textarea>
+        <button class="btn-glass-primary sm full" style="margin-top:10px;" onclick="navigator.clipboard.writeText(\\`${summary}\\`); showToast('📋 คัดลอกแล้ว');">📋 คัดลอก</button>
       </div>
-    \`);
+    `);
   }, 1000);
 };
 
@@ -9943,7 +9943,7 @@ window.internTriggerSOS = function() {
 window.internSimulateOcrScanner = function() {
   showToast('🔍 กำลังสแกนใบเสร็จด้วย AI OCR...');
   setTimeout(() => {
-    openModal('📄 ผลวิเคราะห์ใบเสร็จการรักษาพยาบาล', \`
+    openModal('📄 ผลวิเคราะห์ใบเสร็จการรักษาพยาบาล', `
       <div style="text-align:center; padding:10px;">
         <div style="font-size:32px; margin-bottom:10px;">🏥</div>
         <div style="font-weight:800; font-size:16px;">โรงพยาบาลวิภาราม</div>
@@ -9952,7 +9952,7 @@ window.internSimulateOcrScanner = function() {
           ✅ สามารถเบิกรับเงินช่วยเหลือจากกองทุนสวัสดิภาพนิสิตได้! (โควตา OPD สูงสุด 2,000 บาท)
         </div>
       </div>
-    \`);
+    `);
   }, 1200);
 };
 
@@ -9997,26 +9997,26 @@ window.renderInternshipPage = function() {
   // Phase 1 - Kanban rendering helper
   const renderKanbanCol = (title, statusId) => {
     const list = iState.kanban[statusId] || [];
-    return \`
+    return `
       <div style="flex:1; min-width:140px; background:rgba(255,255,255,0.4); border:1.5px solid #000; border-radius:6px; padding:8px;">
-        <div style="font-weight:800; font-size:12px; margin-bottom:8px; text-align:center;">\${title}</div>
+        <div style="font-weight:800; font-size:12px; margin-bottom:8px; text-align:center;">${title}</div>
         <div style="display:flex; flex-direction:column; gap:6px;">
-          \${list.map(id => {
+          ${list.map(id => {
             const c = iState.companies.find(x => x.id === id);
             if(!c) return '';
-            return \`
-              <div class="glass-card" style="padding:6px; font-size:11px; border:1px solid #000; background:#fff; cursor:pointer;" onclick="internMoveKanban('\${id}', prompt('ย้ายไปสถานะ (interested, applied, interview, accepted):', '\${c.status}'))">
-                <div style="font-weight:700;">\${c.name}</div>
-                <div style="opacity:0.7; font-size:10px; margin-top:4px;">\${c.note}</div>
+            return `
+              <div class="glass-card" style="padding:6px; font-size:11px; border:1px solid #000; background:#fff; cursor:pointer;" onclick="internMoveKanban('${id}', prompt('ย้ายไปสถานะ (interested, applied, interview, accepted):', '${c.status}'))">
+                <div style="font-weight:700;">${c.name}</div>
+                <div style="opacity:0.7; font-size:10px; margin-top:4px;">${c.note}</div>
               </div>
-            \`;
+            `;
           }).join('')}
         </div>
       </div>
-    \`;
+    `;
   };
   
-  return \`
+  return `
     <div class="page-wrap" style="padding-bottom:120px;">
       <div class="page-header-row" style="margin-bottom:20px;">
         <h1 class="page-title" style="display:flex; align-items:center; gap:10px; font-size:24px;">
@@ -10026,32 +10026,32 @@ window.renderInternshipPage = function() {
 
       <!-- Navigation Tabs -->
       <div class="glass-card" style="display:flex; gap:8px; padding:8px; border:2.5px solid #000; box-shadow: 4px 4px 0px #000; margin-bottom:20px; overflow-x:auto; white-space:nowrap; scrollbar-width: none;">
-        <button class="btn-glass sm \${iState.activePhase === 1 ? 'active' : ''}" onclick="changeInternPhase(1)" style="flex:1; font-weight:800;">1. ยื่นสมัคร</button>
-        <button class="btn-glass sm \${iState.activePhase === 2 ? 'active' : ''}" onclick="changeInternPhase(2)" style="flex:1; font-weight:800;">2. อบรม</button>
-        <button class="btn-glass sm \${iState.activePhase === 3 ? 'active' : ''}" onclick="changeInternPhase(3)" style="flex:1; font-weight:800;">3. ปฏิบัติงาน</button>
-        <button class="btn-glass sm \${iState.activePhase === 4 ? 'active' : ''}" onclick="changeInternPhase(4)" style="flex:1; font-weight:800;">4. รายงาน</button>
-        <button class="btn-glass sm \${iState.activePhase === 5 ? 'active' : ''}" onclick="changeInternPhase(5)" style="flex:1; font-weight:800; color:var(--c-rust);">5. ฉุกเฉิน</button>
-        <button class="btn-glass sm \${iState.activePhase === 6 ? 'active' : ''}" onclick="changeInternPhase(6)" style="flex:1; font-weight:800; color:#8b5cf6;">⭐ โบนัส</button>
+        <button class="btn-glass sm ${iState.activePhase === 1 ? 'active' : ''}" onclick="changeInternPhase(1)" style="flex:1; font-weight:800;">1. ยื่นสมัคร</button>
+        <button class="btn-glass sm ${iState.activePhase === 2 ? 'active' : ''}" onclick="changeInternPhase(2)" style="flex:1; font-weight:800;">2. อบรม</button>
+        <button class="btn-glass sm ${iState.activePhase === 3 ? 'active' : ''}" onclick="changeInternPhase(3)" style="flex:1; font-weight:800;">3. ปฏิบัติงาน</button>
+        <button class="btn-glass sm ${iState.activePhase === 4 ? 'active' : ''}" onclick="changeInternPhase(4)" style="flex:1; font-weight:800;">4. รายงาน</button>
+        <button class="btn-glass sm ${iState.activePhase === 5 ? 'active' : ''}" onclick="changeInternPhase(5)" style="flex:1; font-weight:800; color:var(--c-rust);">5. ฉุกเฉิน</button>
+        <button class="btn-glass sm ${iState.activePhase === 6 ? 'active' : ''}" onclick="changeInternPhase(6)" style="flex:1; font-weight:800; color:#8b5cf6;">⭐ โบนัส</button>
       </div>
 
       <!-- General Stats Widget -->
       <div class="glass-card" style="border:2.5px solid #000; box-shadow: 4px 4px 0px #000; padding:15px; margin-bottom:20px; display:flex; align-items:center; gap:15px;">
         <div style="flex:1;">
           <div style="font-size:11px; font-weight:800; color:var(--c-muted); text-transform:uppercase;">ชั่วโมงสะสม</div>
-          <div style="font-size:32px; font-weight:900; color:#22c55e; margin:2px 0; line-height:1;">\${iState.totalHours} <span style="font-size:14px;">/ 240 ชม.</span></div>
+          <div style="font-size:32px; font-weight:900; color:#22c55e; margin:2px 0; line-height:1;">${iState.totalHours} <span style="font-size:14px;">/ 240 ชม.</span></div>
           <div style="width:100%; height:8px; background:#e2e8f0; border:1px solid #000; border-radius:4px; overflow:hidden;">
-            <div style="width:\${progressPercent}%; height:100%; background:#22c55e;"></div>
+            <div style="width:${progressPercent}%; height:100%; background:#22c55e;"></div>
           </div>
         </div>
         <div style="flex:1; display:flex; flex-direction:column; gap:6px; font-size:11px; font-weight:700;">
-          <div style="display:flex; justify-content:space-between; border-bottom:1px dashed #cbd5e1; padding-bottom:4px;"><span>💰 เบี้ยเลี้ยง:</span> <span style="color:#2563eb;">\${iState.totalAllowance.toLocaleString()} ฿</span></div>
-          <div style="display:flex; justify-content:space-between; border-bottom:1px dashed #cbd5e1; padding-bottom:4px;"><span>📝 Log สะสม:</span> <span>\${iState.dailyLogs.length} วัน</span></div>
+          <div style="display:flex; justify-content:space-between; border-bottom:1px dashed #cbd5e1; padding-bottom:4px;"><span>💰 เบี้ยเลี้ยง:</span> <span style="color:#2563eb;">${iState.totalAllowance.toLocaleString()} ฿</span></div>
+          <div style="display:flex; justify-content:space-between; border-bottom:1px dashed #cbd5e1; padding-bottom:4px;"><span>📝 Log สะสม:</span> <span>${iState.dailyLogs.length} วัน</span></div>
           <div style="display:flex; justify-content:space-between;"><span>🎓 เกณฑ์วิชา:</span> <span style="color:#22c55e;">ผ่านแล้ว</span></div>
         </div>
       </div>
 
       <!-- Phase-Specific Panels -->
-      \${iState.activePhase === 1 ? \`
+      ${iState.activePhase === 1 ? `
         <!-- Phase 1: Preparation & Application -->
         <div class="glass-card" style="border:2.5px solid #000; box-shadow: 4px 4px 0px #000; padding:15px; margin-bottom:20px;">
           <h3 style="font-weight:900; font-size:16px; margin:0 0 10px; color:var(--c-accent);">📥 Phase 1: Preparation & Application</h3>
@@ -10063,10 +10063,10 @@ window.renderInternshipPage = function() {
               <button class="btn-glass sm" onclick="internAddCompany()">+ เพิ่มบริษัท</button>
             </div>
             <div style="display:flex; gap:10px; overflow-x:auto; padding-bottom:10px;">
-              \${renderKanbanCol('🤔 สนใจ', 'interested')}
-              \${renderKanbanCol('📤 ส่งเมลแล้ว', 'applied')}
-              \${renderKanbanCol('💬 รอสัมภาษณ์', 'interview')}
-              \${renderKanbanCol('✅ ตอบรับ', 'accepted')}
+              ${renderKanbanCol('🤔 สนใจ', 'interested')}
+              ${renderKanbanCol('📤 ส่งเมลแล้ว', 'applied')}
+              ${renderKanbanCol('💬 รอสัมภาษณ์', 'interview')}
+              ${renderKanbanCol('✅ ตอบรับ', 'accepted')}
             </div>
           </div>
 
@@ -10090,9 +10090,9 @@ window.renderInternshipPage = function() {
             </div>
           </div>
         </div>
-      \` : ''}
+      ` : ''}
 
-      \${iState.activePhase === 2 ? \`
+      ${iState.activePhase === 2 ? `
         <!-- Phase 2: Official Process & Orientation -->
         <div class="glass-card" style="border:2.5px solid #000; box-shadow: 4px 4px 0px #000; padding:15px; margin-bottom:20px;">
           <h3 style="font-weight:900; font-size:16px; margin:0 0 10px; color:var(--c-accent);">🏫 Phase 2: Official Process & Orientation</h3>
@@ -10119,11 +10119,11 @@ window.renderInternshipPage = function() {
           <div class="glass-card" style="border:2px solid #000; padding:12px; background:rgba(255,255,255,0.6); margin-bottom:15px;">
             <div style="font-weight:800; font-size:13px; margin-bottom:8px;">📢 Orientation Tracker (4 ครั้ง)</div>
             <div style="display:flex; flex-direction:column; gap:6px; font-size:11px; font-weight:700;">
-              \${['ครั้งที่ 1 (ส.ค.)', 'ครั้งที่ 2 (ต.ค.)', 'ครั้งที่ 3 (ธ.ค.)', 'ครั้งที่ 4 (มี.ค.)'].map((title, i) => \`
+              ${['ครั้งที่ 1 (ส.ค.)', 'ครั้งที่ 2 (ต.ค.)', 'ครั้งที่ 3 (ธ.ค.)', 'ครั้งที่ 4 (มี.ค.)'].map((title, i) => `
                 <label style="display:flex; align-items:center; gap:6px;">
-                  <input type="checkbox" \${iState.orientationAttendance[i] ? 'checked' : ''} onchange="internToggleOrientation(\${i})"> \${title}
+                  <input type="checkbox" ${iState.orientationAttendance[i] ? 'checked' : ''} onchange="internToggleOrientation(${i})"> ${title}
                 </label>
-              \`).join('')}
+              `).join('')}
             </div>
           </div>
 
@@ -10131,39 +10131,39 @@ window.renderInternshipPage = function() {
           <div class="glass-card" style="border:2px solid #000; padding:15px; background:#fff;">
             <div style="font-weight:900; font-size:13px; margin-bottom:10px; display:flex; justify-content:space-between;">
               <span>🧮 Mock Quiz Master</span>
-              \${iState.mockQuizCompleted ? '<span style="color:#22c55e;">ผ่านแล้ว 100%</span>' : '<span style="color:#f97316;">ยังไม่สอบ</span>'}
+              ${iState.mockQuizCompleted ? '<span style="color:#22c55e;">ผ่านแล้ว 100%</span>' : '<span style="color:#f97316;">ยังไม่สอบ</span>'}
             </div>
             <div style="display:flex; flex-direction:column; gap:12px; font-size:11px; font-weight:700; margin-bottom:10px;">
               <div>
                 <p style="margin:0 0 4px;">1. หากจำเป็นต้องลากิจ ต้องทำอย่างไร?</p>
-                <label style="margin-right:15px;"><input type="radio" name="q1" value="0" \${iState.mockQuizCompleted ? 'checked' : ''}> แจ้งพี่เลี้ยงและส่งใบลา</label>
+                <label style="margin-right:15px;"><input type="radio" name="q1" value="0" ${iState.mockQuizCompleted ? 'checked' : ''}> แจ้งพี่เลี้ยงและส่งใบลา</label>
                 <label><input type="radio" name="q1" value="1"> ไม่ต้องแจ้งใคร</label>
               </div>
               <div>
                 <p style="margin:0 0 4px;">2. จำนวนวันที่อนุญาตให้ลาป่วยสูงสุด?</p>
-                <label style="margin-right:15px;"><input type="radio" name="q2" value="0" \${iState.mockQuizCompleted ? 'checked' : ''}> ไม่เกิน 3 วัน</label>
+                <label style="margin-right:15px;"><input type="radio" name="q2" value="0" ${iState.mockQuizCompleted ? 'checked' : ''}> ไม่เกิน 3 วัน</label>
                 <label><input type="radio" name="q2" value="1"> 7 วัน</label>
               </div>
             </div>
             <button class="btn-glass-primary sm full" onclick="internSubmitQuiz()">🔥 ยืนยันคำตอบ</button>
           </div>
         </div>
-      \` : ''}
+      ` : ''}
 
-      \${iState.activePhase === 3 ? \`
+      ${iState.activePhase === 3 ? `
         <!-- Phase 3: During Internship -->
         <div class="glass-card" style="border:2.5px solid #000; box-shadow: 4px 4px 0px #000; padding:15px; margin-bottom:20px;">
           <h3 style="font-weight:900; font-size:16px; margin:0 0 10px; color:var(--c-accent);">🛠️ Phase 3: During Internship</h3>
           
           <div class="widget-grid" style="gap:10px; margin-bottom:15px;">
             <!-- Check-in -->
-            <div class="glass-card" style="border:2px solid #000; padding:15px; text-align:center; background:\${iState.checkedIn ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.6)'};">
+            <div class="glass-card" style="border:2px solid #000; padding:15px; text-align:center; background:${iState.checkedIn ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.6)'};">
               <div style="font-weight:800; font-size:13px; margin-bottom:10px;">📍 Smart Check-in (GPS)</div>
-              <button class="btn-glass-primary" onclick="internCheckIn()" style="background:\${iState.checkedIn ? '#ef4444' : '#22c55e'}; border-color:#000; color:#fff; font-weight:900; width:120px; height:45px; font-size:14px;">
-                \${iState.checkedIn ? '⏹️ Clock Out' : '▶️ Clock In'}
+              <button class="btn-glass-primary" onclick="internCheckIn()" style="background:${iState.checkedIn ? '#ef4444' : '#22c55e'}; border-color:#000; color:#fff; font-weight:900; width:120px; height:45px; font-size:14px;">
+                ${iState.checkedIn ? '⏹️ Clock Out' : '▶️ Clock In'}
               </button>
               <div style="font-size:10px; margin-top:8px; font-weight:700;">
-                \${iState.checkedIn ? \`<span style="color:#22c55e;">เข้างาน: \${iState.checkInTime}</span>\` : 'ยังไม่ได้ลงเวลา'}
+                ${iState.checkedIn ? `<span style="color:#22c55e;">เข้างาน: ${iState.checkInTime}</span>` : 'ยังไม่ได้ลงเวลา'}
               </div>
             </div>
 
@@ -10210,17 +10210,17 @@ window.renderInternshipPage = function() {
               <button class="btn-glass sm" onclick="internGenerateWorkLog()">📄 เจน PDF ใบลงเวลา</button>
             </div>
             <div style="display:flex; flex-direction:column; gap:8px; max-height:120px; overflow-y:auto; padding-right:4px;">
-              \${iState.dailyLogs.map(l => \`
+              ${iState.dailyLogs.map(l => `
                 <div class="glass-card" style="border:1.5px solid #000; padding:8px; font-size:11px; background:rgba(255,255,255,0.8);">
-                  <strong style="color:var(--c-accent);">\${l.date}</strong>: \${l.text}
+                  <strong style="color:var(--c-accent);">${l.date}</strong>: ${l.text}
                 </div>
-              \`).join('')}
+              `).join('')}
             </div>
           </div>
         </div>
-      \` : ''}
+      ` : ''}
 
-      \${iState.activePhase === 4 ? \`
+      ${iState.activePhase === 4 ? `
         <!-- Phase 4: Reporting & Evaluation -->
         <div class="glass-card" style="border:2.5px solid #000; box-shadow: 4px 4px 0px #000; padding:15px; margin-bottom:20px;">
           <h3 style="font-weight:900; font-size:16px; margin:0 0 10px; color:var(--c-accent);">✍️ Phase 4: Reporting & Evaluation</h3>
@@ -10228,12 +10228,12 @@ window.renderInternshipPage = function() {
           <div class="widget-grid" style="gap:10px; margin-bottom:15px;">
             <!-- Envelope checklist -->
             <div class="glass-card" style="border:2px solid #000; padding:12px; background:#fff;">
-              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">📦 เอกสารปิดผนึก (\${envelopeCompletedCount}/4)</div>
+              <div style="font-weight:800; font-size:12px; margin-bottom:8px;">📦 เอกสารปิดผนึก (${envelopeCompletedCount}/4)</div>
               <div style="display:flex; flex-direction:column; gap:6px; font-size:11px; font-weight:700;">
-                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" \${iState.envelopeChecked.env_form ? 'checked' : ''} onchange="internToggleEnvelope('env_form')"> ใบคำร้อง</label>
-                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" \${iState.envelopeChecked.env_time ? 'checked' : ''} onchange="internToggleEnvelope('env_time')"> ใบลงเวลา</label>
-                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" \${iState.envelopeChecked.env_eval ? 'checked' : ''} onchange="internToggleEnvelope('env_eval')"> ใบประเมิน</label>
-                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" \${iState.envelopeChecked.env_book ? 'checked' : ''} onchange="internToggleEnvelope('env_book')"> เล่มรายงาน</label>
+                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" ${iState.envelopeChecked.env_form ? 'checked' : ''} onchange="internToggleEnvelope('env_form')"> ใบคำร้อง</label>
+                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" ${iState.envelopeChecked.env_time ? 'checked' : ''} onchange="internToggleEnvelope('env_time')"> ใบลงเวลา</label>
+                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" ${iState.envelopeChecked.env_eval ? 'checked' : ''} onchange="internToggleEnvelope('env_eval')"> ใบประเมิน</label>
+                <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" ${iState.envelopeChecked.env_book ? 'checked' : ''} onchange="internToggleEnvelope('env_book')"> เล่มรายงาน</label>
               </div>
             </div>
 
@@ -10260,9 +10260,9 @@ window.renderInternshipPage = function() {
             <button class="btn-glass-primary sm" onclick="internBackupDrive()">สำรองไฟล์ขึ้น Drive</button>
           </div>
         </div>
-      \` : ''}
+      ` : ''}
 
-      \${iState.activePhase === 5 ? \`
+      ${iState.activePhase === 5 ? `
         <!-- Phase 5: Welfare & SOS -->
         <div class="glass-card" style="border:2.5px solid #000; box-shadow: 4px 4px 0px #000; padding:15px; margin-bottom:20px; border-left: 6px solid var(--c-rust);">
           <h3 style="font-weight:900; font-size:16px; margin:0 0 10px; color:var(--c-rust);">🏥 Phase 5: Welfare & Emergency</h3>
@@ -10294,9 +10294,9 @@ window.renderInternshipPage = function() {
             <button class="btn-glass sm full" onclick="internMentalCheck()">📝 ทำแบบประเมินความเครียด</button>
           </div>
         </div>
-      \` : ''}
+      ` : ''}
 
-      \${iState.activePhase === 6 ? \`
+      ${iState.activePhase === 6 ? `
         <!-- Bonus Phase -->
         <div class="glass-card" style="border:2.5px solid #000; box-shadow: 4px 4px 0px #000; padding:15px; margin-bottom:20px; border-left: 6px solid #8b5cf6;">
           <h3 style="font-weight:900; font-size:16px; margin:0 0 10px; color:#8b5cf6;">⭐ Bonus: Gamification & Network</h3>
@@ -10317,11 +10317,11 @@ window.renderInternshipPage = function() {
           <div class="glass-card" style="border:2px solid #000; padding:12px; background:#f8fafc; margin-bottom:15px;">
             <div style="font-weight:800; font-size:12px; margin-bottom:8px;">🏆 Internship Badges</div>
             <div style="display:flex; gap:8px;">
-              <div style="opacity: \${iState.totalHours > 0 ? '1' : '0.4'}; text-align:center;">
+              <div style="opacity: ${iState.totalHours > 0 ? '1' : '0.4'}; text-align:center;">
                 <div style="font-size:24px;">🌱</div>
                 <div style="font-size:10px; font-weight:700;">First Step</div>
               </div>
-              <div style="opacity: \${iState.dailyLogs.length >= 5 ? '1' : '0.4'}; text-align:center;">
+              <div style="opacity: ${iState.dailyLogs.length >= 5 ? '1' : '0.4'}; text-align:center;">
                 <div style="font-size:24px;">📝</div>
                 <div style="font-size:10px; font-weight:700;">Doc King</div>
               </div>
@@ -10333,7 +10333,7 @@ window.renderInternshipPage = function() {
             <button class="btn-glass sm full" onclick="showToast('📧 เตือนความจำ: อย่าลืมส่งอีเมลขอบคุณพี่เลี้ยงในวันสุดท้าย!')">ตั้งเตือนส่งเมลขอบคุณ</button>
           </div>
         </div>
-      \` : ''}
+      ` : ''}
     </div>
 
     <style>
@@ -10343,5 +10343,5 @@ window.renderInternshipPage = function() {
         100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
       }
     </style>
-  \`;
+  `;
 };
