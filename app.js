@@ -9907,7 +9907,7 @@ window.internAutoSummarizeReflections = function() {
     openModal('📝 สรุปบันทึกการทำงานรายสัปดาห์', `
       <div style="padding:10px;">
         <textarea class="glass-textarea" style="width:100%; height:120px;" readonly>${summary}</textarea>
-        <button class="btn-glass-primary sm full" style="margin-top:10px;" onclick="navigator.clipboard.writeText(\\`${summary}\\`); showToast('📋 คัดลอกแล้ว');">📋 คัดลอก</button>
+        <button class="btn-glass-primary sm full" style="margin-top:10px;" onclick="navigator.clipboard.writeText(\`${summary}\`); showToast('📋 คัดลอกแล้ว');">📋 คัดลอก</button>
       </div>
     `);
   }, 1000);
