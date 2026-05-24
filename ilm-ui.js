@@ -1779,11 +1779,26 @@ function saveNewCompany() {
 
 function openDocumentHubModal() {
   state.ilmSelectedFileId = null;
+  state.ilmCurrentFolderId = state.ilmCurrentFolderId || 'root';
   renderILMExplorer();
 }
 
 function renderILMExplorer() {
-  openModal('📁 คลังจัดการเอกสารการสมัครฝึกงาน (Internship Drive)', renderILMExplorerHTML());
+  // Render as full-page overlay instead of modal to prevent re-render flicker
+  let overlay = document.getElementById('ilm-drive-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'ilm-drive-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;background:var(--bg);overflow-y:auto;box-sizing:border-box;';
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = renderILMExplorerHTML();
+  overlay.style.display = 'block';
+}
+
+function closeILMDriveOverlay() {
+  const overlay = document.getElementById('ilm-drive-overlay');
+  if (overlay) overlay.style.display = 'none';
 }
 
 function getILMFolderBreadcrumbs() {
@@ -1824,21 +1839,31 @@ function renderILMExplorerHTML() {
   const crumbs = getILMFolderBreadcrumbs();
   const folderItems = state.ilmFiles.filter(f => f.parentId === state.ilmCurrentFolderId);
   const hasSelection = state.ilmSelectedFileId !== null;
+  // Detect real GAS connection: check if a real GAS_WEB_APP_URL is set and not just the proxy stub
+  const isGasConnected = window._gasRealConnected === true;
   
   return `
-    <div style="font-family:Sarabun, sans-serif; text-align:left;">
-      <!-- Sync Status Banner -->
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; font-size:0.75rem; color:var(--text-muted);">
-        <span>ระบบคลังสองประสาน (Google Drive + Local Storage Sync)</span>
-        <span id="ilm-drive-sync-status" style="font-weight:700; color:var(--i-emerald);">
-          ${(typeof google !== 'undefined' && google.script) ? '☁️ Google Drive ซิงค์อัตโนมัติ' : '💾 โหมดสำรอง Local Storage'}
-        </span>
+    <div style="font-family:Sarabun, sans-serif; text-align:left; min-height:100vh; padding:16px; box-sizing:border-box; background:var(--bg);">
+      
+      <!-- Header Bar -->
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid var(--i-border);">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:1.5rem;">📁</span>
+          <div>
+            <div style="font-size:1rem; font-weight:800; color:var(--text);">คลังเอกสารส่วนตัว</div>
+            <div style="font-size:0.72rem; color:var(--text-muted);">Nitipat Internship Drive</div>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:0.7rem; font-weight:700; color:${isGasConnected ? 'var(--i-emerald)' : '#64748b'};">${isGasConnected ? '☁️ Google Drive' : '💾 Local'}</span>
+          <button onclick="closeILMDriveOverlay()" style="border:none; background:rgba(0,0,0,0.08); border-radius:50%; width:32px; height:32px; font-size:1.1rem; cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text);">✕</button>
+        </div>
       </div>
 
       <!-- Action Toolbar -->
-      <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(30, 58, 138, 0.04); border:1px solid var(--i-border); border-radius:12px; padding:10px 14px; margin-bottom:15px; flex-wrap:wrap; gap:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(30, 58, 138, 0.04); border:1px solid var(--i-border); border-radius:12px; padding:10px 14px; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
         <!-- Breadcrumbs -->
-        <div style="display:flex; align-items:center; gap:4px; font-weight:700; font-size:0.85rem;">
+        <div style="display:flex; align-items:center; gap:4px; font-weight:700; font-size:0.85rem; flex-wrap:wrap;">
           ${crumbs.map((c, idx) => `
             ${idx > 0 ? '<span style="opacity:0.5; margin:0 2px;">/</span>' : ''}
             <span style="color:${idx === crumbs.length - 1 ? 'var(--text-muted)' : 'var(--i-primary-light)'}; cursor:${idx === crumbs.length - 1 ? 'default' : 'pointer'};" 
@@ -1857,31 +1882,31 @@ function renderILMExplorerHTML() {
             <div style="width:1px; height:18px; background:var(--i-border);"></div>
           ` : ''}
           <button onclick="createILMFolder()" title="สร้างโฟลเดอร์ใหม่" style="border:none; background:transparent; cursor:pointer; padding:2px;">📁+</button>
-          <button onclick="document.getElementById('ilm-upload-input').click()" title="อัปโหลดไฟล์" style="border:none; background:transparent; cursor:pointer; padding:2px;">↑</button>
+          <button onclick="document.getElementById('ilm-upload-input').click()" title="อัปโหลดไฟล์" style="border:none; background:transparent; cursor:pointer; padding:2px; font-size:1.4rem;">⬆️</button>
           <input type="file" id="ilm-upload-input" style="display:none" onchange="handleILMUpload(this)">
         </div>
       </div>
 
       <!-- Main Explorer Files Grid -->
-      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(95px, 1fr)); gap:10px; min-height:220px; max-height:280px; overflow-y:auto; border:1px solid var(--i-border); border-radius:12px; padding:12px; background:var(--bg);" id="ilm-drive-grid">
+      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr)); gap:12px; padding:12px; background:var(--bg); border:1px solid var(--i-border); border-radius:12px;" id="ilm-drive-grid">
         ${folderItems.length === 0 ? `
-          <div style="grid-column:1/-1; display:flex; flex-direction:column; align-items:center; justify-content:center; height:180px; color:var(--text-muted); font-size:0.8rem; text-align:center;">
-            <div style="font-size:2.5rem; margin-bottom:10px;">☁️</div>
-            <div>โฟลเดอร์นี้ว่างเปล่า</div>
-            <div style="font-size:0.7rem; opacity:0.8; margin-top:4px;">กดปุ่ม ↑ อัปโหลดไฟล์ หรือ 📁+ เพื่อสร้างโฟลเดอร์ย่อย</div>
+          <div style="grid-column:1/-1; display:flex; flex-direction:column; align-items:center; justify-content:center; height:220px; color:var(--text-muted); font-size:0.8rem; text-align:center;">
+            <div style="font-size:3rem; margin-bottom:12px;">☁️</div>
+            <div style="font-weight:600;">โฟลเดอร์นี้ว่างเปล่า</div>
+            <div style="font-size:0.7rem; opacity:0.8; margin-top:6px;">กดปุ่ม ⬆️ อัปโหลดไฟล์ หรือ 📁+ เพื่อสร้างโฟลเดอร์ย่อย</div>
           </div>
         ` : folderItems.map(item => `
           <div class="ilm-drive-card ${state.ilmSelectedFileId === item.id ? 'selected' : ''}" 
-               style="position:relative; background:var(--i-card-bg); border:1px solid ${state.ilmSelectedFileId === item.id ? 'var(--i-primary-light)' : 'var(--i-border)'}; border-radius:12px; padding:14px 8px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; cursor:pointer; transition:all 0.2s ease;"
+               style="position:relative; background:var(--i-card-bg); border:2px solid ${state.ilmSelectedFileId === item.id ? 'var(--i-primary-light)' : 'var(--i-border)'}; border-radius:14px; padding:16px 8px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; cursor:pointer; transition:all 0.2s ease; box-shadow:${state.ilmSelectedFileId === item.id ? '0 0 0 3px rgba(59,130,246,0.15)' : 'none'};" 
                onclick="handleILMDriveCardClick(event, '${item.id}', '${item.type}')">
             
             <!-- Selection Checkbox Dot -->
             <div onclick="handleILMSelectionToggle(event, '${item.id}')" 
-                 style="position:absolute; top:6px; right:6px; width:16px; height:16px; border-radius:50%; border:1.5px solid ${state.ilmSelectedFileId === item.id ? 'var(--i-primary-light)' : '#cbd5e1'}; background:${state.ilmSelectedFileId === item.id ? 'var(--i-primary-light)' : 'transparent'}; display:flex; align-items:center; justify-content:center; font-size:9px; color:white; font-weight:bold;">
+                 style="position:absolute; top:7px; right:7px; width:18px; height:18px; border-radius:50%; border:2px solid ${state.ilmSelectedFileId === item.id ? 'var(--i-primary-light)' : '#cbd5e1'}; background:${state.ilmSelectedFileId === item.id ? 'var(--i-primary-light)' : 'transparent'}; display:flex; align-items:center; justify-content:center; font-size:10px; color:white; font-weight:bold; transition:all 0.15s ease;">
               ${state.ilmSelectedFileId === item.id ? '✓' : ''}
             </div>
 
-            <div style="font-size:2.2rem; margin-bottom:8px;">
+            <div style="font-size:2.4rem; margin-bottom:10px;">
               ${item.type === 'folder' ? '📁' : (item.name.toLowerCase().endsWith('.pdf') ? '📄' : (item.name.toLowerCase().endsWith('.png') || item.name.toLowerCase().endsWith('.jpg') ? '🖼️' : '📝'))}
             </div>
 
@@ -1889,16 +1914,16 @@ function renderILMExplorerHTML() {
               ${item.name}
             </div>
             
-            <div style="font-size:0.62rem; color:var(--text-muted); margin-top:2px;">
+            <div style="font-size:0.62rem; color:var(--text-muted); margin-top:3px;">
               ${item.type === 'folder' ? 'โฟลเดอร์' : item.size}
             </div>
           </div>
         `).join('')}
       </div>
       
-      <div style="display:flex; justify-content:flex-end; margin-top:15px; gap:8px;">
-        ${state.ilmCurrentFolderId !== 'root' ? `<button class="i-btn sm" onclick="navigateILMFolder('root')">🏠 กลับห้องหลัก</button>` : ''}
-        <button class="i-btn i-btn-primary sm" onclick="closeModal()">ตกลง (เสร็จสิ้น)</button>
+      <div style="display:flex; justify-content:space-between; margin-top:16px; gap:8px;">
+        ${state.ilmCurrentFolderId !== 'root' ? `<button class="i-btn sm" onclick="navigateILMFolder('root')">🏠 กลับหน้าหลัก</button>` : '<div></div>'}
+        <button class="i-btn i-btn-primary sm" onclick="closeILMDriveOverlay()">✓ เสร็จสิ้น</button>
       </div>
     </div>
   `;
@@ -2076,7 +2101,7 @@ function openILMFileShareModal() {
       
       <div style="display:flex; gap:10px; margin-top:20px;">
         <button class="i-btn i-btn-primary" style="flex:2; justify-content:center;" onclick="saveILMFileShareSettings('${item.id}')">💾 บันทึกและคัดลอกลิงก์</button>
-        <button class="i-btn" style="flex:1; justify-content:center;" onclick="openDocumentHubModal()">ย้อนกลับ</button>
+        <button class="i-btn" style="flex:1; justify-content:center;" onclick="closeModal(); renderILMExplorer();">ย้อนกลับ</button>
       </div>
     </div>
   `);
@@ -2124,7 +2149,8 @@ function saveILMFileShareSettings(fileId) {
   navigator.clipboard.writeText(finalURL);
   
   showToast("🎉 บันทึกและคัดลอกลิงก์แชร์สำเร็จแล้ว! ส่งให้ผู้อื่นรับชมได้เลยครับ");
-  openDocumentHubModal();
+  closeModal();
+  renderILMExplorer();
 }
 
 function openILMFilePreview(fileId) {
@@ -2245,7 +2271,7 @@ function openILMFilePreview(fileId) {
       
       <div style="display:flex; gap:10px; margin-top:20px;">
         <button class="i-btn i-btn-primary" style="flex:2; justify-content:center;" onclick="downloadILMFileObj('${item.id}')">⬇️ ดาวน์โหลดเอกสารฉบับจริง</button>
-        <button class="i-btn" style="flex:1; justify-content:center;" onclick="openDocumentHubModal()">ย้อนกลับ</button>
+        <button class="i-btn" style="flex:1; justify-content:center;" onclick="closeModal(); renderILMExplorer();">ย้อนกลับ</button>
       </div>
     </div>
   `);
