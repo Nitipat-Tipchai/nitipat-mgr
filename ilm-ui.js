@@ -103,26 +103,26 @@ function renderILMPage() {
     document.head.appendChild(style);
   }
 
-  return \`
+  return `
     <div class="top-nav" style="margin-bottom: 15px; background: transparent; padding: 0;">
       <div class="nav-title" style="flex:1; font-size: 1.5rem;">Internship Lifecycle (ILM)</div>
     </div>
 
     <div class="ilm-tabs-scroll">
       <div class="hub-tabs">
-        <button class="hub-tab \${ilmActiveTab === 'planner' ? 'active' : ''}" onclick="switchILMTab('planner')">Planner</button>
-        <button class="hub-tab \${ilmActiveTab === 'prep' ? 'active' : ''}" onclick="switchILMTab('prep')">Prep</button>
-        <button class="hub-tab \${ilmActiveTab === 'tracking' ? 'active' : ''}" onclick="switchILMTab('tracking')">Tracking</button>
-        <button class="hub-tab \${ilmActiveTab === 'safety' ? 'active' : ''}" onclick="switchILMTab('safety')">Safety</button>
-        <button class="hub-tab \${ilmActiveTab === 'report' ? 'active' : ''}" onclick="switchILMTab('report')">Report</button>
-        <button class="hub-tab \${ilmActiveTab === 'extra' ? 'active' : ''}" onclick="switchILMTab('extra')">Extra</button>
+        <button class="hub-tab ${ilmActiveTab === 'planner' ? 'active' : ''}" onclick="switchILMTab('planner')">Planner</button>
+        <button class="hub-tab ${ilmActiveTab === 'prep' ? 'active' : ''}" onclick="switchILMTab('prep')">Prep</button>
+        <button class="hub-tab ${ilmActiveTab === 'tracking' ? 'active' : ''}" onclick="switchILMTab('tracking')">Tracking</button>
+        <button class="hub-tab ${ilmActiveTab === 'safety' ? 'active' : ''}" onclick="switchILMTab('safety')">Safety</button>
+        <button class="hub-tab ${ilmActiveTab === 'report' ? 'active' : ''}" onclick="switchILMTab('report')">Report</button>
+        <button class="hub-tab ${ilmActiveTab === 'extra' ? 'active' : ''}" onclick="switchILMTab('extra')">Extra</button>
       </div>
     </div>
 
     <div class="main-content" id="ilm-content" style="padding-top: 20px;">
       <div style="text-align: center; padding: 40px; color: var(--text-muted);">Loading ILM Module...</div>
     </div>
-  \`;
+  `;
 }
 
 function switchILMTab(tab) {
