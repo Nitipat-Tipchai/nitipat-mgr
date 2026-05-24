@@ -35,28 +35,63 @@ const ILMHub = {
     if (!state.ilmProfile.currentPhase) state.ilmProfile.currentPhase = 'phase1';
     if (state.ilmProfile.quizPassed === undefined) state.ilmProfile.quizPassed = false;
     if (state.ilmProfile.quizScore === undefined) state.ilmProfile.quizScore = 0;
-    if (!state.ilmProfile.seminars) {
-      state.ilmProfile.seminars = [
-        { id: 1, title: 'ปฐมนิเทศฝึกงานและทำความเข้าใจข้อตกลง', date: '2025-08-20', attended: false, note: '', photoUrl: '' },
-        { id: 2, title: 'อบรมด้านจริยธรรมวิชาชีพและความปลอดภัย', date: '2025-10-15', attended: false, note: '', photoUrl: '' },
-        { id: 3, title: 'เตรียมความพร้อมด้านวัสดุศาสตร์และการเขียนรายงาน', date: '2025-12-10', attended: false, note: '', photoUrl: '' },
-        { id: 4, title: 'ปัจฉิมนิเทศและสรุปแนวทางการส่งเล่มรายงาน', date: '2026-03-04', attended: false, note: '', photoUrl: '' }
-      ];
+    
+    // Initialize customizable schedule milestones if none exist
+    if (!state.ilmProfile.schedule) {
+      state.ilmProfile.schedule = {
+        advisingDate: '',          // วันชี้แจงฝึกงานภาควิชาฯ
+        registrationDeadline: '',  // กำหนดส่งใบคำร้องขอฝึกงาน (wt.eng.ku.ac.th)
+        prepSeminar1: '',          // สัมมนาเตรียมความพร้อมครั้งที่ 1 (จริยธรรม)
+        prepSeminar2: '',          // สัมมนาเตรียมความพร้อมครั้งที่ 2 (เขียนเล่ม)
+        orientationDate: '',       // วันปฐมนิเทศฝึกงานนิสิตทุกคน มก.
+        startDate: '',             // วันเริ่มต้นฝึกงาน
+        endDate: '',               // วันสิ้นสุดฝึกงาน
+        submissionDeadline: ''     // วันส่งรายงานและใบลงเวลาที่ภาควิชาฯ
+      };
     }
-    if (!state.ilmProfile.commute) {
-      state.ilmProfile.commute = { type: 'motorcycle', cost: 40 };
-    }
-    if (!state.ilmProfile.companyLocation) {
-      state.ilmProfile.companyLocation = { lat: 12.7230, lon: 101.1400, radius: 300, simulateGPS: true }; // Default SCG Chemicals Rayong
+
+    // Set default seminars based on customized schedule (if configured) or fallback
+    const targetSeminars = [
+      { id: 1, title: 'ชี้แจงฝึกงานและทำความเข้าใจข้อตกลง (หลักสูตรปกติ/พิเศษ/IDDP)', date: state.ilmProfile.schedule.advisingDate || '2026-07-15', attended: false, note: '', photoUrl: '' },
+      { id: 2, title: 'อบรมด้านจริยธรรมวิชาชีพและความปลอดภัย (เตรียมความพร้อม)', date: state.ilmProfile.schedule.prepSeminar1 || '2026-10-15', attended: false, note: '', photoUrl: '' },
+      { id: 3, title: 'เตรียมความพร้อมด้านวัสดุศาสตร์และการเขียนรายงาน', date: state.ilmProfile.schedule.prepSeminar2 || '2026-12-10', attended: false, note: '', photoUrl: '' },
+      { id: 4, title: 'สัมมนาปฐมนิเทศนิสิตฝึกงานทุกคน (บังคับเข้าร่วม)', date: state.ilmProfile.schedule.orientationDate || '2027-03-03', attended: false, note: '', photoUrl: '' }
+    ];
+
+    if (!state.ilmProfile.seminars || state.ilmProfile.seminars.length !== 4 || (state.ilmProfile.seminars[0].date.startsWith('2025') && !state.ilmProfile.schedule.advisingDate)) {
+      if (state.ilmProfile.seminars && state.ilmProfile.seminars.length === 4) {
+        targetSeminars.forEach((ts, idx) => {
+          ts.attended = state.ilmProfile.seminars[idx].attended || false;
+          ts.note = state.ilmProfile.seminars[idx].note || '';
+          ts.photoUrl = state.ilmProfile.seminars[idx].photoUrl || '';
+        });
+      }
+      state.ilmProfile.seminars = targetSeminars;
     }
     
-    // Set default companies if none exist
-    if (state.ilmCompanies.length === 0) {
+    // Always sync seminar dates with customized schedule if user changed them
+    if (state.ilmProfile.schedule.advisingDate) state.ilmProfile.seminars[0].date = state.ilmProfile.schedule.advisingDate;
+    if (state.ilmProfile.schedule.prepSeminar1) state.ilmProfile.seminars[1].date = state.ilmProfile.schedule.prepSeminar1;
+    if (state.ilmProfile.schedule.prepSeminar2) state.ilmProfile.seminars[2].date = state.ilmProfile.schedule.prepSeminar2;
+    if (state.ilmProfile.schedule.orientationDate) state.ilmProfile.seminars[3].date = state.ilmProfile.schedule.orientationDate;
+
+    if (!state.ilmProfile.commute) {
+      state.ilmProfile.commute = { type: 'motorcycle', cost: 60 };
+    }
+    
+    // Default company location: Department of Energy Business (กรมธุรกิจพลังงาน ถนนวิภาวดีรังสิต)
+    if (!state.ilmProfile.companyLocation) {
+      state.ilmProfile.companyLocation = { lat: 13.8234, lon: 100.5623, radius: 300, simulateGPS: true }; 
+    }
+    
+    // Set default companies ONLY if never initialized in LocalStorage (Fixing the deletion bug)
+    if (localStorage.getItem('ilm_companies') === null) {
       state.ilmCompanies = [
-        { id: 'c1', name: 'SCG Chemicals (Rayong)', field: 'Polymer', status: 'interested', salary: 450, address: 'Map Ta Phut, Rayong', contact: 'HR Department scgchem@scg.com' },
-        { id: 'c2', name: 'PTT Global Chemical (GC)', field: 'Polymer', status: 'interested', salary: 500, address: 'Rayong Industrial Land, Rayong', contact: 'recruitment@pttgcgroup.com' },
-        { id: 'c3', name: 'Metal One (Thailand)', field: 'Metal', status: 'interested', salary: 400, address: 'Chonburi Industrial Estate, Chonburi', contact: 'm1hr@metal-one.co.th' }
+        { id: 'c1', name: 'กรมธุรกิจพลังงาน (กองความปลอดภัยธุรกิจน้ำมัน)', field: 'Fuel Safety', status: 'interested', salary: 0, address: 'อาคารศูนย์เอนเนอร์ยี่คอมเพล็กซ์ วิภาวดีรังสิต', contact: 'ฝ่ายบุคคล doeb@doeb.go.th' },
+        { id: 'c2', name: 'กองความปลอดภัยธุรกิจก๊าซปิโตรเลียมเหลว', field: 'LPG Safety', status: 'interested', salary: 0, address: 'ศูนย์เอนเนอร์ยี่คอมเพล็กซ์ อาคาร B ชั้น 12', contact: 'lpg-safety@doeb.go.th' },
+        { id: 'c3', name: 'สถาบันพัฒนาเทคนิคพลังงาน (ชลบุรี)', field: 'NDT & Inspection', status: 'interested', salary: 0, address: 'อำเภอศรีราชา ชลบุรี', contact: 'training-division@doeb.go.th' }
       ];
+      localStorage.setItem('ilm_companies', JSON.stringify(state.ilmCompanies));
     }
     
     this.saveState();
@@ -66,13 +101,21 @@ const ILMHub = {
   async createCalendarEvents(internshipData) {
     if (typeof google === 'undefined' || !google.script) {
       console.warn("GAS not available - Simulating Calendar Event creation");
-      return { success: true, count: 42, message: "จำลองการบันทึกปฏิทิน 42 วันทำการสำเร็จ (ออฟไลน์)" };
+      return { success: true, count: 40, message: "จำลองการบันทึกปฏิทินสำเร็จ (ออฟไลน์)" };
     }
+    
+    // Pass user custom dates if available
+    const payload = {
+      ...internshipData,
+      startDate: state.ilmProfile.schedule.startDate || "2027-04-01",
+      endDate: state.ilmProfile.schedule.endDate || "2027-05-28"
+    };
+
     return new Promise((resolve, reject) => {
       google.script.run
         .withSuccessHandler(resolve)
         .withFailureHandler(reject)
-        .createILMCalendarEvents(internshipData);
+        .createILMCalendarEvents(payload);
     });
   },
 
@@ -117,7 +160,10 @@ const ILMHub = {
 
   // --- Module 1: Smart Internship Planner & Registration ---
   getRegistrationDeadline() {
-    return new Date("2025-09-30T23:59:59").getTime();
+    if (state.ilmProfile.schedule && state.ilmProfile.schedule.registrationDeadline) {
+      return new Date(state.ilmProfile.schedule.registrationDeadline + "T23:59:59").getTime();
+    }
+    return null; // Let the UI display setup instruction
   },
 
   checkEligibility() {
@@ -132,119 +178,14 @@ const ILMHub = {
       messages.push(`หน่วยกิตสะสมรวมไม่ถึงเกณฑ์ขั้นต่ำคณะ (สะสมแล้ว ${earnedCredits} จากขั้นต่ำ 60 หน่วยกิต)`);
     }
 
-    return { passed, messages, earnedCredits };
-  },
-
-  // Generate Kasetsart Student Affairs Request Form PDF
-  async generateRequestForm() {
-    if (typeof showLoadingBlocker === 'function') showLoadingBlocker();
-    try {
-      const { PDFDocument, rgb, StandardFonts } = window.PDFLib;
-      const pdfDoc = await PDFDocument.create();
-      
-      // Use standard A4 size
-      const page = pdfDoc.addPage([595.28, 841.89]);
-      const { width, height } = page.getSize();
-      
-      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-      
-      const drawText = (text, x, y, size = 11, isBold = false) => {
-        page.drawText(text, {
-          x, y, size, font: isBold ? fontBold : font, color: rgb(0.05, 0.05, 0.05)
-        });
-      };
-      
-      const drawLine = (x1, y1, x2, y2, thickness = 1) => {
-        page.drawLine({
-          start: { x: x1, y: y1 },
-          end: { x: x2, y: y2 },
-          thickness: thickness,
-          color: rgb(0.8, 0.8, 0.8)
-        });
-      };
-
-      // Find the accepted company on the board
-      const acceptedCompany = state.ilmCompanies.find(c => c.status === 'accepted') || 
-                              state.ilmCompanies.find(c => c.status === 'applied') || 
-                              { name: '............................................', address: '..................................................................' };
-
-      // Header Banner
-      page.drawRectangle({
-        x: 40, y: height - 85, width: width - 80, height: 45,
-        color: rgb(0.95, 0.97, 1.0)
-      });
-      
-      drawText('KASETSART UNIVERSITY - FACULTY OF ENGINEERING', 50, height - 60, 12, true);
-      drawText('STUDENT AFFAIRS DIVISION - SUMMER INTERNSHIP REQUEST FORM', 50, height - 76, 9, false);
-
-      drawLine(40, height - 100, width - 40, height - 100, 1.5);
-
-      // Section 1: Student Information
-      drawText('1. PERSONAL DETAILS / ข้อมูลส่วนตัวนิสิต', 40, height - 120, 11, true);
-      
-      drawText(`Student ID (รหัสนิสิต): ${STUDENT.id}`, 50, height - 145);
-      drawText(`Full Name (ชื่อ-นามสกุล): ${STUDENT.name} (${STUDENT.nameTh})`, 50, height - 165);
-      drawText(`Major (สาขาวิชา): ${STUDENT.major}`, 50, height - 185);
-      
-      const elig = this.checkEligibility();
-      drawText(`Academic Level (ชั้นปี): ชั้นปีที่ 3 (วิศวกรรมศาสตร์)`, 50, height - 205);
-      drawText(`Cumulative Credits (หน่วยกิตสะสม): ${elig.earnedCredits} credits (ผ่านเกณฑ์ 60)`, 50, height - 225);
-      
-      drawLine(40, height - 245, width - 40, height - 245);
-
-      // Section 2: Internship Placement
-      drawText('2. PROPOSED INTERNSHIP PLACEMENT / ข้อมูลสถานประกอบการ', 40, height - 265, 11, true);
-      
-      drawText(`Company Name (ชื่อบริษัท/หน่วยงาน): ${acceptedCompany.name}`, 50, height - 290, 11, true);
-      drawText(`Field of Work (สายงาน): ${acceptedCompany.field || 'Materials Science'}`, 50, height - 310);
-      drawText(`Address (ที่ตั้งสถานประกอบการ): ${acceptedCompany.address || 'N/A'}`, 50, height - 330);
-      drawText(`Contact Info (ข้อมูลติดต่อฝ่ายบุคคล): ${acceptedCompany.contact || 'N/A'}`, 50, height - 350);
-      drawText(`Proposed Internship Duration (ระยะเวลาฝึกงาน): 1 เมษายน 2569 ถึง 29 พฤษภาคม 2569`, 50, height - 370);
-
-      drawLine(40, height - 390, width - 40, height - 390);
-
-      // Section 3: Verification & Signatures
-      drawText('3. DEPARTMENT APPROVALS / การพิจารณาอนุมัติคำร้อง', 40, height - 410, 11, true);
-      
-      drawText('ความเห็นของอาจารย์ที่ปรึกษาวิชาการ:', 50, height - 435);
-      drawText('[  ] อนุมัติให้เข้าร่วมการฝึกงานภาคฤดูร้อน พ.ศ. 2569 ได้เนื่องจากผ่านเกณฑ์และเงื่อนไขครบถ้วน', 60, height - 455);
-      drawText('[  ] เห็นควรปรับปรุง / ยังไม่สมควรเข้าร่วมการฝึกงาน', 60, height - 470);
-      
-      drawText('ลงชื่อ: ___________________________________________ อาจารย์ที่ปรึกษา', 280, height - 510);
-      drawText('(                                                                 )', 310, height - 525);
-      
-      drawText('ความเห็นของหัวหน้าภาควิชาวิศวกรรมวัสดุ:', 50, height - 565);
-      drawText('[  ] ผ่านความเห็นชอบและออกหนังสือขอความอนุเคราะห์ส่งตัวนิสิตอย่างเป็นทางการ', 60, height - 585);
-      
-      drawText('ลงชื่อ: ___________________________________________ หัวหน้าภาควิชาฯ', 280, height - 625);
-      drawText('(                                                                 )', 310, height - 640);
-
-      // Signature Block of User
-      drawText('นิสิตผู้ยื่นคำร้อง:', 50, height - 690);
-      drawText('ลงชื่อ: ___________________________________________', 50, height - 715);
-      drawText(`      ( นาย${STUDENT.nameTh} )`, 50, height - 730);
-      drawText(`วันที่ยื่นร้อง: ${new Date().toLocaleDateString('th-TH')}`, 50, height - 750);
-
-      // Footer
-      drawLine(40, 50, width - 40, 50, 0.5);
-      drawText('Generate by NITIPAT MGR V3 IILM Personal Sync System. No signature forged.', 40, 35, 8, false);
-
-      const pdfBytes = await pdfDoc.save();
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `IILM_Internship_Request_KU_2569_${STUDENT.id}.pdf`;
-      a.click();
-      if (typeof showToast === 'function') showToast('📄 ดาวน์โหลดแบบคำร้องยื่นเสนอบทความสำเร็จ!');
-    } catch (e) {
-      console.error(e);
-      if (typeof showToast === 'function') showToast('❌ เกิดข้อผิดพลาดทางเทคนิคในการเรนเดอร์ PDF', 'err');
-    } finally {
-      if (typeof hideLoadingBlocker === 'function') hideLoadingBlocker();
+    // Check Materials Thermodynamics prerequisite (Course 01213217)
+    const thermoGrade = STUDENT.existingGrades["01213217"];
+    if (!thermoGrade || ["F", "W", "N"].includes(thermoGrade.grade)) {
+      passed = false;
+      messages.push("ยังไม่ผ่านรายวิชาบังคับก่อนหลักสูตร: 01213217 Thermodynamics of Materials (เกรดวิชานี้ต้องไม่เป็น F, W หรือ N)");
     }
+
+    return { passed, messages, earnedCredits };
   },
 
   // Polite Email Templates Generator
@@ -255,39 +196,42 @@ const ILMHub = {
     const majorEn = "Materials Engineering";
     const univ = "มหาวิทยาลัยเกษตรศาสตร์ (บางเขน)";
     const univEn = "Kasetsart University (Bang Khen)";
+    const startDateStr = state.ilmProfile.schedule.startDate ? new Date(state.ilmProfile.schedule.startDate).toLocaleDateString('th-TH') : '[ระบุวันเริ่ม]';
+    const endDateStr = state.ilmProfile.schedule.endDate ? new Date(state.ilmProfile.schedule.endDate).toLocaleDateString('th-TH') : '[ระบุวันสิ้นสุด]';
+    const sDateEn = state.ilmProfile.schedule.startDate || '[Start Date]';
+    const eDateEn = state.ilmProfile.schedule.endDate || '[End Date]';
     
     if (type === 'th_request') {
-      return `Subject: ขอความอนุเคราะห์ฝึกงานภาคฤดูร้อน พ.ศ. 2569 - นาย${studentName} นิสิตภาควิชา${major} มก.
+      return `Subject: ขอความอนุเคราะห์สมัครฝึกงานภาคฤดูร้อน พ.ศ. 2570 - นาย${studentName} นิสิตภาควิชา${major} มก.
 
-เรียน ${contactPerson} บริษัท ${companyName}
+เรียน ${contactPerson} ${companyName}
 
-กระผม นาย${studentName} นิสิตชั้นปีที่ 3 ภาควิชา${major} คณะวิศวกรรมศาสตร์ ${univ} รหัสนิสิต ${STUDENT.id} มีความประสงค์จะขอเข้าฝึกงานเพื่อเก็บเกี่ยวประสบการณ์ทางวิศวกรรมและทำโครงงานฝึกงานภาคฤดูร้อนประจำปีการศึกษา 2568 (ภาคฤดูร้อน พ.ศ. 2569) 
+กระผม นาย${studentName} นิสิตชั้นปีที่ 3 ภาควิชา${major} คณะวิศวกรรมศาสตร์ ${univ} รหัสนิสิต ${STUDENT.id} มีความประสงค์จะขอความอนุเคราะห์เข้าฝึกงานเพื่อศึกษาและเพิ่มประสบการณ์ทางวิชาชีพในช่วงภาคฤดูร้อน ประจำปีการศึกษา 2569 (ภาคฤดูร้อน พ.ศ. 2570) 
 
-โดยมีกำหนดระยะเวลาฝึกงานระหว่างวันที่ 1 เมษายน 2569 ถึงวันที่ 29 พฤษภาคม 2569 (รวม 40 วันทำการ หรือไม่ต่ำกว่า 240 ชั่วโมง)
+โดยมีระยะเวลากำหนดฝึกงานระหว่างวันที่ ${startDateStr} ถึงวันที่ ${endDateStr} (ไม่ต่ำกว่า 30 วันทำการ และเก็บชั่วโมงสะสมปฏิบัติหน้าที่ขั้นต่ำ 240 ชั่วโมงตามเกณฑ์วิชาบังคับคณะ)
 
-กระผมมีความสนใจในสายงานด้าน ${major} ของบริษัท ${companyName} เป็นอย่างยิ่ง และได้แนบไฟล์ประวัติส่วนตัว (Resume) และใบรายงานผลการศึกษา (Transcript) มาพร้อมกับอีเมลฉบับนี้เพื่อประกอบการพิจารณา
+กระผมมีความประสงค์และสนใจที่จะเข้าร่วมปฏิบัติงานในสายวิเคราะห์งานความปลอดภัย ความแข็งแรงทางวัสดุ และมาตรฐานอุตสาหกรรมในกองงานของ ${companyName} เป็นอย่างยิ่ง และได้แนบประวัติส่วนตัว (Resume) พร้อมทั้งใบแสดงผลการเรียน (Transcript) มาเพื่อประกอบการพิจารณาครับ
 
-หวังเป็นอย่างยิ่งว่าจะได้รับโอกาสเข้าฝึกงานร่วมกับทีมวิศวกรและผู้ชำนาญการของสถานประกอบการท่าน 
+หวังเป็นอย่างยิ่งว่าจะได้รับการประสานงานและโอกาสพิจารณาให้กระผมเข้าฝึกฝนวิชาชีพในหน่วยงานของท่าน
 
 จึงเรียนมาเพื่อโปรดพิจารณาความอนุเคราะห์
 ขอแสดงความนับถืออย่างสูง
 
 นาย${studentName}
 โทรศัพท์: [เบอร์โทรของคุณ]
-อีเมล: [อีเมลของคุณ]
-ภาควิชา${major} คณะวิศวกรรมศาสตร์ มหาวิทยาลัยเกษตรศาสตร์`;
+อีเมล: [อีเมลของคุณ]`;
     } else if (type === 'en_request') {
-      return `Subject: Summer Internship Placement Application (April - May 2026) - ${studentEng}
+      return `Subject: Summer Internship Placement Application (April - May 2027) - ${studentEng}
 
-Dear Hiring Manager / HR Team at ${companyName},
+Dear Hiring Manager / Coordinator at ${companyName},
 
-My name is ${studentEng}, a third-year undergraduate student majoring in ${majorEn} at the Faculty of Engineering, ${univEn}. I am writing to express my strong interest in applying for a summer internship opportunity at ${companyName}.
+My name is ${studentEng}, a third-year undergraduate student majoring in ${majorEn} at the Faculty of Engineering, ${univEn}. I am writing to formally apply for a summer engineering internship placement opportunity in your department.
 
-Our academic curriculum requires a summer internship of at least 240 working hours, starting from April 1, 2026, until May 29, 2026. 
+Our academic curriculum requires a vocational summer internship of at least 240 working hours, starting from ${sDateEn} until ${eDateEn}.
 
-Given ${companyName}'s leading prestige and strong emphasis on technical innovation, I am eagerly motivated to contribute to and learn from your professional engineering practices. I have enclosed my Resume and academic Transcript alongside this email for your kind review.
+Given ${companyName}'s technical expertise and standard-setting reputation, I am highly motivated to learn and contribute in fields related to materials degradation, structural safety testing, and inspection workflows under your supervisor's mentorship. I have attached my Resume and Academic Transcript for your kind review.
 
-Thank you very much for your time and consideration. I look forward to the possibility of discussing how I can contribute to your team this summer.
+Thank you very much for your time and kind consideration. I look forward to hearing from you soon.
 
 Sincerely yours,
 
@@ -295,21 +239,19 @@ ${studentEng}
 Student ID: ${STUDENT.id}
 Department of ${majorEn}, Faculty of Engineering
 Kasetsart University
-Tel: [Your Phone Number]
-Email: [Your Email]`;
+Tel: [Your Phone]`;
     } else if (type === 'th_followup') {
       return `Subject: ติดตามผลการพิจารณาขอเข้าฝึกงานภาคฤดูร้อน - นาย${studentName} (รหัสนิสิต ${STUDENT.id})
 
-เรียน ${contactPerson} บริษัท ${companyName}
+เรียน ${contactPerson} ${companyName}
 
-ตามที่กระผม นาย${studentName} นิสิตภาควิชา${major} คณะวิศวกรรมศาสตร์ ${univ} ได้ดำเนินการส่งเอกสารใบคำร้องสมัครเข้าฝึกงานภาคฤดูร้อน 2569 มายังสถานประกอบการของท่านเมื่อวันที่ [ระบุวันที่ส่งใบสมัคร] 
+ตามที่กระผม นาย${studentName} นิสิตภาควิชา${major} คณะวิศวกรรมศาสตร์ ${univ} ได้ดำเนินการส่งหนังสือแสดงความจำนงสมัครเข้าฝึกงานภาคฤดูร้อน พ.ศ. 2570 มายังหน่วยงานเมื่อวันที่ [ระบุวันที่ส่งเมลครั้งแรก]
 
-กระผมใคร่ขอความอนุเคราะห์ติดตามผลการพิจารณาเบื้องต้น เพื่อประสานจัดเตรียมและส่งมอบหนังสือขอความอนุเคราะห์ส่งตัวฉบับทางการจากคณะวิศวกรรมศาสตร์ มก. ต่อไปครับ
+กระผมใคร่ขอความอนุเคราะห์ติดตามผลการพิจารณาเบื้องต้น เพื่อประสานจัดเตรียมและส่งมอบหนังสือขอความอนุเคราะห์ส่งตัวฉบับทางการจากคณะวิศวกรรมศาสตร์ มก. ให้ตรงตามกำหนดการถัดไปครับ
 
-หากทางบริษัทต้องการข้อมูลหรือเอกสารใดๆ เพิ่มเติม สามารถติดต่อกระผมได้ตลอดเวลาครับ
+หากมีเอกสารหรือข้อมูลประวัติส่วนใดที่ต้องการเพิ่มเติม สามารถติดต่อกระผมได้โดยตรงทางอีเมลหรือหมายเลขโทรศัพท์นี้ครับ
 
-ขอขอบพระคุณเป็นอย่างยิ่งในความอนุเคราะห์พิจารณาของท่าน
-ขอแสดงความนับถือ
+ขอแสดงความนับถืออย่างสูง
 
 นาย${studentName}
 โทร: [เบอร์โทรของคุณ]`;
@@ -318,68 +260,68 @@ Email: [Your Email]`;
   },
 
   // --- Module 2: Orientation & Test Prep ---
-  // Official Orientation Questions Pool
+  // Official Orientation Questions Pool (Department of Energy & Safety context)
   getQuizQuestions() {
     return [
       {
-        q: "1. นิสิตวิศวกรรมศาสตร์ มก. ต้องเก็บชั่วโมงฝึกงานสะสมในภาคฤดูร้อนอย่างน้อยกี่ชั่วโมง?",
-        options: ["200 ชั่วโมง", "240 ชั่วโมง", "300 ชั่วโมง", "360 ชั่วโมง"],
+        q: "1. นิสิตวิศวกรรมวัสดุ มก. ต้องเก็บชั่วโมงปฏิบัติงานสะสมในการฝึกงานภาคฤดูร้อนอย่างน้อยกี่ชั่วโมง?",
+        options: ["200 ชั่วโมง", "240 ชั่วโมง", "280 ชั่วโมง", "300 ชั่วโมง"],
         ans: 1,
-        ref: "สไลด์ปฐมนิเทศระบุชัดเจนว่า ต้องปฏิบัติงานจริงในโรงงานหรือสถานประกอบการไม่ต่ำกว่า 240 ชั่วโมง"
+        ref: "เกณฑ์ข้อบังคับระบุชัดเจนว่า นิสิตต้องปฏิบัติหน้าที่ไม่น้อยกว่า 240 ชั่วโมง"
       },
       {
-        q: "2. นิสิตต้องปฏิบัติงานไม่ต่ำกว่ากี่วันทำการ (ไม่รวมวันหยุดเสาร์-อาทิตย์)?",
-        options: ["20 วันทำการ", "25 วันทำการ", "30 วันทำการ", "45 วันทำการ"],
-        ans: 2,
-        ref: "ตามเกณฑ์คณะคือ 30 วันทำการเต็ม เพื่อรักษาระยะการเรียนรู้ครบถ้วน"
-      },
-      {
-        q: "3. กำหนดการส่งเล่มรายงานฝึกงานฉบับสมบูรณ์ เอกสารลายเซ็น และใบประเมินของปีการศึกษา 2568 (ฤดูร้อน 2569) คือข้อใด?",
-        options: ["31 พฤษภาคม 2569", "15 มิถุนายน 2569", "30 มิถุนายน 2569", "31 กรกฎาคม 2569"],
-        ans: 2,
-        ref: "กำหนดการเส้นตายส่งเล่มที่ภาควิชาคือภายในวันที่ 30 มิถุนายน 2569"
-      },
-      {
-        q: "4. การลาป่วยในระยะเวลาการฝึกงาน สามารถลาได้สูงสุดกี่วันโดยไม่ต้องฝึกงานชดเชยชั่วโมง?",
-        options: ["ห้ามลาป่วยเลย", "ลาได้ไม่เกิน 3 วัน (ต้องแนบใบรับรองแพทย์และฝึกงานชดเชยเพื่อให้ครบ 240 ชม.)", "ลาได้ 5 วัน", "ลาได้ไม่จำกัดจำนวนวัน"],
+        q: "2. หากเกิดอุบัติเหตุระหว่างตรวจคลังปิโตรเลียมจนต้องเข้าโรงพยาบาลในฐานะ 'ผู้ป่วยนอก (OPD)' วงเงินคุ้มครองประกันสวัสดิภาพ มก. จ่ายจริงสูงสุดครั้งละเท่าใด?",
+        options: ["1,000 บาท", "2,000 บาท", "5,000 บาท", "ไม่จำกัดวงเงิน"],
         ans: 1,
-        ref: "ลาป่วยได้แต่ต้องแจ้งพี่เลี้ยงควบคุมงานทันที และต้องเก็บชั่วโมงชดเชยชั่วโมงการทำงานที่ขาดไปให้ครบ 240 ชม."
+        ref: "สิทธิ์เบิกจ่ายอุบัติเหตุกรณีผู้ป่วยนอกสูงสุด 2,000 บาทต่อครั้งตามเกณฑ์กองทุนนิสิต"
       },
       {
-        q: "5. หมายเลขโทรศัพท์สายตรงติดต่อหน่วยกิจการนิสิต คณะวิศวกรรมศาสตร์ มก. (กรณีเกิดเหตุฉุกเฉิน) คือเบอร์ใด?",
-        options: ["02-797-0969", "02-942-8500", "02-797-0999", "191"],
+        q: "3. กำหนดการเส้นตายสุดท้ายในการส่งเล่มรายงานฝึกงาน ใบลงเวลาสะสม และใบประเมินจริงของปีการศึกษา 2569 คือข้อใด?",
+        options: ["31 พฤษภาคม 2570", "15 มิถุนายน 2570", "30 มิถุนายน 2570", "31 กรกฎาคม 2570"],
+        ans: 2,
+        ref: "กำหนดการปิดซองส่งเอกสารที่ภาควิชาคือภายในวันที่ 30 มิถุนายน 2570"
+      },
+      {
+        q: "4. หากมีความจำเป็นต้องลากิจหรือลาป่วยกระทันหันในชั่วโมงการฝึกงาน ข้อใดคือระเบียบที่ถูกต้อง?",
+        options: ["ลาได้เลยโดยไม่ต้องแจ้งผู้ใด", "ต้องแจ้งพี่เลี้ยงข้าราชการคุมงานทันที และปฏิบัติชั่วโมงชดเชยภายหลังเพื่อให้ครบ 240 ชั่วโมง", "สามารถหักลบชั่วโมงและให้เพื่อนเซ็นแทนได้", "ไม่สามารถลาป่วยได้เลยทุกกรณี"],
+        ans: 1,
+        ref: "การลาต้องได้รับอนุมัติจากพี่เลี้ยงหน้างาน และสะสมชั่วโมงชดเชยให้ครบตามเกณฑ์ มก."
+      },
+      {
+        q: "5. เครื่องแต่งกายสำหรับนิสิตออกฝึกงานภาคสนามในคลังพลังงานหรือท่อส่งเชื้อเพลิงแรงดันสูงคือข้อใด?",
+        options: ["สวมชุดช็อปภาควิชา แว่นนิรภัย และรองเท้าเซฟตี้ต้านไฟฟ้าสถิตหัวเหล็กหุ้มส้น", "เสื้อยืดกางเกงยีนส์และรองเท้าแตะเพื่อความคล่องตัว", "ชุดนิสิตเต็มยศและรองเท้าหนังแฟชั่น", "เสื้อแจ็กเกตหนังและหมวกแก๊ปธรรมดา"],
         ans: 0,
-        ref: "เบอร์สายตรงตึก 3 ชั้น 1 คือ 02-797-0969 หรือ 02-797-0967"
+        ref: "เขตหน้างานอุตสาหกรรมพลังงานต้องสวมชุดช็อปและอุปกรณ์ PPE ครบชุดต้านประกายไฟอย่างเคร่งครัด"
       },
       {
-        q: "6. วงเงินช่วยเหลือค่ารักษาพยาบาลอุบัติเหตุเฉุกเฉินกรณี 'ผู้ป่วยนอก (OPD)' ของกองทุนสวัสดิภาพนิสิต มก. สูงสุดต่อครั้งคือเท่าใด?",
-        options: ["1,000 บาท", "2,000 บาท", "5,000 บาท", "8,000 บาท"],
+        q: "6. เบอร์โทรสายตรงติดต่อประสานงานฉุกเฉินฝ่ายกิจการนิสิต คณะวิศวกรรมศาสตร์ มก. คือเบอร์ใด?",
+        options: ["02-797-0969", "02-942-8500", "191", "199"],
+        ans: 0,
+        ref: "เบอร์สายด่วนหน่วยกิจการนิสิต ตึก 3 ชั้น 1 คือ 02-797-0969"
+      },
+      {
+        q: "7. เกรดประเมินผลที่จะปรากฏใน Transcript วิชาฝึกงานวิชาชีพวิศวกรรมวัสดุ (01213399) คือเกรดข้อใด?",
+        options: ["A, B, C, D", "เกรด S (Satisfactory) / U (Unsatisfactory)", "Pass / Fail เท่านั้น", "ไม่มีการลงเกรด"],
         ans: 1,
-        ref: "ประกาศกองทุนสวัสดิภาพนิสิต มก. 2566 ระบุสิทธิ์เบิกจ่ายอุบัติเหตุผู้ป่วยนอก สูงสุดครั้งละไม่เกิน 2,000 บาท"
+        ref: "ประเมินผลการเรียนการศึกษาเป็นแบบผ่าน (S) หรือไม่ผ่าน (U)"
       },
       {
-        q: "7. วงเงินช่วยเหลือรักษาพยาบาลอุบัติเหตุกรณีแอดมิทเข้าเป็น 'ผู้ป่วยใน (IPD)' เบิกได้สูงสุดกี่บาท?",
-        options: ["2,000 บาท", "5,000 บาท", "8,000 บาท", "15,000 บาท"],
-        ans: 2,
-        ref: "แอดมิทเป็นผู้ป่วยในสามารถเบิกจ่ายตามจริงได้สูงสุดไม่เกิน 8,000 บาทต่อครั้ง"
-      },
-      {
-        q: "8. ข้อใดเป็นเกณฑ์ระเบียบเรื่องการฝึกงานข้ามสายงานหรือเปลี่ยนสถานประกอบการกลางคัน?",
-        options: ["สามารถแจ้งเปลี่ยนได้อิสระ", "เปลี่ยนได้เมื่อผ่านไปแล้วครึ่งหนึ่ง", "ห้ามเปลี่ยนสถานที่ฝึกงานโดยพลการโดยเด็ดขาด ยกเว้นมีอุบัติภัยรุนแรงและต้องรับความเห็นชอบจากอาจารย์ประสานงานภาควิชา", "สามารถฝึกงานที่บ้านได้"],
-        ans: 2,
-        ref: "การย้ายที่ฝึกงานพลการจะส่งผลให้ถูกปรับตก (U) ในรายวิชาฝึกงานวิศวกรรมทันที"
-      },
-      {
-        q: "9. เวลาตอกบัตรเช็คเอาต์เลิกฝึกงาน หากต้องทำ OT สามารถทำได้สูงสุดไม่เกินเวลาใดเพื่อความปลอดภัย?",
-        options: ["18:00 น.", "20:00 น.", "22:00 น.", "ไม่จำกัดเวลา"],
+        q: "8. ในการฝึกงานคลังแก๊สปิโตรเลียม การทดสอบความสมบูรณ์ของรอยเชื่อมโลหะโดยไม่ทำลาย (NDT) มีเป้าหมายสูงสุดคือข้อใด?",
+        options: ["เพื่อทดสอบความยืดหยุ่นของสีเคลือบภายนอก", "เพื่อค้นหารอยแตกหักระดับลึก ป้องกันการแตกร้าวแบบฉับพลันจากแรงดันแก๊สสะสม", "เพื่อลดต้นทุนการก่อสร้างท่อส่ง", "เพื่อเพิ่มความสว่างให้กับแนวรอยต่อโลหะ"],
         ans: 1,
-        ref: "กฎความปลอดภัยห้ามนิสิตฝึกงานล่วงเวลาเกินกว่าเวลา 20:00 น. ยกเว้นมีผู้ควบคุมชำนาญการกำกับดูแล"
+        ref: "การตรวจ NDT ค้นหา Sub-surface defects ป้องกัน Brittle Fracture จากความเค้นดันก๊าซ"
       },
       {
-        q: "10. เครื่องแต่งกายสำหรับการปฏิบัติงานภาคสนามหรือโรงงานอุตสาหกรรมคือข้อใด?",
-        options: ["ชุดนิสิตปกติ", "สวมกางเกงยีนส์และเสื้อยืด", "ชุดปฏิบัติการประจำภาควิชา (ช็อป) พร้อมอุปกรณ์เซฟตี้ (PPE) หุ้มส้นห้ามเปิดนิ้วเท้า", "แต่งกายอิสระ"],
-        ans: 2,
-        ref: "งานโรงงานอุตสาหกรรมวัสดุต้องสวมชุดช็อปและอุปกรณ์ความปลอดภัยส่วนบุคคล PPE ให้ครบถ้วนตามข้อกำหนดโรงงาน"
+        q: "9. อุปกรณ์ PPE ชนิดใดที่มีความจำจำเป็นสูงสุดเมื่อนิสิตต้องร่วมเดินตรวจคลังน้ำมันปิโตรเลียมขนาดใหญ่?",
+        options: ["หน้ากากกรองกลิ่นทั่วไป", "เครื่องตรวจจับก๊าซรั่วพกพา (Multi-gas Detector) แว่นนิรภัย และรองเท้าต้านไฟฟ้าสถิตหัวเหล็ก", "ร่มกันแดดและถุงมือผ้าถักธรรมดา", "หมวกเซฟตี้พลาสติกสีแฟชั่น"],
+        ans: 1,
+        ref: "คลังสารเคมีไวไฟต้องการอุปกรณ์ต้านไฟฟ้าสถิต ป้องกันแรงดันแก๊ส และเครื่องตรวจสภาพอากาศแจ้งเตือนรั่วไหล"
+      },
+      {
+        q: "10. ข้อใดระบุเกณฑ์การฝึกงานย้ายสถานที่หรือข้ามสายงานอุตสาหกรรมในระหว่างฝึกงานได้ถูกต้อง?",
+        options: ["นิสิตสามารถทำเรื่องย้ายค่ายย้ายแผนกได้ตามอำเภอใจในสัปดาห์ที่ 3", "ห้ามย้ายสถานประกอบการโดยพลการอย่างเด็ดขาด ยกเว้นได้รับความเห็นชอบจากอาจารย์ประสานงานภาควิชาจากอุบัติภัยร้ายแรง", "สามารถย้ายไปทำที่บ้านได้", "สามารถหยุดกลางคันแล้วค่อยกลับมาฝึกต่อปีหน้าได้เลยไม่ต้องแจ้งคณะ"],
+        ans: 1,
+        ref: "การย้ายที่ฝึกงานโดยพละการจะส่งผลให้ถูกปรับตกเกรด U ในทันที"
       }
     ];
   },
@@ -389,13 +331,13 @@ Email: [Your Email]`;
   integrateMoneyManagerCommute() {
     if (typeof state.moneyTransactions === 'undefined') return;
     
-    const commuteCost = state.ilmProfile.commute.cost || 40;
+    const commuteCost = state.ilmProfile.commute.cost || 60;
     const commuteType = state.ilmProfile.commute.type || 'motorcycle';
     
     let typeText = 'มอเตอร์ไซค์';
-    if (commuteType === 'bts_mrt') typeText = 'รถไฟฟ้า BTS/MRT';
-    else if (commuteType === 'car') typeText = 'รถส่วนตัว';
-    else if (commuteType === 'bus') typeText = 'รถเมล์สาธารณะ';
+    if (commuteType === 'bts_mrt') typeText = 'รถไฟฟ้า BTS/MRT ไปกระทรวงพลังงาน';
+    else if (commuteType === 'car') typeText = 'รถยนต์ส่วนตัว / ค่าน้ำมัน';
+    else if (commuteType === 'bus') typeText = 'รถประจำทาง';
 
     const transaction = {
       id: 'tx_ilm_' + Date.now(),
@@ -403,18 +345,16 @@ Email: [Your Email]`;
       type: 'expense',
       category: 'travel',
       amount: parseFloat(commuteCost),
-      desc: `💼 ค่าเดินทางฝึกงาน (${typeText})`,
+      desc: `💼 ค่าเดินทางตรวจคลังแก๊ส (${typeText})`,
       date: new Date().toISOString().split('T')[0],
       createdAt: Date.now()
     };
     
-    // Push transaction and update wallet balance
     state.moneyTransactions.unshift(transaction);
     if (state.moneyWallets && state.moneyWallets[0]) {
       state.moneyWallets[0].balance -= parseFloat(commuteCost);
     }
     
-    // Save state
     localStorage.setItem('moneyTransactions', JSON.stringify(state.moneyTransactions));
     localStorage.setItem('moneyWallets', JSON.stringify(state.moneyWallets));
     
@@ -437,56 +377,163 @@ Email: [Your Email]`;
       console.warn("AQI API fail, returning offline estimate", e);
       return {
         success: false,
-        aqi: 32, // Default healthy estimate
-        pm25: 7.8
+        aqi: 35,
+        pm25: 8.2
       };
     }
+  },
+
+  // --- Specialized Government & Energy Safety Datasets ---
+  getEnergyInterviewQuestions() {
+    return [
+      {
+        q: "เหล็กกล้าคาร์บอนในถังเก็บน้ำมันเชื้อเพลิงใต้ดิน (Underground Fuel Storage Tank) มักพบกลไกเสื่อมสภาพ (Material Degradation) รูปแบบใดมากที่สุด และป้องกันอย่างไร?",
+        a: "ปัญหากลไกที่พบบ่อยที่สุดคือ การกัดกร่อนจากไฟฟ้าเคมีในดิน (Underground Electro-chemical Corrosion) เนื่องจากเหล็กสัมผัสความชื้น สารละลายเกลือ และอากาศในดิน ป้องกันได้โดยการเคลือบผิวต้านสนิม เช่น อีพ็อกซีหนาพิเศษ ร่วมกับระบบการป้องกัน Cathodic Protection (ระบบสลักโลหะกันกร่อน Sacrificial Anode หรือใช้กระแสตรง Impressed Current)"
+      },
+      {
+        q: "ในการคัดเลือกท่อเหล็กเพื่อขนส่งก๊าซหุงต้มปิโตรเลียมเหลว (LPG) ความดันสูง จำเป็นต้องใช้การทดสอบแบบไม่ทำลาย (NDT) ชนิดใดบ้างถึงจะปลอดภัยและมั่นใจสูงสุด?",
+        a: "รอยเชื่อมของท่อและถัง LPG ต้องตรวจรอยแตกฝังลึกภายใน (Sub-surface) ด้วยการทดสอบคลื่นความถี่สูง Ultrasonic Testing (UT) หรือถ่ายภาพรังสี Radiographic Testing (RT) และตรวจจับรอยร้าวรอยแยกที่ผิวตื้นด้วยผงแม่เหล็ก Magnetic Particle Testing (MT) หรือสารแทรกซึม Dye Penetrant Testing (PT) เพื่อต้านทานแรงเค้นดันดันพุ่ง"
+      },
+      {
+        q: "นิสิตคิดว่าจะใช้วิชา 'Mechanical Behavior of Materials' ในการตรวจสอบท่อส่งแก๊สธรรมชาติ (High-Pressure Pipeline) เพื่อป้องกันอุบัติภัยได้อย่างไร?",
+        a: "ประยุกต์ใช้ในการคำนวณและประเมินขีดจำกัดความเค้นดึงทนยืด (Yield & Tensile Strength) และวิเคราะห์พฤติกรรมการแตกร้าวแบบฉับพลันจากความเค้นล้า (Fatigue Stress) จากแรงบีบสั่นสะเทือนของคอมเพรสเซอร์ปั๊ม เพื่อวางแผนตรวจสอบจุดบกพร่องตามโค้ดมาตรฐาน API 5L หรือ ASME B31.8"
+      },
+      {
+        q: "ปัญหาการเปราะจากไฮโดรเจน (Hydrogen Embrittlement) มีกลไกเกิดอย่างไรต่อโครงสร้างโลหะทนความดันสูง?",
+        a: "กลไกเกิดจากอะตอมของแก๊สไฮโดรเจนแพร่ซึมเข้าไปแทรกอยู่ตามรอยกักหรือขอบเกรน (Grain Boundaries) ของเหล็กขัดขวางการจัดตัวคริสตัล ส่งผลให้เหล็กสูญเสียความเหนียว (Ductility) และพร้อมเกิดการแตกร้าวแบบฉับพลันอย่างไร้สัญญาณเตือน (Brittle Fracture) เมื่อถูกความเค้นเชิงกลกระทำ"
+      }
+    ];
+  },
+
+  getSafetyRiskLevels() {
+    return {
+      station: {
+        title: "สถานีบริการน้ำมันและสถานีบรรจุแก๊สปิโตรเลียม (Gas & LPG Station Service)",
+        risk: "ระดับปานกลาง (Moderate)",
+        hazards: [
+          "การสูดดมสารระเหยไวไฟ (VOCs - Volatile Organic Compounds) เช่น เบนซิน โทลูอีน",
+          "อุบัติเหตุการจราจรจากยานพาหนะเข้าออกปั๊มน้ำมันขณะตรวจวัดพิกัดหัวจ่าย",
+          "ความเสี่ยงประกายไฟจากประจุไฟฟ้าสถิตของเสื้อผ้า/โทรศัพท์ใกล้เขตคลังบรรจุ"
+        ],
+        ppe: [
+          "เสื้อกั๊กสะท้อนแสงนิรภัยสีส้มตองอ่อนความเห็นชัด (High-Visibility Vest)",
+          "รองเท้าเซฟตี้หุ้มส้นชนิดต้านทานไฟฟ้าสถิต (Anti-static Footwear)",
+          "หน้ากากกรองไอสารเคมีออร์แกนิก (Organic Vapor Mask)"
+        ],
+        guidelines: [
+          "ตรวจวัดในทิศทางเหนือลม (Upwind) เสมอเพื่อเลี่ยงไอระเหยแก๊สเป็นพิษ",
+          "ยืนตรวจในจุดที่ห่างจากวิถีเคลื่อนรถยนต์และห้ามจับถือประกายไฟในระยะ 3 เมตร",
+          "ห้ามหยิบใช้อุปกรณ์อิเล็กทรอนิกส์ที่ไม่ใช่รุ่นป้องกันการเกิดประกายไฟในพื้นที่อันตราย"
+        ]
+      },
+      depot: {
+        title: "คลังเก็บน้ำมันปิโตรเลียมดิบและเชื้อเพลิงหลักขนาดใหญ่ (Oil Storage Depot)",
+        risk: "ระดับสูง (High Risk)",
+        hazards: [
+          "อันตรายเพลิงไหม้ระเบิดฉับพลันของคลังสารเชื้อเพลิงขนาดหมื่นบาร์เรล",
+          "การพลัดตกจากที่สูงระหว่างข้ามบันไดไต่ขึ้นไปส่องความสึกกร่อนขอบหลังคาถังเหล็ก",
+          "พื้นที่อับอากาศอันตรายรุนแรง (Confined Space Entry) ภายในถังเก็บขนาดใหญ่"
+        ],
+        ppe: [
+          "หมวกนิรภัยเซฟตี้ต้านไฟฟ้าทนเจาะ Class E (Safety Helmet)",
+          "แว่นตานิรภัยเซฟตี้ปิดกันสารเคมีไอพ่น (Goggles/Safety Glasses)",
+          "ชุดหมีผ้าฝ้ายพิเศษหน่วงไฟลามไม่สะสมไฟฟ้าสถิต (FR Coverall)",
+          "รองเท้าเซฟตี้หัวเหล็กหนาพื้นกันทะลุหุ้มข้อ"
+        ],
+        guidelines: [
+          "ห้ามเหยียบย่างขึ้นหลังคาถังเก็บโดยไม่มีการคล้องเข็มขัดกันตกขอบสะพาน (Full Harness)",
+          "ต้องพกพาเครื่องวัดแก๊ส Portable Gas Detector ร่วมตรวจสภาพออกซิเจนก่อนเข้าใกล้แนวถังพัก",
+          "แตะสกรูกราวด์ดินขจัดไฟฟ้าสถิตในร่างกายบริเวณป้ายทางเข้าคลังทุกครั้ง"
+        ]
+      },
+      pipeline: {
+        title: "คลังเก็บก๊าซปิโตรเลียมเหลว (LPG) และสถานีควบคุมท่อส่งแก๊สความดันสูง (LPG Terminal & pipeline)",
+        risk: "ระดับอันตรายสูงสุด (Extreme)",
+        hazards: [
+          "ไอแก๊สความดันสูงรั่วพ่นเฉียบพลันทำลายเยื่อบุตาและทางเดินหายใจ",
+          "แก๊สเหลว LPG อุณหภูมิต่ำจัดรั่วรดสัมผัสผิวหนังทำให้เกิดแผลหิมะกัด (Frostbite/Cold Burn)",
+          "ความล้าของเนื้อโลหะขอบท่อแตกร้าวฉับพลันจากคลื่นกระแทกความดันกระเพื่อม"
+        ],
+        ppe: [
+          "ถุงมือหนังเนื้อหนาทนความเย็นจัดสูงพิเศษ ป้องกันแผลแก๊สเหลวรด",
+          "แว่นครอบตานิรภัยซีลปิดมิดชิด (Safety Goggles)",
+          "เครื่องตรวจวัดแก๊สรั่วส่วนบุคคล (Portable Gas Detector)",
+          "รองเท้าเซฟตี้ต้านแรงดันไฟฟ้าสูง"
+        ],
+        guidelines: [
+          "สังเกตการณ์เกจความดันและความชื้นของทรานส์เฟอร์แก๊สเสมอก่อนสัมผัสถัง",
+          "ใช้เครื่องมือจับสัมผัสที่เป็นทองเหลืองหรือเบอริลเลียมทองแดงชนิดไม่เกิดประกายไฟ (Non-sparking Tools)",
+          "กรณีเกิดท่อรั่วเสียงหวีดพุ่ง ให้เคลื่อนที่หนีขวางลมและห้ามเดินเข้าหาในเขตใต้ลมเด็ดขาด"
+        ]
+      }
+    };
+  },
+
+  getEnergyProjectIdeas() {
+    return [
+      {
+        title: "การประเมินการผุพังและการชำรุดชะลอตัวจากการกัดกร่อนในถังเก็บน้ำมันเชื้อเพลิงใต้ดิน (Underground Fuel Tank Corrosion Assessment)",
+        desc: "เน้นการศึกษาปัญหารอยรั่วซึมและการผุของถังโลหะใต้ดินเนื่องจากสัมผัสความชื้นและสภาพความเป็นกรดด่างในดินของสถานีบริการน้ำมัน และเสนอมาตรการทำความสะอาดและระบบป้องกัน Cathodic Protection เพื่อรักษาสภาพถังเหล็กอย่างปลอดภัยตามมาตรฐานกรมธุรกิจพลังงาน"
+      },
+      {
+        title: "การวิเคราะห์โครงสร้างความปลอดภัยในการบรรจุก๊าซ LPG และการตรวจสอบจุดบกพร่องรอยเชื่อมด้วยการทดสอบแบบไม่ทำลาย (LPG Tank Welding NDT Evaluation)",
+        desc: "เสนอแนวทางการใช้วิธี Ultrasonic Testing (UT) และ Liquid Penetrant Testing (PT) ในการเข้าสแกนหารอยแยกหรือฟองอากาศในแนวเชื่อมของถังความดันสูงสำหรับก๊าซหุงต้มเหลวปิโตรเลียม เพื่อป้องกันการแตกร้าวแบบฉับพลันจากแรงดันแก๊สสะสม"
+      },
+      {
+        title: "การศึกษามาตรการป้องกันการเกิดออกซิเดชันและการกัดกร่อนกัลวานิกในระบบท่อส่งน้ำมันเชื้อเพลิงทางบก (Pipeline Galvanic Corrosion & Protection)",
+        desc: "ศึกษาประสิทธิภาพการเคลือบผิวท่อทรานส์เฟอร์เชื้อเพลิงและการยึดติดขั้วโลหะสังเวย (Sacrificial Anode) เพื่อขัดขวางการเกิดปฏิกิริยาไฟฟ้าเคมีต้านสนิมเหล็กในบริเวณข้อต่อโลหะต่างชนิดกันที่ทอดข้ามเขตดินและน้ำ"
+      },
+      {
+        title: "การทบทวนข้อกำหนดทางกฎหมาย มาตรฐานวิศวกรรมความปลอดภัย และการวิเคราะห์การแตกร้าวของท่อก๊าซธรรมชาติ CNG (NGV Pipeline Crack & Safety Audit)",
+        desc: "ศึกษาความสัมพันธ์ของมาตรฐานแรงดึงความปลอดภัยท่อส่งแก๊สอัด NGV การควบคุมความเค้นล้าจากการสั่นสะเทือนของเครื่องคอมเพรสเซอร์ และทบทวนระยะห่างปลอดภัยในการจัดตั้งสถานีบริการตามข้อบังคับกระทรวงพลังงาน"
+      }
+    ];
   },
 
   // --- Module 5: Materials Glossary & Curriculum Course Theory Mapper ---
   getTechnicalGlossary() {
     return [
       {
-        term: "Metallography (โลหะวิทยาภาพจุลทรรศน์)",
-        definition: "การเตรียมชิ้นงานและส่องกล้องวิเคราะห์โครงสร้างเกรนของโลหะ",
-        courseCode: "01213312",
-        courseName: "Materials Characterization and Properties Analysis Lab",
-        tips: "ควรอ้างอิงระเบียบวิธีส่องกล้องจุลทรรศน์แบบแสง (Optical Microscope) ในส่วนบทที่ 3"
+        term: "Cathodic Protection (การป้องกันสนิมแบบแคโทดิก)",
+        definition: "เทคนิคการควบคุมการกัดกร่อนโลหะในท่อส่งใต้ดินหรือถังเก็บพลังงานปิโตรเลียม โดยการจ่ายไฟฟ้าลบหรือติดแร่โลหะศักย์ไฟฟ้าต่ำกว่าเป็นกันชน",
+        courseCode: "01213427",
+        courseName: "Corrosion of Materials",
+        tips: "ใช้บรรยายการป้องกันสนิมถังน้ำมันเหล็กใต้ดินในบทความส่วนทฤษฎีบทที่ 2"
       },
       {
-        term: "Sintering (การเผาผนึก)",
-        definition: "กระบวนการให้ความร้อนผงวัสดุจนเกาะตัวแน่นเป็นของแข็งอุณหภูมิสูงต่ำกว่าจุดหลอมเหลว",
-        courseCode: "01213432",
-        courseName: "Ceramic Processing",
-        tips: "อภิปรายการเปลี่ยนแปลงความหนาแน่นเชิงสัมพัทธ์ (Relative Density) ในเซรามิกหรือผงโลหะ"
-      },
-      {
-        term: "Polymer Injection Molding (การฉีดขึ้นรูปพอลิเมอร์)",
-        definition: "กระบวนการแปรรูปโดยการหลอมเหลวเม็ดพลาสติกและฉีดเข้าสู่แม่พิมพ์เหล็กกล้า",
-        courseCode: "01213441",
-        courseName: "Fundamental of Polymeric Materials",
-        tips: "วิเคราะห์พฤติกรรมการหดตัวและการจัดเรียงตัวของโมเลกุลสายโซ่พอลิเมอร์"
-      },
-      {
-        term: "Precipitation Hardening (การชุบแข็งแบบตกตะกอน)",
-        definition: "การอบชุบความร้อนเพื่อสร้างเฟสตกตะกอนละเอียดขัดขวางการเคลื่อนที่ของดิสโลเคชันในโลหะผสม",
-        courseCode: "01213421",
-        courseName: "Physical Metallurgy",
-        tips: "เขียนขั้นตอน Solution Treatment และ Aging ลงในกระบวนการอบอลูมิเนียมเกรด 6061"
-      },
-      {
-        term: "Cold Rolling (การรีดเย็น)",
-        definition: "การผ่านโลหะระหว่างลูกรีดที่อุณหภูมิห้องเพื่อเพิ่มความแข็งแรงด้วยวิธีสร้างความเค้นสะสม (Strain Hardening)",
+        term: "Non-Destructive Testing - NDT (การทดสอบแบบไม่ทำลาย)",
+        definition: "การตรวจสอบหารอยร้าว ข้อบกพร่องภายใน หรือความหนาของถังแก๊ส LPG โดยไม่ทำลายชิ้นงาน เช่น การตรวจด้วยคลื่นสะท้อนความถี่สูง (Ultrasonic Testing)",
         courseCode: "01213216",
         courseName: "Mechanical Behavior of Materials",
-        tips: "บรรยายการยืดตัวของเม็ดเกรนตามแนวรีดและผลกระทบต่อความต้านทานแรงดึงดึงยืด"
+        tips: "ใช้อ้างอิงวิธีการตรวจแนวเชื่อมรอยต่อนิรภัยคลังก๊าซปิโตรเลียม"
       },
       {
-        term: "Corrosion and Oxidation (การกัดกร่อน)",
-        definition: "การทำปฏิกิริยาไฟฟ้าเคมีของโลหะกับสภาพแวดล้อม ทำให้วัสดุเสื่อมสภาพ",
+        term: "Stress Corrosion Cracking - SCC (การแตกร้าวจากความเค้นร่วมกับการกัดกร่อน)",
+        definition: "กลไกความเสียหายที่โลหะท่อส่งน้ำมันความดันสูงแตกร้าวเฉียบพลันจากผลร่วมของความเค้นดึงเชิงกลและปฏิกิริยากัดกร่อนไฟฟ้าเคมี",
+        courseCode: "01213217",
+        courseName: "Thermodynamics of Materials",
+        tips: "ใช้อธิบายทฤษฎีกลศาสตร์ความคงทนและสมดุลเคมีของวัสดุทนความดันสูง"
+      },
+      {
+        term: "Welding Defect (จุดบกพร่องในแนวเชื่อม)",
+        definition: "ปัญหาฟองอากาศ เศษสารมลทิน หรือการหลอมละลายไม่สมบูรณ์บริเวณแนวรอยต่อเชื่อมของถังความปลอดภัยโลหะ ซึ่งลดแรงต้านทานทางกล",
+        courseCode: "01213421",
+        courseName: "Physical Metallurgy",
+        tips: "เขียนอภิปรายการเปลี่ยนแปลงของโครงสร้างจุลภาคบริเวณรอยเชื่อม (HAZ - Heat Affected Zone) ในบทสรุปรายงาน"
+      },
+      {
+        term: "Hydrogen Embrittlement (การเปราะจากไฮโดรเจน)",
+        definition: "ปรากฏการณ์ที่อะตอมไฮโดรเจนซึมผ่านโลหะท่อส่งแก๊สปิโตรเลียมความดันสูงและสะสมตามโครงสร้างผลึก ทำให้โลหะสูญเสียความเหนียวและเปราะหักง่าย",
+        courseCode: "01213216",
+        courseName: "Mechanical Behavior of Materials",
+        tips: "อภิปรายกลไกการเปลี่ยนพฤติกรรมจากวัสดุเหนียวกลายเป็นแตกร้าวแบบ Brittle Fracture"
+      },
+      {
+        term: "Sacrificial Anode (โลหะกันกร่อนแบบสังเวย)",
+        definition: "การติดตั้งแท่งโลหะที่มีค่าศักย์ไฟฟ้าลบมากกว่า (เช่น ซิงก์หรืออลูมิเนียม) เชื่อมติดถังเหล็กคลังปิโตรเลียม เพื่อปล่อยให้โลหะชนิดนี้ผุกร่อนแทนตัวถังเหล็กหลัก",
         courseCode: "01213427",
-        courseName: "Corrosion",
-        tips: "ระบุกลไกเกิดกัลวานิกแคลดดิ้งหรือรูผุพังในตัวอย่างถังรับน้ำอุตสาหกรรม"
+        courseName: "Corrosion of Materials",
+        tips: "ใช้วาดไดอะแกรมวิเคราะห์ปฏิกิริยากัลวานิกในรายงานโครงงานบทที่ 3"
       }
     ];
   },
@@ -494,8 +541,9 @@ Email: [Your Email]`;
   // --- Module 5: Markdown Report Compiler Engine ---
   compileReportDraft() {
     const student = STUDENT;
-    const activeComp = state.ilmCompanies.find(c => c.status === 'accepted') || state.ilmCompanies[0];
+    const activeComp = state.ilmCompanies.find(c => c.status === 'accepted') || state.ilmCompanies[0] || { name: 'กรมธุรกิจพลังงาน กระทรวงพลังงาน', address: 'ศูนย์เอนเนอร์ยี่คอมเพล็กซ์ วิภาวดีรังสิต', field: 'Fuel Safety Standards' };
     const logs = state.ilmLogs || [];
+    const schedule = state.ilmProfile.schedule || {};
     
     let logsMarkdown = '';
     if (logs.length > 0) {
@@ -504,132 +552,34 @@ Email: [Your Email]`;
       logsMarkdown = '*ยังไม่มีข้อมูลบันทึกเวลางานปฏิบัติการรายวัน*';
     }
 
-    return `# รายงานผลการฝึกงานวิศวกรรมวัสดุ (01213399)
+    const startDateStr = schedule.startDate ? new Date(schedule.startDate).toLocaleDateString('th-TH') : '[ยังไม่ได้ป้อนวันที่]';
+    const endDateStr = schedule.endDate ? new Date(schedule.endDate).toLocaleDateString('th-TH') : '[ยังไม่ได้ป้อนวันที่]';
+
+    return `# รายงานผลการฝึกงานวิชาชีพวิศวกรรมวัสดุ (01213399) ณ หน่วยงานราชการ
 **สถานที่ฝึกงาน**: ${activeComp.name}
 **ผู้จัดทำ**: นาย${student.nameTh} (${student.name})
 **รหัสนิสิต**: ${student.id} ชั้นปีที่ 3 
-**หลักสูตร**: วิศวกรรมศาสตรบัณฑิต (สาขาวิชาพิษเคมีและวิศวกรรมวัสดุ) มหาวิทยาลัยเกษตรศาสตร์
+**หลักสูตร**: วิศวกรรมศาสตรบัณฑิต (สาขาวิชาวิศวกรรมวัสดุ) คณะวิศวกรรมศาสตร์ มหาวิทยาลัยเกษตรศาสตร์
+**ช่วงระยะเวลาฝึกงาน**: ตั้งแต่วันที่ ${startDateStr} ถึงวันที่ ${endDateStr}
 
 ---
 
-## บทที่ 1: ข้อมูลเบื้องต้นของสถานประกอบการ
-บริษัทเป้าหมายและแหล่งฝึกงานหลักคือ **${activeComp.name}** ตั้งอยู่ที่ ${activeComp.address || 'N/A'} โดยดำเนินงานในสายวิศวกรรมหลักด้านวัสดุกลุ่ม **${activeComp.field || 'N/A'}** 
-ขอบข่ายการทำงานและการผลิตเกี่ยวข้องโดยตรงกับการออกแบบ ปรับปรุง หรือควบคุมคุณภาพของผลิตภัณฑ์เพื่อการจัดจำหน่ายระดับประเทศ
+## บทที่ 1: ข้อมูลเบื้องต้นของกรมธุรกิจพลังงาน กระทรวงพลังงาน
+หน่วยงานเป้าหมายหลักคือ **${activeComp.name}** ตั้งอยู่ที่ ${activeComp.address || 'N/A'} โดยทำหน้าที่กำกับดูแล ควบคุม ตรวจสอบ และสร้างมาตรฐานความปลอดภัยสำหรับธุรกิจพลังงานเชื้อเพลิง คลังน้ำมัน ท่อส่งปิโตรเลียม และปั๊มแก๊ส LPG ทั่วประเทศ ซึ่งขอบเขตวัสดุที่เกี่ยวข้อง ได้แก่ เหล็กกล้าผสมคาร์บอนในถังแรงดัน ท่อส่งแก๊สแรงดันสูง และโลหะทนการกัดกร่อน
 
-## บทที่ 2: ทฤษฎีวิศวกรรมวัสดุศาสตร์ที่ประยุกต์ใช้
-การฝึกงานทางเทคนิคนี้ มีความเชื่อมโยงกับรายวิชาในหลักสูตรวิศวกรรมวัสดุของมหาวิทยาลัยเกษตรศาสตร์ ดังนี้:
-1. **ทฤษฎีการแปรรูปขึ้นรูปวัสดุ**: สอดคล้องโดยตรงกับรายวิชา *กระบวนการผลิตสำหรับวิศวกรวัสดุ (01213218)*
-2. **การศึกษาจุลภาคและการทดสอบคุณสมบัติ**: เชื่อมโยงกับวิชา *การศึกษาลักษณะเฉพาะของวัสดุ (01213311)* และวิชา *พฤติกรรมทางกลของวัสดุ (01213216)*
+## บทที่ 2: ทฤษฎีวิศวกรรมวัสดุศาสตร์และการวิเคราะห์การเสื่อมสภาพที่เกี่ยวข้อง
+ในระหว่างการฝึกงาน ได้ประยุกต์และเชื่อมโยงหลักวิชาความรู้จากวิศวกรรมวัสดุ มก. ดังนี้:
+1. **ทฤษฎีการกัดกร่อนและป้องกันสนิม (Corrosion of Materials - 01213427)**: อธิบายกลไกเกิดปฏิกิริยาไฟฟ้าเคมีในถังเก็บใต้ดิน และบทบาทของการติดตั้งแท่ง Sacrificial Anode แคโทดิกต้านสนิม
+2. **การทดสอบแบบไม่ทำลาย (Non-Destructive Testing NDT - 01213216)**: การตรวจอัลตราโซนิก (UT) หาจุดพร่องของแนวเชื่อมท่อ LPG
+3. **พฤติกรรมทางกลของวัสดุ (Mechanical Behavior - 01213216)**: การวิเคราะห์ลักษณะความเหนียวและจุดแตกหักล้าจากความดันสะสม
 
-## บทที่ 3: บันทึกข้อมูลและเวลาปฏิบัติงานสะสมรายวัน
-บันทึกตารางการลงเวลาปฏิบัติงานจริงสะสมตั้งแต่วันเริ่มต้น สอดรับกับคู่มือฝึกงาน Summer 2569:
+## บทที่ 3: บันทึกตารางลงเวลาปฏิบัติงานและรายงานความก้าวหน้าสะสมรายวัน
 
 ${logsMarkdown}
 
-## บทที่ 4: สรุปผลการปฏิบัติงาน ข้อเสนอแนะ และแนวทางการพัฒนารุ่นน้อง
-1. **ผลสัมฤทธิ์ที่ได้รับ**: ได้เรียนรู้วิถีการทำงานร่วมกับวิศวกรในหน้างานจริง และประยุกต์ทฤษฎีในห้องแล็บเข้ากับการผลิตเชิงพาณิชย์
-2. **ปัญหาและอุปสรรคที่พบ**: [ผู้ใช้สามารถเขียนกรอกเพิ่มเติมเพื่อสะท้อนคิดเกี่ยวกับกระบวนการทำงานในโรงงานได้ที่นี่]
-3. **ข้อเสนอแนะสำหรับภาควิชาฯ**: ควรส่งเสริมกระเรียนรู้ด้านทักษะเครื่องมือตรวจวิเคราะห์ชิ้นงานเชิงลึกให้ครอบคลุมก่อนออกฝึกงานภาคปฏิบัติจริง`;
-  },
-
-  // --- Module 6: Downloadable Completion Certificate Generator (HTML Canvas based) ---
-  generateECompletionCertificate() {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1000;
-    canvas.height = 700;
-    const ctx = canvas.getContext('2d');
-    
-    // Border Background
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, 1000, 700);
-    
-    // Outer Decorative Box
-    ctx.strokeStyle = '#1e3a8a'; // Deep Navy
-    ctx.lineWidth = 15;
-    ctx.strokeRect(30, 30, 940, 640);
-    
-    ctx.strokeStyle = '#b45309'; // Amber Gold inner thin line
-    ctx.lineWidth = 3;
-    ctx.strokeRect(48, 48, 904, 604);
-    
-    // Watermark Symbol in Background
-    ctx.fillStyle = 'rgba(30, 58, 138, 0.03)';
-    ctx.font = '300px Sarabun';
-    ctx.textAlign = 'center';
-    ctx.fillText('⚗', 500, 480);
-    
-    // Header
-    ctx.fillStyle = '#1e3a8a';
-    ctx.font = 'bold 36px Sarabun';
-    ctx.textAlign = 'center';
-    ctx.fillText('CERTIFICATE OF COMPLETION', 500, 120);
-    
-    ctx.fillStyle = '#4b5563';
-    ctx.font = '20px Sarabun';
-    ctx.fillText('This certificate is proudly awarded to', 500, 180);
-    
-    // Name
-    ctx.fillStyle = '#b45309'; // Gold
-    ctx.font = 'bold 38px Sarabun';
-    ctx.fillText(STUDENT.name.toUpperCase(), 500, 250);
-    
-    ctx.fillStyle = '#374151';
-    ctx.font = '18px Sarabun';
-    ctx.fillText(`Student ID: ${STUDENT.id}  |  Major: ${STUDENT.major}`, 500, 290);
-    
-    // Core body
-    const activeComp = state.ilmCompanies.find(c => c.status === 'accepted') || state.ilmCompanies[0] || { name: 'SCG Chemicals' };
-    ctx.fillStyle = '#4b5563';
-    ctx.font = '18px Sarabun';
-    ctx.fillText(`For successfully completing 240 hours of summer engineering vocational internship`, 500, 360);
-    ctx.fillText(`focusing on Materials Science & Engineering daily operations at`, 500, 395);
-    
-    ctx.fillStyle = '#111827';
-    ctx.font = 'bold 22px Sarabun';
-    ctx.fillText(activeComp.name.toUpperCase(), 500, 440);
-    
-    ctx.fillStyle = '#6b7280';
-    ctx.font = '14px Sarabun';
-    ctx.fillText(`Internship Period: April 1, 2026 - May 29, 2026`, 500, 480);
-
-    // Signatures
-    ctx.strokeStyle = '#1f2937';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(200, 580);
-    ctx.lineTo(400, 580);
-    ctx.moveTo(600, 580);
-    ctx.lineTo(800, 580);
-    ctx.stroke();
-    
-    ctx.fillStyle = '#374151';
-    ctx.font = 'bold 15px Sarabun';
-    ctx.fillText('Mr. Nitipat Tipchai', 300, 605);
-    ctx.font = '13px Sarabun';
-    ctx.fillText('Student Developer & Intern', 300, 625);
-    
-    // Mock signature for the supervisor
-    ctx.fillStyle = '#b45309';
-    ctx.font = 'italic 24px Brush Script MT, cursive, Sarabun';
-    ctx.fillText('Supervisor Approved', 700, 560);
-    
-    ctx.fillStyle = '#374151';
-    ctx.font = 'bold 15px Sarabun';
-    ctx.fillText('Internship Mentor', 700, 605);
-    ctx.font = '13px Sarabun';
-    ctx.fillText('Materials Production Dept.', 700, 625);
-
-    // Barcode on corner
-    ctx.fillStyle = '#111827';
-    ctx.font = '10px Courier';
-    ctx.fillText('ID: ' + STUDENT.id, 500, 650);
-
-    // Trigger download
-    const url = canvas.toDataURL('image/png');
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Internship_Completion_Certificate_${STUDENT.id}.png`;
-    a.click();
-    if (typeof showToast === 'function') showToast('📜 ทำการดาวน์โหลด E-Certificate ของคุณเรียบร้อยแล้ว!');
+## บทที่ 4: สรุปผลการศึกษาโครงงาน ปัญหา ข้อเสนอแนะ และความคิดสะท้อนคิด
+1. **หัวข้อโครงงานความปลอดภัยปิโตรเลียม**: การประเมินรอยเชื่อมและการกัดกร่อนของวัสดุถังทนแรงดันและท่อส่งพลังงานของกรมธุรกิจพลังงาน
+2. **ปัญหาและอุปสรรค**: เรียนรู้ระบบกฎเกณฑ์เอกสารทางราชการ กฎหมายการควบคุมน้ำมันเชื้อเพลิง และความปลอดภัยในการเข้าหน้างานคลังปิโตรเลียมขนาดใหญ่
+3. **ข้อเสนอแนะต่อหลักสูตร**: ควรเพิ่มความรู้การศึกษาตรวจสอบรอยเชื่อมและมาตรฐานท่อส่งพลังงาน (เช่น มาตรฐาน API/ASME) ในคาบเรียนเพิ่มเติม`;
   }
 };
