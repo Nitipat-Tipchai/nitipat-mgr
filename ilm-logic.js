@@ -13,12 +13,14 @@ const ILMHub = {
     localStorage.setItem('ilm_companies', JSON.stringify(state.ilmCompanies));
     localStorage.setItem('ilm_profile', JSON.stringify(state.ilmProfile));
     localStorage.setItem('ilm_logs', JSON.stringify(state.ilmLogs));
+    localStorage.setItem('ilm_files', JSON.stringify(state.ilmFiles));
     
     // Save to firebase if logged in
     if (typeof fsSet === 'function' && state.userId) {
       fsSet('ilm_data', 'profile', state.ilmProfile).catch(e => console.warn(e));
       fsSet('ilm_data', 'companies', { list: state.ilmCompanies }).catch(e => console.warn(e));
       fsSet('ilm_data', 'logs', { list: state.ilmLogs }).catch(e => console.warn(e));
+      fsSet('ilm_data', 'files', { list: state.ilmFiles }).catch(e => console.warn(e));
     }
   },
 
@@ -30,6 +32,8 @@ const ILMHub = {
     state.ilmCompanies = JSON.parse(localStorage.getItem('ilm_companies') || '[]');
     state.ilmProfile = JSON.parse(localStorage.getItem('ilm_profile') || '{}');
     state.ilmLogs = JSON.parse(localStorage.getItem('ilm_logs') || '[]');
+    state.ilmFiles = JSON.parse(localStorage.getItem('ilm_files') || '[]');
+
     
     // Initialize default profile values
     if (!state.ilmProfile.currentPhase) state.ilmProfile.currentPhase = 'phase1';
@@ -92,6 +96,17 @@ const ILMHub = {
         { id: 'c3', name: 'สถาบันพัฒนาเทคนิคพลังงาน (ชลบุรี)', field: 'NDT & Inspection', status: 'interested', salary: 0, address: 'อำเภอศรีราชา ชลบุรี', contact: 'training-division@doeb.go.th' }
       ];
       localStorage.setItem('ilm_companies', JSON.stringify(state.ilmCompanies));
+    }
+    
+    // Set default files ONLY if never initialized in LocalStorage
+    if (localStorage.getItem('ilm_files') === null) {
+      state.ilmFiles = [
+        { id: 'f_resume', name: 'Resume_Nitipat_Tipchai.pdf', type: 'file', parentId: 'root', size: '1.2 MB', mimeType: 'application/pdf', data: 'mock_pdf_resume_data', slug: 'resume', password: '', createdAt: Date.now() - 86400000 * 5 },
+        { id: 'f_transcript', name: 'Transcript_KU_Year3.pdf', type: 'file', parentId: 'root', size: '850 KB', mimeType: 'application/pdf', data: 'mock_pdf_transcript_data', slug: 'transcript', password: '', createdAt: Date.now() - 86400000 * 5 },
+        { id: 'f_portfolio', name: 'ผลงานโครงงานคลังพลังงาน (LPG)', type: 'folder', parentId: 'root', size: '--', mimeType: '', data: '', slug: '', password: '', createdAt: Date.now() - 86400000 * 2 },
+        { id: 'f_safety_cert', name: 'ใบรับรองความปลอดภัยคลังแก๊ส.png', type: 'file', parentId: 'f_portfolio', size: '420 KB', mimeType: 'image/png', data: 'mock_image_cert_data', slug: 'safety-certificate', password: '', createdAt: Date.now() - 86400000 * 1 }
+      ];
+      localStorage.setItem('ilm_files', JSON.stringify(state.ilmFiles));
     }
     
     this.saveState();
