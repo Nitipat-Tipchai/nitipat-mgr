@@ -4876,7 +4876,7 @@ async function initWebPush() {
       console.log('Firebase Service Worker registered');
 
       // อัปเดต Token อัตโนมัติถ้าเคยอนุญาตแล้ว
-      if (Notification.permission === 'granted' && typeof getToken !== 'undefined') {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && typeof getToken !== 'undefined') {
         const registration = await navigator.serviceWorker.ready;
         try {
           const currentToken = await getToken(messaging, {
@@ -4998,7 +4998,7 @@ window.saveSingleReflection = async (id) => {
 };
 // ── Notification Logic ──
 function pushNotif(title, body, delay = 0) {
-  if (!state.notificationsGranted) return;
+  if (!state.notificationsGranted || typeof Notification === 'undefined') return;
   if (delay <= 0) {
     new Notification(title, { body, icon: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png" });
   } else {
