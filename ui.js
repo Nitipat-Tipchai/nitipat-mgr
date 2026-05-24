@@ -4635,8 +4635,17 @@ async function initApp() {
     const unlocked = sessionStorage.getItem('unlocked');
     const unlockedAt = sessionStorage.getItem('unlocked_at');
     const isTimeout = unlockedAt && Date.now() - parseInt(unlockedAt) > 1800000;
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const isShareLink = urlParams.has('share');
 
-    if (unlocked === 'true' && !isTimeout) {
+    if (isShareLink) {
+      state.isLocked = false;
+      document.getElementById('login-gate')?.classList.add('inactive');
+      if (typeof startAppPublic === 'function') {
+        await startAppPublic();
+      }
+    } else if (unlocked === 'true' && !isTimeout) {
       state.isLocked = false;
       document.getElementById('login-gate')?.classList.add('inactive');
       await startAppCore();
