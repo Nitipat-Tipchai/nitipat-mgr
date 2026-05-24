@@ -107,7 +107,7 @@ const STUDENT = {
 // ══════════════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════════════
-let state = {
+var state = {
   view: 'dashboard',
   isLocked: sessionStorage.getItem('unlocked') !== 'true',
   pin: null,
