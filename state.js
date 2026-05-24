@@ -202,5 +202,9 @@ let state = {
   // ILM State
   ilmCompanies: JSON.parse(localStorage.getItem('ilm_companies') || '[]'),
   ilmProfile: JSON.parse(localStorage.getItem('ilm_profile') || '{}'),
-  ilmLogs: JSON.parse(localStorage.getItem('ilm_logs') || '[]')
+  ilmLogs: JSON.parse(localStorage.getItem('ilm_logs') || '[]'),
+  ilmFiles: JSON.parse(localStorage.getItem('ilm_files') || '[]'),
+  ilmCurrentFolderId: 'root',
+  ilmSelectedFileId: null
 };
+
