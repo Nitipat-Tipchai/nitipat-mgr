@@ -1,4 +1,4 @@
-﻿// ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
 // DASHBOARD
 // ══════════════════════════════════════════════════
 function renderDashboard(gpaVal, proVal, curSemVal) {
@@ -293,7 +293,7 @@ function renderCourses() {
               </div>
             `;
     }).join('')}
-            <div class="folder-card add-folder" style="--folder-bg: #f1f5f9; border-style: dashed; justify-content:center; align-items:center;" onclick="openAddCourseForm()">
+            <div class="folder-card add-folder" style="--folder-bg: #f1f5f9; border-style: dashed; justify-content:center; align-items:center;" onclick="openAddCourseForm(null, '${sem.id}')">
                <span style="font-size:30px; opacity:0.3;">+</span>
             </div>
           </div>
@@ -3238,9 +3238,10 @@ function openAddSemesterForm(existing = null) {
 
 const COURSE_COLORS_LIST = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#dc2626', '#7c3aed', '#db2777', '#ea580c'];
 
-function openAddCourseForm(existing = null) {
+function openAddCourseForm(existing = null, targetSemId = null) {
   const curSem = getCurrentSemester() || state.semesters[state.semesters.length - 1];
-  const semOptions = state.semesters.map(s => `<option value="${s.id}" ${(existing ? existing.semId === s.id : curSem?.id === s.id) ? 'selected' : ''}>${s.name}</option>`).join('');
+  const defaultSemId = existing ? existing.semId : (targetSemId || curSem?.id);
+  const semOptions = state.semesters.map(s => `<option value="${s.id}" ${defaultSemId === s.id ? 'selected' : ''}>${s.name}</option>`).join('');
 
   let slots = existing?.schedules || [{ day: 0, start: "09:00", end: "12:00" }];
 
