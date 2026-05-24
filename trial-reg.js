@@ -1,7 +1,7 @@
 /**
- * NITIPAT MANAGER - Trial Course Registration Simulator (Refined Edition)
+ * NITIPAT MANAGER - Trial Course Registration Simulator (Multi-day Edition)
  * ฟีเจอร์ทดลองจัดตารางเรียนเทอมหน้า ตรวจวิชาตัวต่อ เช็คตารางชน และออกใบเสร็จแอนิเมชัน 3D พร้อมเสียงสังเคราะห์!
- * เวอร์ชันแก้บั๊ก UI และให้ผู้ใช้กรอกวันเวลาเรียน/อาจารย์/หมู่เรียน ด้วยตนเอง 100%
+ * เวอร์ชันอัปเกรดสูงสุด: รองรับรายวิชาที่เรียนหลายวัน/หลายเวลา (Multi-day Schedules) ได้อย่างสมบูรณ์แบบ
  */
 
 // โครงสร้างวันย่อและตัวย่อสำหรับตารางเรียน
@@ -11,8 +11,8 @@ const DAYS_COLORS = ['#fbbf24', '#f472b6', '#34d399', '#f87171', '#60a5fa', '#c0
 
 // สถานะการลงทะเบียนจำลอง
 let trialState = {
-  selectedCourses: [], // รายการวิชาที่เลือกลงทะเบียนจำลอง { courseCode, secNo, instructor, room, day, startHour, endHour, timeStr }
-  activeCategory: 'general', // หมวดวิชาหลักที่กำลังเลือกดูอยู่
+  selectedCourses: [], // รายการวิชาที่เลือกลงทะเบียนจำลอง { courseCode, secNo, instructor, room, slots: [{ day, startHour, endHour, startTime, endTime, timeStr }] }
+  activeCategory: 'general', 
   searchQuery: '',
   isPrinting: false,
   isTorn: false
@@ -32,12 +32,40 @@ function decimalToTimeString(dec) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-// โหลดสถานะลงทะเบียนจำลองจาก localStorage
+// โหลดสถานะลงทะเบียนจำลองจาก localStorage พร้อมระบบแปลงข้อมูลเวอร์ชันเก่า (Backward Compatibility Migration)
 function initTrialState() {
   const saved = localStorage.getItem('nitipat_trial_registration');
   if (saved) {
     try {
-      trialState.selectedCourses = JSON.parse(saved);
+      const loaded = JSON.parse(saved);
+      // ตรวจเช็คและแปลงโครงสร้างข้อมูลจำลองจากเวอร์ชันเก่า (Single Slot) ให้เป็นโครงสร้างใหม่ (Multi-slots array)
+      trialState.selectedCourses = loaded.map(item => {
+        if (!item.slots) {
+          const oldDay = item.day !== undefined ? item.day : 0;
+          const oldStartHour = item.startHour !== undefined ? item.startHour : 9.0;
+          const oldEndHour = item.endHour !== undefined ? item.endHour : 12.0;
+          const oldStartStr = item.startTime || decimalToTimeString(oldStartHour);
+          const oldEndStr = item.endTime || decimalToTimeString(oldEndHour);
+          
+          item.slots = [{
+            day: oldDay,
+            startHour: oldStartHour,
+            endHour: oldEndHour,
+            startTime: oldStartStr,
+            endTime: oldEndStr,
+            timeStr: `${DAYS_ENG[oldDay]} ${oldStartStr} - ${oldEndStr}`
+          }];
+
+          // ลบฟิลด์ของเวอร์ชันเก่าทิ้งเพื่อความเป็นระเบียบ
+          delete item.day;
+          delete item.startHour;
+          delete item.endHour;
+          delete item.startTime;
+          delete item.endTime;
+          delete item.timeStr;
+        }
+        return item;
+      });
     } catch (e) {
       trialState.selectedCourses = [];
     }
@@ -51,7 +79,6 @@ function saveTrialState() {
 
 // -------------------------------------------------------------
 // PREREQUISITES VERIFIER
-// ตรวจสอบวิชาตัวต่อโดยเชื่อมโยงกับ STUDENT.existingGrades
 // -------------------------------------------------------------
 function checkCoursePrerequisites(course) {
   if (!course.prereq || course.prereq.length === 0) {
@@ -66,7 +93,6 @@ function checkCoursePrerequisites(course) {
     for (const key in grades) {
       if (key.startsWith(reqCode)) {
         const record = grades[key];
-        // เกรดที่ผ่านคือ A, B+, B, C+, C, D+, D, P
         if (['A', 'B+', 'B', 'C+', 'C', 'D+', 'D', 'P'].includes(record.grade)) {
           isPassed = true;
           break;
@@ -85,12 +111,12 @@ function checkCoursePrerequisites(course) {
 }
 
 // -------------------------------------------------------------
-// CUSTOM SCHEDULE CONFLICT DETECTOR
-// ตรวจสอบการทับซ้อนเวลาจากข้อมูลเวลาเรียนที่ผู้ใช้กรอกเอง
+// MULTI-SLOT SCHEDULE CONFLICT DETECTOR
+// ตรวจสอบคาบเวลาเรียนทับซ้อนชนกันของทุกคาบเรียน (Multi-day checking)
 // -------------------------------------------------------------
-function checkCustomScheduleConflict(courseCode, day, startHour, endHour, existingIndex = null) {
+function checkCustomSlotConflict(courseCode, day, startHour, endHour, existingIndex = null) {
   for (let i = 0; i < trialState.selectedCourses.length; i++) {
-    if (existingIndex !== null && existingIndex === i) continue; // ข้ามการเช็คชนกับตัวเองตอนกำลังแก้ไข
+    if (existingIndex !== null && existingIndex === i) continue; // ข้ามการเช็คคาบเรียนชนของตัวเองตอนแก้ไข
 
     const item = trialState.selectedCourses[i];
     if (item.courseCode === courseCode && existingIndex === null) continue;
@@ -98,15 +124,18 @@ function checkCustomScheduleConflict(courseCode, day, startHour, endHour, existi
     const addedCourse = ALL_COURSES.find(c => c.code === item.courseCode);
     if (!addedCourse) continue;
 
-    // ชนกันถ้าวัดวันเดียวกัน และช่วงเวลาทับซ้อนคาบเกี่ยวกัน
-    if (item.day === day) {
-      const isOverlap = !(endHour <= item.startHour || startHour >= item.endHour);
-      if (isOverlap) {
-        return {
-          conflict: true,
-          conflictingCourse: addedCourse,
-          timeStr: item.timeStr
-        };
+    // ตรวจสอบเทียบกับทุกคาบเรียนของวิชาที่ถูกเลือกลงทะเบียนแล้ว
+    const slots = item.slots || [];
+    for (const addedSlot of slots) {
+      if (addedSlot.day === day) {
+        const isOverlap = !(endHour <= addedSlot.startHour || startHour >= addedSlot.endHour);
+        if (isOverlap) {
+          return {
+            conflict: true,
+            conflictingCourse: addedCourse,
+            timeStr: `${DAYS_ENG[addedSlot.day]} ${addedSlot.startTime} - ${addedSlot.endTime}`
+          };
+        }
       }
     }
   }
@@ -115,7 +144,6 @@ function checkCustomScheduleConflict(courseCode, day, startHour, endHour, existi
 
 // -------------------------------------------------------------
 // SOUND SYNTHESIZER (WEB AUDIO API)
-// สังเคราะห์เสียงเอฟเฟกต์ด้วยโค้ด 100% ไม่ต้องพึ่งพาไฟล์ภายนอก!
 // -------------------------------------------------------------
 function getAudioContext() {
   if (!window.trialAudioCtx) {
@@ -127,7 +155,6 @@ function getAudioContext() {
   return window.trialAudioCtx;
 }
 
-// 1. เสียงพิมพ์หัวเข็มเครื่องพิมพ์ (Dot-matrix Printer printing sound)
 function playPrinterSound() {
   try {
     const ctx = getAudioContext();
@@ -146,7 +173,6 @@ function playPrinterSound() {
   } catch (e) {}
 }
 
-// 2. เสียงฉีกกระดาษขาวขาดฟึ่บ! (Paper Tearing sound)
 function playTearSound() {
   try {
     const ctx = getAudioContext();
@@ -176,12 +202,10 @@ function playTearSound() {
     noise.connect(filter);
     filter.connect(gainNode);
     gainNode.connect(ctx.destination);
-    
     noise.start();
   } catch (e) {}
 }
 
-// 3. เสียงปิ๊งเมื่อสำเร็จ (Sparkle sound)
 function playSuccessSound() {
   try {
     const ctx = getAudioContext();
@@ -207,8 +231,7 @@ function playSuccessSound() {
 }
 
 // -------------------------------------------------------------
-// UI RENDERING FUNCTION
-// ฟังก์ชันสร้างโค้ด HTML ตารางเรียนที่ลื่นไหล ปรับเข้ากับธีมหลัก 100%
+// RENDER INTERACTIVE PAGES
 // -------------------------------------------------------------
 function renderTrialReg() {
   initTrialState();
@@ -241,7 +264,6 @@ function renderTrialReg() {
 
   return `
     <style>
-      /* ดีไซน์พรีเมียม สไตล์ Glassmorphism กลมกลืนกับธีมหลัก */
       .sim-page-wrapper {
         font-family: 'Kanit', sans-serif;
         padding: 20px;
@@ -264,7 +286,6 @@ function renderTrialReg() {
         }
       }
 
-      /* Glowing Header */
       .sim-header {
         display: flex;
         justify-content: space-between;
@@ -293,7 +314,6 @@ function renderTrialReg() {
         color: var(--text-muted);
       }
 
-      /* Credits Progress Badge */
       .credits-meter {
         background: var(--glass-card-bg);
         border: 2px dashed #3b82f6;
@@ -316,7 +336,6 @@ function renderTrialReg() {
         50% { box-shadow: 0 0 10px 3px rgba(239, 68, 68, 0.2); }
       }
 
-      /* 📚 Tab selectors */
       .cat-tabs {
         display: flex;
         gap: 8px;
@@ -345,7 +364,6 @@ function renderTrialReg() {
         box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
       }
 
-      /* Course list and Search */
       .search-box-wrap {
         position: relative;
         margin-bottom: 16px;
@@ -386,7 +404,6 @@ function renderTrialReg() {
         padding-right: 4px;
       }
 
-      /* 🎴 Course interactive card */
       .course-card-sim {
         background: var(--glass-card-bg);
         border: 1px solid var(--glass-border);
@@ -448,7 +465,6 @@ function renderTrialReg() {
         margin: 0;
       }
 
-      /* Shaking Spring Animation */
       @keyframes spring-shake {
         0%, 100% { transform: translateX(0); }
         15%, 45%, 75% { transform: translateX(-5px); }
@@ -459,7 +475,6 @@ function renderTrialReg() {
         animation: spring-shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
       }
 
-      /* 📅 Calendar wrapper with horizontal scroll support */
       .timetable-scroll-wrap {
         width: 100%;
         overflow-x: auto;
@@ -471,11 +486,11 @@ function renderTrialReg() {
       .sched-grid {
         display: grid;
         grid-template-columns: 50px repeat(5, 1fr);
-        grid-template-rows: 35px repeat(12, 32px); /* 8:00 - 20:00 (12 slots) */
+        grid-template-rows: 35px repeat(12, 32px); 
         gap: 2px;
         background: var(--glass);
         padding: 6px;
-        min-width: 620px; /* ป้องกันแถวบีบอัดเละเทะในจอเล็ก */
+        min-width: 620px; 
       }
 
       .grid-corner {
@@ -541,7 +556,6 @@ function renderTrialReg() {
         white-space: nowrap;
       }
 
-      /* 🎫 ULTRA-PREMIUM THERMAL RECEIPT SLIDING SLOT */
       .receipt-container {
         display: none;
         perspective: 1000px;
@@ -627,7 +641,6 @@ function renderTrialReg() {
         100% { transform: rotate(-30deg) translateY(600px) translateX(-80px) scale(0.95); opacity: 0; }
       }
 
-      /* Buttons & Badges */
       .sim-btn {
         background: linear-gradient(135deg, #3b82f6, #1d4ed8);
         color: white;
@@ -709,7 +722,7 @@ function renderTrialReg() {
       <div class="sim-header">
         <div class="sim-title-wrap">
           <h1>🎫 ทดลองจัดตารางเรียนเทอมหน้า</h1>
-          <p>วางแผนจัดหน่วยกิต คาบเวลาเรียน และประเมินผ่านเกณฑ์วิชาตัวต่ออย่างอิสระ 100% (ข้อมูลกรอกตารางด้วยตนเอง)</p>
+          <p>วางแผนจัดหน่วยกิต คาบเวลาเรียน และประเมินผ่านเกณฑ์วิชาตัวต่ออย่างอิสระ 100% (รองรับวิชาที่เรียนหลายวัน/หลายเวลา)</p>
         </div>
         <div class="credits-meter ${totalCredits > 22 ? 'overflow' : ''}" id="creditsMeter">
           <div style="font-size: 0.7rem; opacity: 0.7; font-weight: bold; text-transform: uppercase;">หน่วยกิตจำลองสะสม</div>
@@ -756,6 +769,12 @@ function renderTrialReg() {
               if (isAdded) cardClass += ' added';
               if (!prereqStatus.passed) cardClass += ' prereq-failed';
 
+              // ประกอบเวลาเรียนย่อเพื่อแสดงผลในการ์ด
+              let timeSummary = '';
+              if (isAdded && userSelection.slots) {
+                timeSummary = userSelection.slots.map(s => `${DAYS_ENG[s.day]} ${s.startTime}-${s.endTime}`).join(', ');
+              }
+
               return `
                 <div class="course-card-sim ${cardClass}" id="card-${c.code}">
                   <div class="card-header-sim">
@@ -775,12 +794,12 @@ function renderTrialReg() {
                     }
                   </div>
 
-                  <!-- ข้อมูลที่กรอกไว้ (ถ้าเพิ่มแล้ว) -->
+                  <!-- ข้อมูลคาบเรียนเรียนทั้งหมดที่กรอกไว้ -->
                   ${isAdded ? `
                     <div style="background:rgba(59,130,246,0.06); padding:8px 12px; border-radius:10px; font-size:0.78rem; display:flex; flex-direction:column; gap:2px;">
                       <div><strong>หมู่เรียน (Sec):</strong> ${userSelection.secNo} | <strong>ผู้สอน:</strong> ${userSelection.instructor || '-'}</div>
                       <div><strong>ห้องเรียน:</strong> ${userSelection.room || '-'}</div>
-                      <div style="color:#3b82f6; font-weight:700;">⏰ เวลา: ${userSelection.timeStr}</div>
+                      <div style="color:#3b82f6; font-weight:700;">⏰ เวลา: ${timeSummary}</div>
                     </div>
                   ` : ''}
 
@@ -805,7 +824,7 @@ function renderTrialReg() {
           <!-- Interactive Calendar Grid with scroll support -->
           <div class="sim-card" style="padding: 14px;">
             <h2 style="font-size: 1.05rem; font-weight: 800; margin: 0 0 12px 0; display: flex; align-items: center; gap: 6px;">
-              <span>📅</span> ตารางเรียนลงทะเบียนจำลอง (ลากจอซ้ายขวาได้หากเปิดในมือถือ)
+              <span>📅</span> ตารางเรียนลงทะเบียนจำลอง (เรียนหลายวันจะขึ้นแยกเป็นกล่องตามคาบเรียน)
             </h2>
 
             <div class="timetable-scroll-wrap">
@@ -823,35 +842,38 @@ function renderTrialReg() {
                   const c = ALL_COURSES.find(x => x.code === item.courseCode);
                   if (!c) return [];
 
-                  // ตรวจสอบคาบชนแบบละเอียด
-                  const conflict = checkCustomScheduleConflict(c.code, item.day, item.startHour, item.endHour, idx);
-                  const isConflicting = conflict.conflict;
+                  const slots = item.slots || [];
+                  return slots.map(slot => {
+                    // ตรวจสอบความถูกต้องคาบชนกันทีละคาบเรียน (Multi-slots overlap checking)
+                    const conflict = checkCustomSlotConflict(c.code, slot.day, slot.startHour, slot.endHour, idx);
+                    const isConflicting = conflict.conflict;
 
-                  // คำนวณแถวตำแหน่งตารางเรียนจำลอง
-                  const rowStart = item.startHour - 8 + 2;
-                  const rowEnd = item.endHour - 8 + 2;
-                  const col = item.day + 2; // day 0 = col 2 (MON)
+                    // คำนวณแถวตำแหน่ง
+                    const rowStart = slot.startHour - 8 + 2;
+                    const rowEnd = slot.endHour - 8 + 2;
+                    const col = slot.day + 2; // day 0 = col 2 (MON)
 
-                  const color = DAYS_COLORS[item.day % DAYS_COLORS.length];
-                  const borderStyle = isConflicting ? 'conflict-pulsing' : '';
+                    const color = DAYS_COLORS[slot.day % DAYS_COLORS.length];
+                    const borderStyle = isConflicting ? 'conflict-pulsing' : '';
 
-                  const activeStyle = `
-                    grid-column: ${col};
-                    grid-row: ${rowStart} / ${rowEnd};
-                    background: ${isConflicting ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.1))' : color + '18'};
-                    border-color: ${isConflicting ? '#ef4444' : color};
-                    color: ${isConflicting ? '#ef4444' : 'var(--text)'};
-                  `;
+                    const activeStyle = `
+                      grid-column: ${col};
+                      grid-row: ${rowStart} / ${rowEnd};
+                      background: ${isConflicting ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.1))' : color + '18'};
+                      border-color: ${isConflicting ? '#ef4444' : color};
+                      color: ${isConflicting ? '#ef4444' : 'var(--text)'};
+                    `;
 
-                  return `
-                    <div class="grid-block ${borderStyle}" style="${activeStyle}" onclick="openSimCourseModal('${c.code}', ${idx})" title="คลิกเพื่อแก้ไขข้อมูลคาบเรียนจำลอง\nผู้สอน: ${item.instructor || '-'}\nห้อง: ${item.room || '-'}">
-                      <span class="gb-code">${c.code}</span>
-                      <div style="font-size: 0.6rem; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                        ${c.name}
+                    return `
+                      <div class="grid-block ${borderStyle}" style="${activeStyle}" onclick="openSimCourseModal('${c.code}', ${idx})" title="คลิกเพื่อแก้ไขตารางวิชาจำลอง\nผู้สอน: ${item.instructor || '-'}\nห้อง: ${item.room || '-'}">
+                        <span class="gb-code">${c.code}</span>
+                        <div style="font-size: 0.6rem; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                          ${c.name}
+                        </div>
+                        <span class="gb-details">📍 Sec ${item.secNo} | ${item.room || '-'}</span>
                       </div>
-                      <span class="gb-details">📍 Sec ${item.secNo} | ${item.room || '-'}</span>
-                    </div>
-                  `;
+                    `;
+                  });
                 }).join('')}
               </div>
             </div>
@@ -868,8 +890,12 @@ function renderTrialReg() {
                 
                 trialState.selectedCourses.forEach((item, idx) => {
                   const c = ALL_COURSES.find(x => x.code === item.courseCode);
-                  if (c) {
-                    if (checkCustomScheduleConflict(c.code, item.day, item.startHour, item.endHour, idx).conflict) hasConflict = true;
+                  if (c && item.slots) {
+                    item.slots.forEach(slot => {
+                      if (checkCustomSlotConflict(c.code, slot.day, slot.startHour, slot.endHour, idx).conflict) {
+                        hasConflict = true;
+                      }
+                    });
                     if (!checkCoursePrerequisites(c).passed) hasPrereqError = true;
                   }
                 });
@@ -888,7 +914,7 @@ function renderTrialReg() {
                   if (!hasConflict) {
                     html += `<div style="color:#10b981; font-size:0.82rem; font-weight:bold;">✓ ตารางเวลาเรียนสมบูรณ์ ไม่มีเวลาเรียนชนทับซ้อนกัน</div>`;
                   } else {
-                    html += `<div style="color:#ef4444; font-size:0.82rem; font-weight:bold;">⚠️ มีตารางเรียนชนซ้อนกัน! กรุณาคลิกที่คาบเรียนบนตารางหรือกดปุ่มสีส้มเพื่อแก้เวลาเรียนใหม่</div>`;
+                    html += `<div style="color:#ef4444; font-size:0.82rem; font-weight:bold;">⚠️ มีตารางเรียนชนซ้อนกัน! กรุณาคลิกที่คาบเรียนบนตารางเพื่อแก้ไขข้อมูลวันและช่วงเวลาใหม่</div>`;
                   }
 
                   if (!hasPrereqError) {
@@ -942,6 +968,8 @@ function renderTrialReg() {
                     ${trialState.selectedCourses.map(item => {
                       const c = ALL_COURSES.find(x => x.code === item.courseCode);
                       if (!c) return '';
+                      // สร้างรายการเวลาสั้นๆ แสดงในใบเสร็จ
+                      const timesList = (item.slots || []).map(s => `${DAYS_ENG[s.day]} ${s.startTime}-${s.endTime}`).join(', ');
                       return `
                         <tr>
                           <td style="padding: 3px 0; font-weight: bold;">${c.code}</td>
@@ -951,7 +979,7 @@ function renderTrialReg() {
                         </tr>
                         <tr style="border-bottom: 1px dotted #ccc;">
                           <td colspan="4" style="font-size: 0.55rem; color: #444; padding-bottom: 3px;">
-                            ↳ TIME: ${item.timeStr} (ROOM: ${item.room || 'N/A'}) [INSTR: ${item.instructor || 'N/A'}]
+                            ↳ TIME: ${timesList} (ROOM: ${item.room || 'N/A'}) [INSTR: ${item.instructor || 'N/A'}]
                           </td>
                         </tr>
                       `;
@@ -1005,7 +1033,7 @@ function renderTrialReg() {
 }
 
 // -------------------------------------------------------------
-// INTERACTIVE POPUP MODAL FOR CUSTOM SCHEDULE INPUT
+// INTERACTIVE POPUP MODAL FOR CUSTOM SCHEDULE INPUT (WITH DYNAMIC SLOTS ADDER)
 // -------------------------------------------------------------
 
 function openSimCourseModal(courseCode, existingIndex = null) {
@@ -1015,66 +1043,133 @@ function openSimCourseModal(courseCode, existingIndex = null) {
   const isEditing = existingIndex !== null;
   const existing = isEditing ? trialState.selectedCourses[existingIndex] : null;
 
-  // โหลดข้อมูลเดิมถ้าเป็นการแก้ไข หรือโหลดข้อมูลเริ่มต้นถ้าเป็นคาบใหม่
   const secNo = existing ? existing.secNo : "1";
   const instructor = existing ? existing.instructor : "";
   const room = existing ? existing.room : "";
-  const day = existing ? existing.day : 0;
-  const startTime = existing ? decimalToTimeString(existing.startHour) : "09:00";
-  const endTime = existing ? decimalToTimeString(existing.endHour) : "12:00";
+
+  // ดึงรายการคาบเรียนเดิม หรือตั้งค่าเริ่มต้นเป็น 1 คาบถ้าวัดยังไม่มี
+  let slots = existing && existing.slots ? JSON.parse(JSON.stringify(existing.slots)) : [
+    { day: 0, startTime: "09:00", endTime: "12:00" }
+  ];
+
+  window.currentSimModalSlots = slots;
 
   const bodyHtml = `
-    <div style="display:flex; flex-direction:column; gap:12px; font-family:'Kanit', sans-serif;">
-      <div style="background:rgba(59,130,246,0.06); padding:10px; border-radius:10px; font-size:0.82rem; line-height:1.4;">
+    <div style="display:flex; flex-direction:column; gap:10px; font-family:'Kanit', sans-serif; max-height:480px; overflow-y:auto; padding-right:4px;">
+      <div style="background:rgba(59,130,246,0.06); padding:8px; border-radius:10px; font-size:0.8rem; line-height:1.4;">
         วิชา: <strong>${course.code} - ${course.name}</strong><br>
         จำนวนหน่วยกิต: <strong>${course.credits} หน่วยกิต</strong>
       </div>
       
       <div class="fg" style="margin-bottom: 2px;">
-        <label style="font-weight:700; font-size:0.8rem; display:block; margin-bottom:4px;">หมู่เรียน (Section) <span style="color:#ef4444;">*</span></label>
+        <label style="font-weight:700; font-size:0.78rem; display:block; margin-bottom:4px;">หมู่เรียน (Section) <span style="color:#ef4444;">*</span></label>
         <input type="text" class="glass-input" id="sim-f-sec" placeholder="ตัวอย่าง: 1, 2, 700" value="${secNo}" style="width:100%;">
       </div>
       
       <div class="fg" style="margin-bottom: 2px;">
-        <label style="font-weight:700; font-size:0.8rem; display:block; margin-bottom:4px;">อาจารย์ผู้สอน</label>
+        <label style="font-weight:700; font-size:0.78rem; display:block; margin-bottom:4px;">อาจารย์ผู้สอน</label>
         <input type="text" class="glass-input" id="sim-f-instructor" placeholder="ระบุชื่ออาจารย์" value="${instructor}" style="width:100%;">
       </div>
 
       <div class="fg" style="margin-bottom: 2px;">
-        <label style="font-weight:700; font-size:0.8rem; display:block; margin-bottom:4px;">ห้องเรียน</label>
+        <label style="font-weight:700; font-size:0.78rem; display:block; margin-bottom:4px;">ห้องเรียน</label>
         <input type="text" class="glass-input" id="sim-f-room" placeholder="ตัวอย่าง: LH-4301, Online" value="${room}" style="width:100%;">
       </div>
 
-      <div class="fg" style="margin-bottom: 2px;">
-        <label style="font-weight:700; font-size:0.8rem; display:block; margin-bottom:4px;">วันเรียนตามตารางสอน <span style="color:#ef4444;">*</span></label>
-        <select class="glass-select" id="sim-f-day" style="width:100%;">
-          ${DAYS_TH.map((d, i) => `<option value="${i}" ${day === i ? 'selected' : ''}>${d}</option>`).join('')}
-        </select>
-      </div>
-
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-        <div class="fg">
-          <label style="font-weight:700; font-size:0.8rem; display:block; margin-bottom:4px;">เวลาเริ่มเรียน <span style="color:#ef4444;">*</span></label>
-          <input type="time" class="glass-input" id="sim-f-start" value="${startTime}" style="width:100%;">
+      <!-- 🕒 MULTIPLE SLOTS CONTROLLER -->
+      <div style="border-top:1px solid var(--glass-border); padding-top:10px; margin-top:5px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <label style="font-weight:700; font-size:0.8rem; color:#3b82f6;">🕒 จัดคาบเวลาเรียนจำลอง (เรียนหลายวันสามารถเพิ่มคาบได้)</label>
+          <button class="sim-btn" onclick="addSimModalSlotRow()" style="padding:4px 8px; font-size:0.7rem; border-radius:6px; background:#10b981; box-shadow:none;">+ เพิ่มวันเรียน</button>
         </div>
-        <div class="fg">
-          <label style="font-weight:700; font-size:0.8rem; display:block; margin-bottom:4px;">เวลาเลิกเรียน <span style="color:#ef4444;">*</span></label>
-          <input type="time" class="glass-input" id="sim-f-end" value="${endTime}" style="width:100%;">
+        
+        <div id="sim-slots-container" style="display:flex; flex-direction:column; gap:8px;">
+          <!-- คาบเรียนจะถูกเรนเดอร์ไดนามิกที่นี่ -->
         </div>
       </div>
     </div>
   `;
 
   const footerHtml = `
-    <div style="display:flex; gap:8px; width:100%; justify-content:flex-end;">
+    <div style="display:flex; gap:8px; width:100%; justify-content:flex-end; padding-top:5px; border-top:1px solid var(--glass-border);">
       <button class="btn-glass" onclick="closeModal()" style="padding: 8px 16px; border-radius: 10px; font-size:0.85rem; border:1px solid var(--glass-border);">ยกเลิก</button>
       <button class="sim-btn" onclick="saveSimCourseModal('${course.code}', ${existingIndex})" style="padding: 8px 18px; border-radius: 10px; font-size:0.85rem; font-weight:700;">บันทึกและลงตาราง</button>
     </div>
   `;
 
   openModal(isEditing ? '📝 แก้ไขข้อมูลคาบเรียนจำลอง' : '🎫 ระบุเวลาเรียนจำลองรายวิชา', bodyHtml, footerHtml);
+  
+  // เรนเดอร์รายการคาบเรียนเริ่มต้นทันที
+  renderSimModalSlots();
 }
 
+// ฟังก์ชันเซฟค่าคาบเรียนทั้งหมดจากหน้ากาก DOM กลับเข้าอาเรย์หน่วยความจำชั่วคราว
+function saveCurrentModalSlotsFromDOM() {
+  const container = document.getElementById('sim-slots-container');
+  if (!container) return;
+
+  const rows = container.querySelectorAll('.sim-slot-row');
+  const updatedSlots = [];
+
+  rows.forEach(row => {
+    const day = parseInt(row.querySelector('.f-slot-day')?.value) || 0;
+    const startTime = row.querySelector('.f-slot-start')?.value;
+    const endTime = row.querySelector('.f-slot-end')?.value;
+
+    updatedSlots.push({
+      day: day,
+      startTime: startTime,
+      endTime: endTime
+    });
+  });
+
+  window.currentSimModalSlots = updatedSlots;
+}
+
+// ฟังก์ชันเรนเดอร์รายการคาบเรียนจำลองลงในหน้าต่างโมดอล
+function renderSimModalSlots() {
+  const container = document.getElementById('sim-slots-container');
+  if (!container) return;
+
+  const slots = window.currentSimModalSlots || [];
+  
+  container.innerHTML = slots.map((s, idx) => `
+    <div class="sim-slot-row" data-idx="${idx}" style="display:flex; gap:6px; align-items:center; background:rgba(0,0,0,0.02); padding:6px; border-radius:10px; border:1px dashed var(--glass-border);">
+      <select class="glass-select sm f-slot-day" style="padding: 4px; font-size: 0.75rem; border-radius:6px; flex:1.2;">
+        ${DAYS_TH.map((d, i) => `<option value="${i}" ${s.day == i ? 'selected' : ''}>${DAYS_ENG[i]}</option>`).join('')}
+      </select>
+      <input type="time" class="glass-input sm f-slot-start" value="${s.startTime || '09:00'}" style="padding: 4px; font-size: 0.75rem; border-radius:6px; flex:1;">
+      <span style="font-size:0.8rem; color:var(--text-muted);">-</span>
+      <input type="time" class="glass-input sm f-slot-end" value="${s.endTime || '12:00'}" style="padding: 4px; font-size: 0.75rem; border-radius:6px; flex:1;">
+      
+      ${slots.length > 1 ? `
+        <button class="sim-btn sim-btn-danger" onclick="removeSimModalSlotRow(${idx})" style="padding: 4px 8px; font-size: 0.7rem; border-radius: 6px; box-shadow:none;">✕</button>
+      ` : ''}
+    </div>
+  `).join('');
+}
+
+// ฟังก์ชันเพิ่มวันเรียนใหม่
+function addSimModalSlotRow() {
+  saveCurrentModalSlotsFromDOM();
+  window.currentSimModalSlots.push({
+    day: 0,
+    startTime: "09:00",
+    endTime: "12:00"
+  });
+  renderSimModalSlots();
+}
+
+// ฟังก์ชันลบวันเรียนออก
+function removeSimModalSlotRow(idx) {
+  saveCurrentModalSlotsFromDOM();
+  window.currentSimModalSlots.splice(idx, 1);
+  renderSimModalSlots();
+}
+
+// -------------------------------------------------------------
+// SAVE SIM COURSE WITH MULTIPLE SLOTS
+// -------------------------------------------------------------
 function saveSimCourseModal(courseCode, existingIndex) {
   const course = ALL_COURSES.find(c => c.code === courseCode);
   if (!course) return;
@@ -1082,32 +1177,52 @@ function saveSimCourseModal(courseCode, existingIndex) {
   const secNo = document.getElementById('sim-f-sec')?.value.trim();
   const instructor = document.getElementById('sim-f-instructor')?.value.trim() || '';
   const room = document.getElementById('sim-f-room')?.value.trim() || '';
-  const day = parseInt(document.getElementById('sim-f-day')?.value) || 0;
-  const startTime = document.getElementById('sim-f-start')?.value;
-  const endTime = document.getElementById('sim-f-end')?.value;
 
-  // 1. ตรวจสอบข้อมูลครบถ้วน
   if (!secNo) {
     showToast('⚠️ กรุณาระบุหมู่เรียน (Section)', 'err');
     return;
   }
-  if (!startTime || !endTime) {
-    showToast('⚠️ กรุณาระบุช่วงเวลาเรียนให้ครบถ้วน', 'err');
+
+  // ดึงข้อมูลคาบเวลาเรียนจาก DOM ล่าสุด
+  saveCurrentModalSlotsFromDOM();
+  const slots = window.currentSimModalSlots || [];
+
+  if (slots.length === 0) {
+    showToast('⚠️ วิชาจำลองต้องมีวันเวลาเรียนอย่างน้อย 1 คาบสอนนะครับ', 'err');
     return;
   }
 
-  const startHour = timeStringToDecimal(startTime);
-  const endHour = timeStringToDecimal(endTime);
+  // ประมวลผลและเช็คข้อมูลคาบเวลาเรียนแต่ละแถว
+  const validatedSlots = [];
+  for (let i = 0; i < slots.length; i++) {
+    const s = slots[i];
+    if (!s.startTime || !s.endTime) {
+      showToast(`⚠️ แถวที่ ${i+1}: กรุณากรอกเวลาให้ครบถ้วน`, 'err');
+      return;
+    }
 
-  if (startHour >= endHour) {
-    showToast('⚠️ เวลาเริ่มเรียนต้องเกิดก่อนเวลาเลิกเรียนนะคร้าบ', 'err');
-    return;
+    const startHour = timeStringToDecimal(s.startTime);
+    const endHour = timeStringToDecimal(s.endTime);
+
+    if (startHour >= endHour) {
+      showToast(`⚠️ แถวที่ ${i+1}: เวลาเรียนผิดพลาด! คลาสเริ่มเรียนทีหลังเวลาเลิกเรียนไม่ได้`, 'err');
+      return;
+    }
+
+    validatedSlots.push({
+      day: s.day,
+      startHour: startHour,
+      endHour: endHour,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      timeStr: `${DAYS_ENG[s.day]} ${s.startTime} - ${s.endTime}`
+    });
   }
 
-  // 2. ตรวจสอบหน่วยกิตสะสมสูงสุด (ไม่เกิน 22)
+  // 1. ตรวจสอบหน่วยกิตรวมไม่ให้เกิน 22
   let totalCredits = course.credits;
   trialState.selectedCourses.forEach((item, idx) => {
-    if (existingIndex !== null && existingIndex === idx) return; // ไม่นับหน่วยกิตวิชาเดิมตอนแก้ไข
+    if (existingIndex !== null && existingIndex === idx) return; 
     const c = ALL_COURSES.find(x => x.code === item.courseCode);
     if (c) totalCredits += c.credits;
   });
@@ -1117,29 +1232,28 @@ function saveSimCourseModal(courseCode, existingIndex) {
     return;
   }
 
-  // 3. ตรวจสอบคาบเรียนซ้อนทับชนกันแบบ ไดนามิก
-  const conflict = checkCustomScheduleConflict(courseCode, day, startHour, endHour, existingIndex);
-  if (conflict.conflict) {
-    showToast(`⚠️ คาบเรียนที่ระบุชนกับวิชา: ${conflict.conflictingCourse.name} (${conflict.timeStr})`, 'err');
-    return;
+  // 2. ตรวจเช็คคาบเวลาชนกันทีละคาบเรียน (Multi-slots conflict checks)
+  for (const newSlot of validatedSlots) {
+    const conflict = checkCustomSlotConflict(courseCode, newSlot.day, newSlot.startHour, newSlot.endHour, existingIndex);
+    if (conflict.conflict) {
+      showToast(`⚠️ คาบเรียนชนกับวิชา: ${conflict.conflictingCourse.name} ที่เวลา ${conflict.timeStr}`, 'err');
+      return;
+    }
   }
 
-  // 4. แจ้งเตือนวิชาตัวต่อ (Prereq Warning)
+  // 3. ตรวจสอบวิชาต่อ
   const prereq = checkCoursePrerequisites(course);
   if (!prereq.passed) {
     showToast(`⚠️ คำเตือน! วิชานี้ยังมีวิชาตัวต่อที่ยังไม่ผ่านเกณฑ์: ${prereq.missing.join(', ')}`, 'warn');
   }
 
-  // 5. บันทึก/อัปเดตลงอาเรย์จำลอง
+  // 4. บันทึกข้อมูลแผนลงทะเบียนใหม่
   const item = {
     courseCode: courseCode,
     secNo: secNo,
     instructor: instructor,
     room: room,
-    day: day,
-    startHour: startHour,
-    endHour: endHour,
-    timeStr: `${DAYS_ENG[day]} ${startTime} - ${endTime}`
+    slots: validatedSlots
   };
 
   if (existingIndex !== null) {
@@ -1151,7 +1265,6 @@ function saveSimCourseModal(courseCode, existingIndex) {
   saveTrialState();
   closeModal();
 
-  // เสียงสังเคราะห์ปิ๊งสั้นๆ ยืนยันการเพิ่มเสร็จสิ้น
   try {
     const ctx = getAudioContext();
     const osc = ctx.createOscillator();
@@ -1167,7 +1280,7 @@ function saveSimCourseModal(courseCode, existingIndex) {
   } catch (e) {}
 
   render();
-  showToast(existingIndex !== null ? '✅ อัปเดตตารางสำเร็จ' : '✅ เพิ่มรายวิชาลงตารางสำเร็จ');
+  showToast(existingIndex !== null ? '✅ อัปเดตตารางวิชาชนสำเร็จ' : '✅ เพิ่มวิชาหลายคาบลงตารางสำเร็จ');
 }
 
 function removeSimCourse(courseCode) {
@@ -1220,6 +1333,11 @@ function handleSimSearch(q) {
       if (isAdded) cardClass += ' added';
       if (!prereqStatus.passed) cardClass += ' prereq-failed';
 
+      let timeSummary = '';
+      if (isAdded && userSelection.slots) {
+        timeSummary = userSelection.slots.map(s => `${DAYS_ENG[s.day]} ${s.startTime}-${s.endTime}`).join(', ');
+      }
+
       return `
         <div class="course-card-sim ${cardClass}" id="card-${c.code}">
           <div class="card-header-sim">
@@ -1242,7 +1360,7 @@ function handleSimSearch(q) {
             <div style="background:rgba(59,130,246,0.06); padding:8px 12px; border-radius:10px; font-size:0.78rem; display:flex; flex-direction:column; gap:2px;">
               <div><strong>หมู่เรียน (Sec):</strong> ${userSelection.secNo} | <strong>ผู้สอน:</strong> ${userSelection.instructor || '-'}</div>
               <div><strong>ห้องเรียน:</strong> ${userSelection.room || '-'}</div>
-              <div style="color:#3b82f6; font-weight:700;">⏰ เวลา: ${userSelection.timeStr}</div>
+              <div style="color:#3b82f6; font-weight:700;">⏰ เวลา: ${timeSummary}</div>
             </div>
           ` : ''}
 
@@ -1263,7 +1381,6 @@ function handleSimSearch(q) {
 // -------------------------------------------------------------
 // RECEIPT PRINTER & SCANNER ANIMATION
 // -------------------------------------------------------------
-
 function triggerSimReceiptPrinting() {
   const wrap = document.getElementById('receiptWrapper');
   const paper = document.getElementById('receiptPaper');
@@ -1293,7 +1410,6 @@ function triggerSimReceiptPrinting() {
 // -------------------------------------------------------------
 // 3D PAPER TEAR & IMAGE DOWNLOAD
 // -------------------------------------------------------------
-
 async function tearOffSimReceipt() {
   const paper = document.getElementById('receiptPaper');
   if (!paper) return;
@@ -1302,39 +1418,34 @@ async function tearOffSimReceipt() {
     showToast('💾 กำลังจับภาพใบเสร็จสรุปผลความชัดสูง...', 'success');
     
     try {
-      // 1. ถ่ายรูปใบเสร็จขณะที่ตั้งตรงสมบูรณ์แบบ 100% (ก่อนเล่นแอนิเมชันปลิวบิดเบี้ยว)
       const canvas = await html2canvas(paper, {
         backgroundColor: '#fafaf6',
         scale: 2,
         logging: false
       });
 
-      // 2. สังเคราะห์เสียงฉีกขาดและเล่นแอนิเมชันกระดาษปลิวหาย 3D ทันที
       playTearSound();
       paper.classList.add('receipt-tear-away');
 
-      // 3. ทริกเกอร์การดาวน์โหลดไฟล์ภาพ
       setTimeout(() => {
         const link = document.createElement('a');
         link.download = `Receipt_Registration_Plan_Semester_${Date.now()}.png`;
         link.href = canvas.toDataURL('image/png');
         link.click();
         showToast('💾 ดาวน์โหลดตารางเรียนจำลองเสร็จเรียบร้อย! 🌟', 'success');
-      }, 350); // รอจังหวะสอดคล้องกับแอนิเมชันฉีกปลิว
+      }, 350); 
       
     } catch (err) {
       console.error("html2canvas error", err);
       showToast('❌ เซฟภาพล้มเหลว', 'err');
     }
   } else {
-    // Fallback ถ้าไม่มี html2canvas
     playTearSound();
     paper.classList.add('receipt-tear-away');
     showToast('⚠️ ไม่สามารถแปลงรูปภาพได้ (ไม่พบไลบรารี html2canvas)', 'err');
   }
 }
 
-// ฟังก์ชันผูกมัด Event ของหน้าต่างนี้ (เรียกโดย attachAllEvents)
 function attachTrialRegEvents() {
-  console.log("Attached refined trial-reg events successfully.");
+  console.log("Attached refined multi-slot trial-reg events successfully.");
 }
