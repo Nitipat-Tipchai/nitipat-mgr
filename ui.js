@@ -4503,8 +4503,8 @@ window.triggerConfetti = triggerConfetti;
 window.refreshDriveFiles = refreshDriveFiles;
 window.handleFileUpload = handleFileUpload;
 window.initAttendanceMap = initAttendanceMap;
-window.state = state;
-window.Radio = Radio;
+window.state = typeof state !== 'undefined' ? state : {};
+window.Radio = typeof Radio !== 'undefined' ? Radio : null;
 
 // Mini-drive exports
 window.previewFile = previewFile;
@@ -4685,6 +4685,7 @@ if (document.readyState === 'loading') {
 
 // Page Visibility API — kill tree if unfocused during pomodoro
 document.addEventListener('visibilitychange', () => {
+  if (typeof state === 'undefined') return;
   if (document.hidden && state.pomodoroActive && state.pomodoroPhase === 'work') {
     state.tree.alive = false;
     localStorage.setItem('focusTree', JSON.stringify(state.tree));
