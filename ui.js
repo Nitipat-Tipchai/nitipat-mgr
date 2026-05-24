@@ -1,6 +1,118 @@
 // ══════════════════════════════════════════════════
 // DASHBOARD
 // ══════════════════════════════════════════════════
+function renderDashboardInternshipPhaseWidget() {
+  if (typeof state.ilmProfile === 'undefined') {
+    state.ilmProfile = { currentPhase: 'phase1' };
+  }
+  
+  const activePhase = state.ilmProfile.currentPhase || 'phase1';
+  let phaseTitle = '';
+  let phaseDescription = '';
+  let progressPercent = 0;
+  
+  // Custom stats for contextual helper text
+  const totalLogsHours = state.ilmLogs ? state.ilmLogs.reduce((sum, log) => sum + (parseFloat(log.hours) || 0), 0) : 0;
+  const quizPassed = state.ilmProfile.quizPassed || false;
+  const acceptedCompany = state.ilmCompanies ? state.ilmCompanies.find(c => c.status === 'accepted') : null;
+  
+  switch (activePhase) {
+    case 'phase1':
+      phaseTitle = 'Phase 1: ค้นหา & สมัครแผนกฝึกงาน';
+      phaseDescription = acceptedCompany 
+        ? `ยินดีด้วย! กรมธุรกิจพลังงานตอบรับเข้าฝึกงานในแผนก <strong>${acceptedCompany.field}</strong> แล้ว เตรียมตัวสู่ขั้นตอนปฐมนิเทศ` 
+        : 'อยู่ระหว่างพิจารณาติดต่อ กรมธุรกิจพลังงาน (doeb.go.th) | คลิกเพื่อจัดการแผนกเป้าหมายใน Kanban';
+      progressPercent = 25;
+      break;
+    case 'phase2':
+      phaseTitle = 'Phase 2: ปฐมนิเทศ & อบรมเซฟตี้คลังแก๊ส';
+      phaseDescription = quizPassed
+        ? '✓ สอบผ่านเกณฑ์เซฟตี้พลังงาน 100% แล้ว! มีสิทธิ์เข้าตอกบัตรและฝึกงาน ณ สถานประกอบการจริง'
+        : '⚠️ กรุณาเข้าทำแบบทดสอบกฎความปลอดภัยคลังเชื้อเพลิง LPG/NGV (ต้องได้ 10/10 คะแนนเพื่อปลดล็อคบันทึกเวลา)';
+      progressPercent = 50;
+      break;
+    case 'phase3':
+      phaseTitle = 'Phase 3: ปฏิบัติงานตอกบัตร & งบการเงิน';
+      phaseDescription = `สะสมเวลาตรวจหน้างานแล้ว <strong>${totalLogsHours} / 240 ชั่วโมง</strong> | เงินเก็บออมสุทธิซิงค์กับ MoneyPod เรียบร้อย`;
+      progressPercent = 75;
+      break;
+    case 'phase4':
+      phaseTitle = 'Phase 4: เขียนรายงานวิจัย & ปิดเล่มส่งงาน';
+      phaseDescription = 'เตรียมจัดทำโครงร่างเล่มรายงานวิชาการ (.md) และตรวจสอบคู่มือจัดเอกสารจริงใส่ซองสีน้ำตาลส่งภาควิชา มก.';
+      progressPercent = 100;
+      break;
+    default:
+      phaseTitle = 'Phase 1: ค้นหา & สมัครแผนกฝึกงาน';
+      phaseDescription = 'อยู่ระหว่างวางแผนและค้นหาสถานที่ฝึกงานวิศวกรรมวัสดุ';
+      progressPercent = 25;
+  }
+
+  return `
+    <style>
+      @keyframes pulse-green {
+        0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+        70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+      }
+      .ilm-dash-widget {
+        background: rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(15px);
+        -webkit-backdrop-filter: blur(15px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 20px;
+        padding: 20px;
+        margin: 0 20px 20px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.02);
+        position: relative;
+        overflow: hidden;
+      }
+      .dark-mode .ilm-dash-widget {
+        background: rgba(30, 41, 59, 0.4);
+        border-color: rgba(71, 85, 105, 0.3);
+      }
+    </style>
+    
+    <div class="ilm-dash-widget">
+      <!-- Glow bubble -->
+      <div style="position: absolute; top: -50px; right: -50px; width: 120px; height: 120px; background: rgba(59, 130, 246, 0.12); border-radius: 50%; filter: blur(35px);"></div>
+      
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 15px; position: relative; z-index: 1;">
+        <div>
+          <div style="font-size: 0.8rem; font-weight: 700; color: #3b82f6; text-transform: uppercase; letter-spacing: 0.5px;">📍 ติดตามสิทธิ์และการเตรียมฝึกงาน (กรมธุรกิจพลังงาน)</div>
+          <h3 style="margin: 4px 0 0 0; font-size: 1.2rem; font-weight: 800; display: flex; align-items: center; gap: 8px; color: var(--text);">
+            <span>💼</span> ${phaseTitle}
+          </h3>
+        </div>
+        <button class="i-btn sm i-btn-primary" onclick="state.view = 'ilm'; render();" style="font-size: 0.8rem; padding: 6px 14px; border-radius: 10px; font-weight: 700; background: linear-gradient(135deg, #3b82f6, #1e3a8a); color: white; border: none; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.25); cursor: pointer; transition: all 0.2s ease;">
+          จัดการการฝึกงาน 💼
+        </button>
+      </div>
+
+      <!-- Description / Contextual help -->
+      <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; margin: 0 0 15px 0; position: relative; z-index: 1;">
+        ${phaseDescription}
+      </p>
+
+      <!-- Progress Track -->
+      <div style="position: relative; margin-top: 15px; z-index: 1;">
+        <div style="height: 8px; background: rgba(0, 0, 0, 0.05); border-radius: 9999px; overflow: hidden; display: flex;">
+          <div style="width: ${progressPercent}%; height: 100%; background: linear-gradient(90deg, #3b82f6, #10b981); border-radius: 9999px; transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);"></div>
+        </div>
+        <!-- pulsing node -->
+        <div style="position: absolute; left: calc(${progressPercent}% - 6px); top: -2px; width: 12px; height: 12px; border-radius: 50%; background: #10b981; border: 2px solid white; box-shadow: 0 0 8px #10b981; animation: pulse-green 1.5s infinite;"></div>
+      </div>
+
+      <!-- Horizontal stage guides -->
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 12px; font-size: 0.75rem; font-weight: 700; text-align: center; position: relative; z-index: 1;">
+        <div style="color: ${activePhase === 'phase1' ? '#3b82f6' : 'var(--text-muted)'}; opacity: ${activePhase === 'phase1' ? '1' : '0.6'};">1. หาสถานที่</div>
+        <div style="color: ${activePhase === 'phase2' ? '#3b82f6' : 'var(--text-muted)'}; opacity: ${activePhase === 'phase2' ? '1' : '0.6'};">2. เตรียมตัว/เซฟตี้</div>
+        <div style="color: ${activePhase === 'phase3' ? '#3b82f6' : 'var(--text-muted)'}; opacity: ${activePhase === 'phase3' ? '1' : '0.6'};">3. ปฏิบัติงาน</div>
+        <div style="color: ${activePhase === 'phase4' ? '#3b82f6' : 'var(--text-muted)'}; opacity: ${activePhase === 'phase4' ? '1' : '0.6'};">4. ปิดเล่มรายงาน</div>
+      </div>
+    </div>
+  `;
+}
+
 function renderDashboard(gpaVal, proVal, curSemVal) {
   const gpa = gpaVal || getCumGPA();
   const pro = proVal || getProStatus(gpa);
@@ -69,6 +181,8 @@ function renderDashboard(gpaVal, proVal, curSemVal) {
         </div>
       </div>
     </div>
+    
+    ${renderDashboardInternshipPhaseWidget()}
 
 
     ${missingReflections.length > 0 ? `
