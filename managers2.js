@@ -977,15 +977,21 @@ function renderPublicSharePortal(slug) {
   const gate = document.getElementById('login-gate');
   if (gate) gate.classList.add('inactive');
   
-  // Initialize files state if empty (failsafe for public view)
+  // Show loading spinner while fetching from Firestore
+  if (!state.ilmFilesLoadedFromServer) {
+    app.innerHTML = `
+      <div style="font-family:'Kanit', 'Sarabun', sans-serif; min-height:100vh; background:#0f172a; display:flex; align-items:center; justify-content:center; flex-direction:column; color:white;">
+        <div class="spinner" style="margin-bottom:20px; width:40px; height:40px; border:4px solid rgba(255,255,255,0.1); border-top-color:#3b82f6; border-radius:50%; animation:spin 1s linear infinite;"></div>
+        <style>@keyframes spin { 100% { transform:rotate(360deg); } }</style>
+        <div style="font-weight:600; letter-spacing:1px; font-size:1.1rem; color:#94a3b8;">กำลังค้นหาเอกสารจากฐานข้อมูล...</div>
+      </div>
+    `;
+    return;
+  }
+  
+  // Initialize files state if empty
   if (!state.ilmFiles || state.ilmFiles.length === 0) {
     state.ilmFiles = JSON.parse(localStorage.getItem('ilm_files') || '[]');
-  }
-  if (!state.ilmFiles || state.ilmFiles.length === 0) {
-    state.ilmFiles = [
-      { id: 'f_resume', name: 'Resume_Nitipat_Tipchai.pdf', type: 'file', parentId: 'root', size: '1.2 MB', mimeType: 'application/pdf', data: 'mock_pdf_resume_data', slug: 'resume', password: '', createdAt: Date.now() - 86400000 * 5 },
-      { id: 'f_transcript', name: 'Transcript_KU_Year3.pdf', type: 'file', parentId: 'root', size: '850 KB', mimeType: 'application/pdf', data: 'mock_pdf_transcript_data', slug: 'transcript', password: '', createdAt: Date.now() - 86400000 * 5 }
-    ];
   }
   
   const item = state.ilmFiles.find(f => f.slug === slug);
