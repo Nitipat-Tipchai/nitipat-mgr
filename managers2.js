@@ -584,6 +584,18 @@ function getMissingReflections() {
 
 function render() {
   if (state.isInitializing) return;
+
+  // Intercept Public Shared document links
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.has('share')) {
+    const shareVal = urlParams.get('share');
+    if (shareVal && shareVal.startsWith('nitipat/')) {
+      const slug = shareVal.substring(8); // Extract slug after 'nitipat/'
+      renderPublicSharePortal(slug);
+      return;
+    }
+  }
+
   // FIX 2: 30-minute Auto-Lock Security Check
   const unlockedAt = sessionStorage.getItem('unlocked_at');
   if (unlockedAt && Date.now() - parseInt(unlockedAt) > 1800000) { // 1800000ms = 30 mins
@@ -956,6 +968,257 @@ function renderModal() {
       ${state.modal.footer ? `<div class="modal-ft">${state.modal.footer}</div>` : ''}
     </div>
   </div>`;
+}
+
+function renderPublicSharePortal(slug) {
+  const app = document.getElementById('app');
+  if (!app) return;
+  
+  // Hide login gate immediately
+  const gate = document.getElementById('login-gate');
+  if (gate) gate.classList.add('inactive');
+  
+  // Initialize files state if empty (failsafe for public view)
+  if (!state.ilmFiles || state.ilmFiles.length === 0) {
+    state.ilmFiles = JSON.parse(localStorage.getItem('ilm_files') || '[]');
+  }
+  if (!state.ilmFiles || state.ilmFiles.length === 0) {
+    state.ilmFiles = [
+      { id: 'f_resume', name: 'Resume_Nitipat_Tipchai.pdf', type: 'file', parentId: 'root', size: '1.2 MB', mimeType: 'application/pdf', data: 'mock_pdf_resume_data', slug: 'resume', password: '', createdAt: Date.now() - 86400000 * 5 },
+      { id: 'f_transcript', name: 'Transcript_KU_Year3.pdf', type: 'file', parentId: 'root', size: '850 KB', mimeType: 'application/pdf', data: 'mock_pdf_transcript_data', slug: 'transcript', password: '', createdAt: Date.now() - 86400000 * 5 }
+    ];
+  }
+  
+  const item = state.ilmFiles.find(f => f.slug === slug);
+  
+  if (!item) {
+    app.innerHTML = `
+      <div style="font-family:'Kanit', 'Sarabun', sans-serif; min-height:100vh; background:#0f172a; color:#f8fafc; display:flex; align-items:center; justify-content:center; padding:20px; box-sizing:border-box;">
+        <div class="glass-card" style="max-width:500px; width:100%; text-align:center; padding:40px 20px; border-radius:24px; border:1px solid rgba(255,255,255,0.1); background:rgba(30,41,59,0.7); backdrop-filter:blur(15px); box-sizing:border-box;">
+          <div style="font-size:4rem; margin-bottom:20px;">🔍❌</div>
+          <h3 style="font-size:1.4rem; font-weight:700; color:#fb7185; margin:0 0 10px 0;">ไม่พบเอกสารที่แชร์</h3>
+          <p style="font-size:0.9rem; color:#94a3b8; line-height:1.6; margin-bottom:25px;">
+            ลิงก์แชร์อาจจะไม่ถูกต้อง หรือเอกสารนี้ถูกเจ้าของบัญชี (นาย นิติพัฒน์ ทิพย์ชัย) ลบออกจากระบบคลังเอกสารฝึกงานเรียบร้อยแล้ว
+          </p>
+          <a href="${window.location.origin}${window.location.pathname}" style="display:inline-block; text-decoration:none; background:linear-gradient(135deg, #3b82f6, #1d4ed8); color:white; padding:12px 30px; border-radius:30px; font-weight:700; font-size:0.9rem; box-shadow:0 8px 20px rgba(59,130,246,0.3);">เข้าสู่หน้าเข้าสู่ระบบหลัก</a>
+        </div>
+      </div>
+    `;
+    return;
+  }
+  
+  state.ilmSharedUnlocked = state.ilmSharedUnlocked || {};
+  
+  const password = item.password || '';
+  if (password && !state.ilmSharedUnlocked[item.id]) {
+    app.innerHTML = `
+      <div style="font-family:'Kanit', 'Sarabun', sans-serif; min-height:100vh; background:#0f172a; color:#f8fafc; display:flex; align-items:center; justify-content:center; padding:20px; box-sizing:border-box;">
+        <div class="glass-card" style="max-width:460px; width:100%; text-align:center; padding:40px 25px; border-radius:24px; border:1px solid rgba(255,255,255,0.1); background:rgba(30,41,59,0.7); backdrop-filter:blur(15px); box-shadow:0 15px 35px rgba(0,0,0,0.3); box-sizing:border-box;">
+          <div style="font-size:3.5rem; margin-bottom:15px; animation: pulse 2s infinite;">🔐</div>
+          <h3 style="font-size:1.3rem; font-weight:700; color:#f8fafc; margin:0 0 10px 0;">เอกสารได้รับการคุ้มครองความปลอดภัย</h3>
+          <p style="font-size:0.85rem; color:#94a3b8; line-height:1.6; margin-bottom:25px;">
+            เอกสารของ **นาย นิติพัฒน์ ทิพย์ชัย** ชิ้นนี้ได้รับการป้องกันสิทธิ์ส่วนบุคคล กรุณากรอกรหัสผ่านเพื่อตรวจสอบและรับชมตัวอย่างเอกสาร
+          </p>
+          
+          <div style="margin-bottom:20px; text-align:left;">
+            <label style="display:block; font-size:0.8rem; font-weight:600; color:#cbd5e1; margin-bottom:8px;">ป้อนรหัสผ่านสำหรับเอกสารนี้ (Document Password):</label>
+            <input type="password" id="shared-pass-input" placeholder="กรอกรหัสผ่าน..." style="width:100%; padding:12px 16px; border-radius:12px; border:1px solid rgba(255,255,255,0.15); background:rgba(15,23,42,0.6); color:white; font-size:1rem; outline:none; text-align:center; font-family:monospace; letter-spacing:3px;">
+          </div>
+          
+          <button onclick="unlockPublicSharedFile('${item.id}', '${password}')" style="width:100%; background:linear-gradient(135deg, #3b82f6, #1d4ed8); color:white; border:none; padding:14px; border-radius:12px; font-weight:700; font-size:0.95rem; cursor:pointer; box-shadow:0 8px 20px rgba(59,130,246,0.3); transition:all 0.2s ease;">
+            🔓 ปลดล็อคเข้าดูเอกสาร
+          </button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+  
+  let previewHTML = '';
+  const isPdf = item.name.toLowerCase().endsWith('.pdf') || item.mimeType === 'application/pdf';
+  const isImage = item.name.toLowerCase().endsWith('.png') || item.name.toLowerCase().endsWith('.jpg') || item.mimeType.startsWith('image/');
+  
+  if (isImage) {
+    if (item.data && item.data.startsWith('data:image')) {
+      previewHTML = `<div style="text-align:center;"><img src="${item.data}" style="max-width:100%; max-height:450px; border-radius:12px; box-shadow:0 8px 25px rgba(0,0,0,0.15);"></div>`;
+    } else {
+      previewHTML = `
+        <div style="border:1.5px dashed rgba(255,255,255,0.15); border-radius:16px; padding:40px 20px; text-align:center; background:rgba(15,23,42,0.4);">
+          <div style="font-size:4rem; margin-bottom:15px;">📜</div>
+          <h4 style="font-weight:700; color:#10b981; font-size:1.2rem; margin:0 0 10px 0;">ใบรับรองการอบรมกฎความปลอดภัยคลังเชื้อเพลิง</h4>
+          <p style="font-size:0.85rem; color:#94a3b8; line-height:1.6; max-width:400px; margin:0 auto 20px auto;">ใบรับรองการผ่านการอบรมกฎระเบียบเซฟตี้พลังงาน 100% จากสถานีบริการและคลัง LPG ในเขต Energy Complex มก.</p>
+          <div style="font-size:0.75rem; background:rgba(0,0,0,0.2); padding:12px; border-radius:10px; font-family:monospace; display:inline-block; text-align:left; border:1px solid rgba(255,255,255,0.05);">
+            Verification Code: SEC-2569-KU-DOEB<br>
+            ตรวจสอบแล้ว: Mr. Nitipat Tipchai<br>
+            หน่วยงานยื่นรับรอง: กรมธุรกิจพลังงาน
+          </div>
+        </div>
+      `;
+    }
+  } else if (isPdf) {
+    if (item.data && item.data !== 'mock_pdf_resume_data' && item.data !== 'mock_pdf_transcript_data' && item.data !== 'large_file_placeholder_base64') {
+      previewHTML = `
+        <div style="text-align:center; width:100%;">
+          <embed src="${item.data}" type="application/pdf" style="width:100%; height:450px; border-radius:12px; border:1px solid rgba(255,255,255,0.1);">
+        </div>
+      `;
+    } else if (item.id === 'f_resume' || item.data === 'mock_pdf_resume_data') {
+      previewHTML = `
+        <div style="background:#fff; color:#333; padding:25px; border-radius:16px; border:1px solid #ddd; font-family:Sarabun, sans-serif; font-size:0.85rem; line-height:1.5; max-height:420px; overflow-y:auto; box-shadow:0 10px 30px rgba(0,0,0,0.1); text-align:left; position:relative; box-sizing:border-box;">
+          <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%) rotate(-30deg); font-size:4rem; font-weight:900; color:rgba(30,58,138,0.04); pointer-events:none; white-space:nowrap; text-align:center;">KASETSART UNIVERSITY<br>MATERIALS ENG</div>
+          
+          <div style="text-align:center; border-bottom:2px solid #1e3a8a; padding-bottom:12px; margin-bottom:18px;">
+            <h3 style="margin:0 0 4px 0; color:#1e3a8a; font-weight:800; font-size:1.35rem; letter-spacing:0.5px;">NITIPAT TIPCHAI</h3>
+            <p style="margin:0; font-size:0.8rem; color:#555; font-weight:600;">Materials Engineering Student | Kasetsart University</p>
+            <p style="margin:4px 0 0 0; font-size:0.75rem; color:#777;">Tel: [เบอร์โทรของคุณ] | Email: doeb-hr@doeb.go.th</p>
+          </div>
+          <div style="margin-bottom:15px;">
+            <h4 style="margin:0 0 6px 0; color:#1e3a8a; font-weight:700; font-size:0.95rem; border-bottom:1.5px solid #eee; padding-bottom:2px;">EDUCATION</h4>
+            <strong>Kasetsart University</strong> — B.Eng. in Materials Engineering (Current GPAX: ${getCumGPA()})
+          </div>
+          <div style="margin-bottom:15px;">
+            <h4 style="margin:0 0 6px 0; color:#1e3a8a; font-weight:700; font-size:0.95rem; border-bottom:1.5px solid #eee; padding-bottom:2px;">KEY COURSES</h4>
+            Thermodynamics of Materials, Mechanical Behavior of Materials, Corrosion of Materials
+          </div>
+          <div style="margin-bottom:15px;">
+            <h4 style="margin:0 0 6px 0; color:#1e3a8a; font-weight:700; font-size:0.95rem; border-bottom:1.5px solid #eee; padding-bottom:2px;">PROJECTS & COMPETENCIES</h4>
+            * Cathodic Protection studies for Underground Pipelines<br>
+            * Ultrasonic NDT simulation tests for steel pressure welds
+          </div>
+        </div>
+      `;
+    } else if (item.id === 'f_transcript' || item.data === 'mock_pdf_transcript_data') {
+      previewHTML = `
+        <div style="background:#fff; color:#333; padding:25px; border-radius:16px; border:1px solid #ddd; font-family:Sarabun, sans-serif; font-size:0.8rem; line-height:1.4; max-height:420px; overflow-y:auto; box-shadow:0 10px 30px rgba(0,0,0,0.1); text-align:left; position:relative; box-sizing:border-box;">
+          <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%) rotate(-30deg); font-size:3.5rem; font-weight:900; color:rgba(180,83,9,0.04); pointer-events:none; white-space:nowrap; text-align:center;">KASETSART UNIVERSITY<br>OFFICIAL VERIFIED</div>
+          
+          <div style="text-align:center; border-bottom:2.5px solid #b45309; padding-bottom:10px; margin-bottom:15px;">
+            <h4 style="margin:0 0 2px 0; color:#b45309; font-weight:800; font-size:1.2rem; letter-spacing:0.5px;">KASETSART UNIVERSITY TRANSCRIPT</h4>
+            <p style="margin:0; font-size:0.75rem; color:#555; font-weight:600;">Official Grade Report - Mr. Nitipat Tipchai</p>
+          </div>
+          <table style="width:100%; border-collapse:collapse; font-size:0.7rem;">
+            <thead>
+              <tr style="border-bottom:1.8px solid #333; font-weight:700;">
+                <td style="padding:5px 0;">COURSE</td>
+                <td style="padding:5px 0;">TITLE</td>
+                <td style="padding:5px 0; text-align:center;">GRADE</td>
+                <td style="padding:5px 0; text-align:center;">CREDITS</td>
+              </tr>
+            </thead>
+            <tbody>
+              ${Object.keys(STUDENT.existingGrades).slice(0, 10).map(code => {
+                const g = STUDENT.existingGrades[code];
+                return `
+                  <tr style="border-bottom:1px solid #eee;">
+                    <td style="padding:5px 0; font-family:monospace; font-weight:bold;">${code}</td>
+                    <td style="padding:5px 0; color:#555;">Materials Course ${code}</td>
+                    <td style="padding:5px 0; text-align:center; font-weight:800; color:#1e3a8a;">${g.grade}</td>
+                    <td style="padding:5px 0; text-align:center;">${g.credits}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+          <div style="border-top:1.8px solid #333; padding-top:8px; margin-top:12px; display:flex; justify-content:space-between; font-weight:800; font-size:0.75rem; color:#1e3a8a;">
+            <span>TOTAL PASSED CREDITS: ${getTotalPassedCredits()} CR</span>
+            <span>GPAX: ${getCumGPA()}</span>
+          </div>
+        </div>
+      `;
+    } else {
+      previewHTML = `
+        <div style="border:1.5px dashed rgba(255,255,255,0.15); border-radius:16px; padding:40px 20px; text-align:center; background:rgba(15,23,42,0.4);">
+          <div style="font-size:4rem; margin-bottom:15px;">📂</div>
+          <h4 style="font-weight:700; color:#3b82f6; font-size:1.2rem; margin:0 0 10px 0;">${item.name}</h4>
+          <p style="font-size:0.85rem; color:#94a3b8; line-height:1.6; margin-bottom:10px;">ขนาดของไฟล์: ${item.size} | ประเภท: ${item.mimeType || 'เอกสารทั่วไป'}</p>
+          <p style="font-size:0.75rem; color:#eab308; font-weight:600;">(เนื่องจากขนาดของไฟล์เกินขีดจำกัดความจำถาวรท้องถิ่น ระบบจะทำการตรวจสอบแบบลายน้ำเชิงลึกผ่าน metadata ส่วนกลาง)</p>
+        </div>
+      `;
+    }
+  } else {
+    previewHTML = `
+      <div style="border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:30px 15px; text-align:center; background:rgba(15,23,42,0.4);">
+        <div style="font-size:3.5rem; margin-bottom:10px;">📝</div>
+        <h4 style="font-weight:700; font-size:1.15rem; margin:0 0 5px 0; color:#f8fafc;">${item.name}</h4>
+        <p style="font-size:0.85rem; color:#94a3b8;">${item.size} | ${item.mimeType || 'เอกสารทั่วไป'}</p>
+      </div>
+    `;
+  }
+  
+  app.innerHTML = `
+    <div style="font-family:'Kanit', 'Sarabun', sans-serif; min-height:100vh; background:#0f172a; color:#f8fafc; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:30px 20px; box-sizing:border-box;">
+      
+      <!-- Top Verification Seals Header -->
+      <div style="max-width:600px; width:100%; text-align:center; margin-bottom:20px; background:rgba(16, 185, 129, 0.06); border:1px solid rgba(16, 185, 129, 0.2); border-radius:16px; padding:12px 15px; box-sizing:border-box; backdrop-filter:blur(10px); display:flex; align-items:center; gap:12px; justify-content:center;">
+        <span style="font-size:1.8rem;">🛡️</span>
+        <div style="text-align:left;">
+          <div style="font-weight:700; font-size:0.85rem; color:#10b981; text-transform:uppercase; letter-spacing:0.5px;">✓ Verified Professional Academic Share</div>
+          <div style="font-size:0.75rem; color:#94a3b8; font-weight:500;">ระบบสารสนเทศทรานสคริปต์ดิจิทัล คณะวิศวกรรมศาสตร์ มหาวิทยาลัยเกษตรศาสตร์</div>
+        </div>
+      </div>
+
+      <!-- Main Viewer Card -->
+      <div class="glass-card" style="max-width:600px; width:100%; padding:30px; border-radius:24px; border:1px solid rgba(255,255,255,0.1); background:rgba(30,41,59,0.65); backdrop-filter:blur(20px); box-shadow:0 20px 45px rgba(0,0,0,0.3); box-sizing:border-box; text-align:center;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; text-align:left; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:15px; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
+          <div>
+            <div style="font-size:0.75rem; font-weight:600; color:#3b82f6; text-transform:uppercase; letter-spacing:0.5px;">เจ้าของบัญชี (Student Profile)</div>
+            <h3 style="margin:2px 0 0 0; font-size:1.15rem; font-weight:800; color:#f8fafc;">นายนิติพัฒน์ ทิพย์ชัย</h3>
+            <div style="font-size:0.75rem; color:#94a3b8; margin-top:2px;">นิสิตวิศวกรรมวัสดุ ชั้นปีที่ 3 | รหัสนิสิต: 20067105527480</div>
+          </div>
+          <div style="text-align:right;">
+            <span style="background:rgba(59, 130, 246, 0.15); color:#60a5fa; font-weight:700; font-size:0.7rem; padding:4px 10px; border-radius:8px; border:1px solid rgba(59, 130, 246, 0.25);">
+              เป้าหมาย: กรมธุรกิจพลังงาน
+            </span>
+          </div>
+        </div>
+        
+        <p style="font-size:0.8rem; color:#cbd5e1; text-align:left; line-height:1.5; margin:0 0 20px 0;">
+          **คำอธิบาย**: เอกสารชิ้นนี้ใช้สำหรับประกอบการสมัครประสานงานวิชาฝึกงานวิศวกรรมวัสดุ (01213399) ณ หน่วยงาน กองความปลอดภัยธุรกิจน้ำมัน/ก๊าซ กรมธุรกิจพลังงาน กระทรวงพลังงาน
+        </p>
+
+        <!-- Document Preview -->
+        <div style="margin-bottom:25px;">
+          ${previewHTML}
+        </div>
+        
+        <!-- Actions -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <button onclick="downloadPublicSharedFileDirect('${item.id}', '${item.name}', '${item.mimeType}')" style="background:linear-gradient(135deg, #10b981, #047857); color:white; border:none; padding:14px; border-radius:12px; font-weight:700; font-size:0.85rem; cursor:pointer; box-shadow:0 6px 15px rgba(16,185,129,0.25); transition:all 0.2s ease; display:flex; align-items:center; justify-content:center; gap:8px;">
+            <span>⬇️</span> ดาวน์โหลดไฟล์ตัวจริง
+          </button>
+          <a href="${window.location.origin}${window.location.pathname}" style="background:rgba(255,255,255,0.06); color:white; border:1px solid rgba(255,255,255,0.15); text-decoration:none; padding:14px; border-radius:12px; font-weight:700; font-size:0.85rem; display:flex; align-items:center; justify-content:center; box-sizing:border-box; transition:all 0.2s ease;">
+            💼 เข้าเว็บแอปพลิเคชันหลัก
+          </a>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function unlockPublicSharedFile(itemId, password) {
+  const val = document.getElementById('shared-pass-input').value.trim();
+  if (val === password) {
+    state.ilmSharedUnlocked = state.ilmSharedUnlocked || {};
+    state.ilmSharedUnlocked[itemId] = true;
+    render();
+  } else {
+    alert("❌ รหัสผ่านป้องกันเอกสารไม่ถูกต้อง กรุณาตรวจสอบรหัสผ่านอีกครั้งครับ");
+  }
+}
+
+function downloadPublicSharedFileDirect(fileId, name, mimeType) {
+  const item = state.ilmFiles.find(f => f.id === fileId);
+  const a = document.createElement('a');
+  if (item && item.data && item.data.startsWith('data:')) {
+    a.href = item.data;
+  } else {
+    const blob = new Blob(["Simulated Document Data for Mr. Nitipat TIPCHAI - Materials Engineering, KU"], { type: mimeType || 'text/plain' });
+    a.href = URL.createObjectURL(blob);
+  }
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 // ══════════════════════════════════════════════════
