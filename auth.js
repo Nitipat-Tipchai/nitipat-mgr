@@ -247,3 +247,47 @@ async function startAppCore() {
   }
 }
 
+window.startAppPublic = async function() {
+  try {
+    let firebaseConfig;
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      firebaseConfig = {
+        apiKey: "AIzaSyB7pGaPWn4n7NxrQ9l60V16u-qj05khqU8",
+        authDomain: "mat-e-db476.firebaseapp.com",
+        projectId: "mat-e-db476",
+        storageBucket: "mat-e-db476.firebasestorage.app",
+        messagingSenderId: "986910230630",
+        appId: "1:986910230630:web:7b4b23ce828d18ab7bc5a7"
+      };
+    } else {
+      firebaseConfig = await new Promise((res, rej) => {
+        google.script.run.withSuccessHandler(res).withFailureHandler(rej).getFirebaseConfig();
+      });
+    }
+
+    if (!firebaseConfig.apiKey) return;
+
+    const app = initializeApp(firebaseConfig);
+    db = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      experimentalForceLongPolling: true
+    });
+
+    state.ilmFilesLoadedFromServer = false;
+    render(); // Update UI to show loading
+
+    try {
+      const ilmFilesSnap = await getDoc(doc(db, "ilm_data", "files"));
+      if (ilmFilesSnap.exists()) {
+        state.ilmFiles = ilmFilesSnap.data().list || [];
+      }
+    } catch(e) {
+      console.warn("Public fetch error", e);
+    }
+    
+    state.ilmFilesLoadedFromServer = true;
+    render(); // Re-render the portal with actual data
+  } catch (err) {
+    console.error("Public App initialization failed:", err);
+  }
+};
