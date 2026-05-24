@@ -334,6 +334,27 @@ function renderILMPage() {
         opacity: 0.4;
         cursor: not-allowed;
       }
+      /* Interview flashcard styling */
+      .i-flashcard-box {
+        background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+        color: white;
+        border-radius: 16px;
+        padding: 24px;
+        min-height: 180px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        text-align: center;
+        cursor: pointer;
+        box-shadow: 0 8px 24px rgba(30, 58, 138, 0.2);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        position: relative;
+        perspective: 1000px;
+      }
+      .i-flashcard-box:hover {
+        transform: translateY(-4px) scale(1.01);
+        box-shadow: 0 12px 30px rgba(30, 58, 138, 0.3);
+      }
     `;
     document.head.appendChild(style);
   }
@@ -346,8 +367,11 @@ function renderILMPage() {
       <!-- Title & Phase Progress -->
       <div class="i-header">
         <div class="i-title-wrap">
-          <h1 class="i-title">IILM V3 - Internship Lifecycle</h1>
-          <span class="i-badge" id="ilm-top-phase-badge">Phase 1: หาที่ฝึกงาน</span>
+          <h1 class="i-title">IILM V3 - Internship Lifecycle (กรมธุรกิจพลังงาน)</h1>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <button class="i-btn sm" style="background:var(--i-card-bg); font-size:0.8rem; border-color:var(--i-gold); color:var(--i-gold);" onclick="openScheduleSettingsModal()">⚙️ ตั้งค่ากำหนดการของคณะ</button>
+            <span class="i-badge" id="ilm-top-phase-badge">Phase 1: หาที่ฝึกงาน</span>
+          </div>
         </div>
       </div>
 
@@ -358,16 +382,16 @@ function renderILMPage() {
           <span>1. หาสถานที่</span>
         </button>
         <button class="i-phase-tab ${ilmActiveTab === 'prep' ? 'active' : ''}" onclick="switchILMTab('prep')">
-          <span class="p-icon">🎓</span>
-          <span>2. ปฐมนิเทศ</span>
+          <span class="p-icon">🛡️</span>
+          <span>2. เตรียมตัว & เซฟตี้</span>
         </button>
         <button class="i-phase-tab ${ilmActiveTab === 'tracking' ? 'active' : ''}" onclick="switchILMTab('tracking')">
           <span class="p-icon">⏱️</span>
-          <span>3. ตอกบัตร</span>
+          <span>3. ตอกบัตร & การเงิน</span>
         </button>
         <button class="i-phase-tab ${ilmActiveTab === 'report' ? 'active' : ''}" onclick="switchILMTab('report')">
           <span class="p-icon">📄</span>
-          <span>4. ปิดเล่มส่ง</span>
+          <span>4. ปิดเล่มส่งงาน</span>
         </button>
       </div>
 
@@ -392,38 +416,77 @@ function renderILMContent() {
   if (!mount) return;
 
   if (ilmActiveTab === 'planner') {
-    if (topBadge) topBadge.innerText = "Phase 1: ค้นหา & สมัครงาน";
+    if (topBadge) topBadge.innerText = "Phase 1: ค้นหา & สมัครแผนก";
+    state.ilmProfile.currentPhase = 'phase1';
+    ILMHub.saveState();
     renderPhase1(mount);
   } else if (ilmActiveTab === 'prep') {
-    if (topBadge) topBadge.innerText = "Phase 2: ปฐมนิเทศ & อบรม";
+    if (topBadge) topBadge.innerText = "Phase 2: ปฐมนิเทศ & อบรมเซฟตี้";
+    state.ilmProfile.currentPhase = 'phase2';
+    ILMHub.saveState();
     renderPhase2(mount);
   } else if (ilmActiveTab === 'tracking') {
-    if (topBadge) topBadge.innerText = "Phase 3: ปฏิบัติการเวลางาน";
+    if (topBadge) topBadge.innerText = "Phase 3: ปฏิบัติงานตอกบัตร & งบการเงิน";
+    state.ilmProfile.currentPhase = 'phase3';
+    ILMHub.saveState();
     renderPhase3(mount);
   } else if (ilmActiveTab === 'report') {
-    if (topBadge) topBadge.innerText = "Phase 4: ร่างรายงาน & ปิดงาน";
+    if (topBadge) topBadge.innerText = "Phase 4: เขียนรายงานวิจัย & ปิดเล่ม";
+    state.ilmProfile.currentPhase = 'phase4';
+    ILMHub.saveState();
     renderPhase4(mount);
   }
 }
 
 // ══════════════════════════════════════════════════
-// PHASE 1: ค้นหา & สมัครงาน (Aug - Sep)
+// PHASE 1: ค้นหา & เตรียมตัวสมัคร (หาสถานที่)
 // ══════════════════════════════════════════════════
 function renderPhase1(container) {
   const elig = ILMHub.checkEligibility();
   const deadline = ILMHub.getRegistrationDeadline();
+  const schedule = state.ilmProfile.schedule || {};
 
   container.innerHTML = `
     <!-- Registration Countdown -->
     <div class="i-countdown-box">
       <div style="font-size: 0.9rem; opacity: 0.9;">⏳ นับถอยหลังสู่กำหนดส่งใบคำร้องขอฝึกงาน (wt.eng.ku.ac.th)</div>
       <div id="ilm-countdown-val" class="i-countdown-val">--d : --h : --m : --s</div>
-      <div style="font-size: 0.8rem; opacity: 0.8; font-weight: 600;">เส้นตายสิ้นสุด: 30 กันยายน 2568 (23:59:59)</div>
+      <div style="font-size: 0.8rem; opacity: 0.8; font-weight: 600;" id="ilm-deadline-lbl">
+        เส้นตายสิ้นสุด: ${schedule.registrationDeadline ? `${schedule.registrationDeadline} (23:59:59)` : 'ยังไม่ได้ระบุวันส่งคำร้อง'}
+      </div>
     </div>
     
-    <!-- Academic Eligibility Grid -->
+    <!-- Customizable Milestone Dates Summary Panel -->
     <div class="i-card" style="margin-top:25px;">
-      <h3><span class="c-icon">🎓</span> ความพร้อมคุณสมบัติวิชาการ</h3>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+        <h3><span class="c-icon">📅</span> ตารางกำหนดการฝึกงานของคุณ (Milestone Dates)</h3>
+        <button class="i-btn sm" onclick="openScheduleSettingsModal()">✏️ แก้ไขกำหนดการ</button>
+      </div>
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px; font-size:0.85rem;">
+        <div style="padding:10px; border-radius:8px; background:var(--bg); border:1px solid var(--i-border);">
+          <div style="color:var(--text-muted); font-weight:600;">วันชี้แจงฝึกงานภาควิชาฯ:</div>
+          <div style="font-weight:700; margin-top:4px;">${schedule.advisingDate ? `📅 ${schedule.advisingDate}` : '<span style="color:var(--i-gold);">✏️ ยังไม่ระบุวัน</span>'}</div>
+        </div>
+        <div style="padding:10px; border-radius:8px; background:var(--bg); border:1px solid var(--i-border);">
+          <div style="color:var(--text-muted); font-weight:600;">ส่งใบคำร้องขอฝึกงาน (มก.):</div>
+          <div style="font-weight:700; margin-top:4px;">${schedule.registrationDeadline ? `📅 ${schedule.registrationDeadline}` : '<span style="color:var(--i-gold);">✏️ ยังไม่ระบุวัน</span>'}</div>
+        </div>
+        <div style="padding:10px; border-radius:8px; background:var(--bg); border:1px solid var(--i-border);">
+          <div style="color:var(--text-muted); font-weight:600;">วันปฐมนิเทศนิสิตทุกคน:</div>
+          <div style="font-weight:700; margin-top:4px;">${schedule.orientationDate ? `📅 ${schedule.orientationDate}` : '<span style="color:var(--i-gold);">✏️ ยังไม่ระบุวัน</span>'}</div>
+        </div>
+        <div style="padding:10px; border-radius:8px; background:var(--bg); border:1px solid var(--i-border);">
+          <div style="color:var(--text-muted); font-weight:600;">ระยะเวลาฝึกงานจริง:</div>
+          <div style="font-weight:700; margin-top:4px;">
+            ${schedule.startDate && schedule.endDate ? `📅 ${schedule.startDate} ถึง ${schedule.endDate}` : '<span style="color:var(--i-gold);">✏️ ยังไม่ระบุวัน</span>'}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Academic Eligibility Grid -->
+    <div class="i-card">
+      <h3><span class="c-icon">🎓</span> ตรวจสอบคุณสมบัติวิชาการ (เกณฑ์สะสม มก.)</h3>
       <div style="display:flex; flex-direction:column; gap:12px;">
         <div style="padding: 16px; border-radius: 12px; display: flex; align-items: center; gap: 15px; background: ${elig.passed ? 'rgba(16, 185, 129, 0.1)' : 'rgba(244, 63, 94, 0.1)'}; border: 1px solid ${elig.passed ? 'rgba(16, 185, 129, 0.3)' : 'rgba(244, 63, 94, 0.3)'};">
           <span style="font-size: 2.2rem;">${elig.passed ? '✅' : '❌'}</span>
@@ -434,53 +497,76 @@ function renderPhase1(container) {
             <div style="font-size: 0.85rem; opacity: 0.9; margin-top: 4px;">
               เกณฑ์หลักสูตร: ต้องสะสมหน่วยกิตไม่น้อยกว่า 60 หน่วยกิต (ปัจจุบันสะสมแล้ว ${elig.earnedCredits} / 60 หน่วยกิต)
             </div>
+            ${elig.messages.map(m => `<div style="font-size: 0.8rem; color: var(--i-rose); font-weight:600; margin-top:4px;">⚠️ ${m}</div>`).join('')}
           </div>
         </div>
       </div>
     </div>
 
+    <!-- Energy Safety Technical Interview Flashcards widget -->
+    <div class="i-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+        <h3><span class="c-icon">🗣️</span> เครื่องจำลองซ้อมสัมภาษณ์งานกรมธุรกิจพลังงาน (Interview Simulator)</h3>
+        <button class="i-btn sm i-btn-primary" onclick="openInterviewSimulatorModal()">💡 เริ่มซ้อมสัมภาษณ์</button>
+      </div>
+      <p style="font-size:0.85rem; color:var(--text-muted); line-height:1.5; margin-bottom:0;">
+        ซ้อมตอบคำถามทางเทคนิควิศวกรรมวัสดุศาสตร์กึ่งความปลอดภัยในคลังปิโตรเลียม การวิเคราะห์รอยเชื่อมท่อส่ง และการสึกกร่อนใต้ดิน เพื่อสร้างความมั่นใจก่อนเข้าพบกรรมการของกรมธุรกิจพลังงาน
+      </p>
+    </div>
+
     <!-- Kanban board -->
     <div class="i-card">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px; flex-wrap:wrap; gap:10px;">
-        <h3><span class="c-icon">🏢</span> บอร์ดติดตามสถานะสมัครงาน (Interactive Kanban)</h3>
-        <button class="i-btn i-btn-primary" onclick="openAddCompanyModal()">+ ค้นหา/เพิ่มบริษัท</button>
+        <h3><span class="c-icon">🏢</span> คลังจัดกลุ่มแผนก/กองงานที่จะยื่นสมัคร (Kanban Board)</h3>
+        <button class="i-btn i-btn-primary" onclick="openAddCompanyModal()">+ เพิ่มเป้าหมายสมัคร</button>
       </div>
+      <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">*คุณสามารถกดไอคอนถังขยะ 🗑️ หรือเลือกเปลี่ยนสถานะเพื่อย้ายแผนก/หน่วยงานได้อย่างอิสระ หากลบข้อมูลบริษัทจำลองทั้งหมดออก บอร์ดจะคงสภาพว่างอย่างถาวรโดยไม่นำบริษัทตัวอย่างกลับมาทับซ้ำ</div>
       <div class="i-kanban-board" id="ilm-kanban-board">
         <!-- Rendered dynamically -->
       </div>
     </div>
 
-    <!-- Document Helper & Auto fill Request Form -->
+    <!-- Micro Document Advisory & Checklist instead of PDF Generator -->
     <div class="i-grid-2">
       <div class="i-card">
-        <h3><span class="c-icon">📝</span> ศูนย์เอกสารอัจฉริยะ (KU Registrar Form)</h3>
-        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 20px; line-height:1.6;">
-          ระบบจะดึงประวัติการเรียน รหัสนิสิต และเกรดของคุณ มาทำการเขียนฟอร์มขออนุมัติส่งตัวฝึกงานลงบนแบบกระดาษคำร้องขอหน่วยกิจการนิสิต มก. (.pdf) อัตโนมัติ โดยไม่ต้องเขียนมือ
-        </p>
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <button class="i-btn i-btn-primary" onclick="ILMHub.generateRequestForm()">
-            <span>📝</span> สร้างใบคำร้องส่งตัว (Auto-Fill PDF)
-          </button>
-          <button class="i-btn" onclick="openDocumentHubModal()">
-            <span>📁</span> จัดเก็บประวัติสมัครงาน (Resume/Transcript)
+        <h3><span class="c-icon">📝</span> คู่มือแนะแนวการยื่นสมัครงานราชการ (Application Guide)</h3>
+        <div style="font-size: 0.85rem; color: var(--text); line-height: 1.6; display:flex; flex-direction:column; gap:8px;">
+          <div style="background:rgba(30, 58, 138, 0.04); padding:12px; border-radius:10px; border-left:4px solid var(--i-primary);">
+            <strong>ขั้นตอนการยื่นหนังสือขอความอนุเคราะห์ส่งตัว:</strong>
+            <ol style="margin:6px 0 0 15px; padding:0;">
+              <li>ดาวน์โหลดฟอร์มคำร้องจากหน่วยกิจการนิสิตตึก 3 ชั้น 1 คณะวิศวกรรมศาสตร์</li>
+              <li>กรอกข้อมูลด้วยตนเองให้เรียบร้อย (ชื่อนิสิต, รหัส, เกรดเฉลี่ยสะสม, และชื่อกองงานในกรมธุรกิจพลังงานที่จะเสนอฝึก)</li>
+              <li>นำส่งให้อาจารย์ที่ปรึกษาวิชาการและอาจารย์ประสานงานภาควิชาวัสดุเพื่อเซ็นพิจารณาเห็นชอบ</li>
+              <li>นำฟอร์มส่งคืนที่ห้องกิจการนิสิตเพื่อให้คณะออกจดหมายส่งตัวฉบับจริงส่งไปยังกระทรวงพลังงาน</li>
+            </ol>
+          </div>
+          <button class="i-btn" style="width:100%; justify-content:center;" onclick="openDocumentHubModal()">
+            <span>📁</span> ตรวจสอบคลังเอกสารของคุณ (Resume/Transcript)
           </button>
         </div>
       </div>
       
       <div class="i-card">
-        <h3><span class="c-icon">✉️</span> อีเมลติดต่อเขียนร่างอัจฉริยะ (Polite Email)</h3>
-        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 20px; line-height:1.6;">
-          ตัววิเคราะห์อีเมลอัตโนมัติ ร่างข้อความแนะนำตัวและขอเข้าฝึกงานกับฝ่ายทรัพยากรบุคคล (HR) ทั้งภาษาไทยและภาษาอังกฤษอย่างสุภาพแบบนักวิชาชีพ
+        <h3><span class="c-icon">✉️</span> อีเมลติดต่อแนะนำตัว HR/หัวหน้างานกองความปลอดภัย</h3>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px; line-height: 1.6;">
+          ระบบจะทำการดึงประวัติ และวันที่กำหนดการที่คุณกรอกไว้ มาเขียนร่างจดหมายประสานงานติดต่อกับข้าราชการ/HR ของกรมธุรกิจพลังงานอย่างสุภาพเป็นทางการ
         </p>
-        <button class="i-btn i-btn-primary" onclick="openEmailGeneratorModal()">
-          <span>✉️</span> ร่างจดหมายติดต่อฝ่ายบุคคล HR
+        <button class="i-btn i-btn-primary" style="width:100%; justify-content:center;" onclick="openEmailGeneratorModal()">
+          <span>✉️</span> เปิดจดหมายร่างติดต่อประสานงาน
         </button>
       </div>
     </div>
   `;
 
-  // Start registration countdown
-  startCountdownTimer(deadline, 'ilm-countdown-val');
+  // Start registration countdown if deadline is set
+  if (deadline) {
+    startCountdownTimer(deadline, 'ilm-countdown-val');
+  } else {
+    const clock = document.getElementById('ilm-countdown-val');
+    if (clock) clock.innerText = "ยังไม่เปิดระบุกำหนดวันส่ง";
+    const lbl = document.getElementById('ilm-deadline-lbl');
+    if (lbl) lbl.innerHTML = `<span style="color:var(--i-gold); font-weight:700;">⚠️ กรุณาคลิกปุ่ม "ตั้งค่ากำหนดการของคณะ" ด้านบนเพื่อระบุวันส่งคำร้องน้ำถอยหลัง</span>`;
+  }
   renderKanbanHTML();
 }
 
@@ -519,10 +605,10 @@ function renderKanbanHTML() {
 
   const cols = [
     { id: 'interested', title: '💡 สนใจ', color: '#64748b' },
-    { id: 'applied', title: '📤 สมัครแล้ว', color: '#3b82f6' },
+    { id: 'applied', title: '📤 ยื่นสมัครแล้ว', color: '#3b82f6' },
     { id: 'interview', title: '🗣️ นัดสัมภาษณ์', color: '#eab308' },
-    { id: 'accepted', title: '🎉 อนุมัติ/ตอบรับ', color: '#10b981' },
-    { id: 'rejected', title: '❌ ปฏิเสธ', color: '#f43f5e' }
+    { id: 'accepted', title: '🎉 กรมฯ ตอบรับ', color: '#10b981' },
+    { id: 'rejected', title: '❌ ปฏิเสธ/ไม่ผ่าน', color: '#f43f5e' }
   ];
 
   kb.innerHTML = cols.map(col => {
@@ -538,17 +624,16 @@ function renderKanbanHTML() {
           ${list.map(c => `
             <div class="i-kanban-card" draggable="true" ondragstart="event.dataTransfer.setData('text/plain', '${c.id}')">
               <div style="font-weight:700; font-size:0.95rem; margin-bottom:6px;">${c.name}</div>
-              <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:4px;">กลุ่มวัสดุ: ${c.field}</div>
-              <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:8px;">เบี้ยเลี้ยง: ${c.salary} บาท/วัน</div>
+              <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:4px;">กองงาน: ${c.field}</div>
+              <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:8px;">เบี้ยเลี้ยง: ${c.salary > 0 ? `${c.salary} บาท/วัน` : 'ไม่มี (ฝึกภาครัฐ)'}</div>
               
-              <!-- Quick navigation action buttons for easier touch use -->
               <div style="display:flex; gap:4px; justify-content:flex-end; border-top: 1px solid var(--i-border); padding-top:6px; margin-top:4px;">
                 <select style="font-size:0.75rem; padding:2px; border-radius:6px; border:1px solid var(--i-border); background:var(--bg); color:var(--text);" onchange="moveCompany('${c.id}', this.value)">
                   <option value="" disabled selected>ย้าย...</option>
                   <option value="interested">💡 สนใจ</option>
-                  <option value="applied">📤 สมัครแล้ว</option>
+                  <option value="applied">📤 ยื่นสมัครแล้ว</option>
                   <option value="interview">🗣️ นัดสัมภาษณ์</option>
-                  <option value="accepted">🎉 ตอบรับ</option>
+                  <option value="accepted">🎉 กรมฯ ตอบรับ</option>
                   <option value="rejected">❌ ปฏิเสธ</option>
                 </select>
                 <button style="border:none; background:transparent; cursor:pointer; font-size:0.8rem;" onclick="deleteCompany('${c.id}')">🗑️</button>
@@ -567,10 +652,8 @@ function moveCompany(id, newStatus) {
     comp.status = newStatus;
     ILMHub.saveState();
     renderKanbanHTML();
-    
-    // Auto shift workflow if a company gets accepted!
     if (newStatus === 'accepted') {
-      showToast("🎉 ยินดีด้วยครับ! สถานประกอบการตอบรับการฝึกงานแล้ว ระบบจะแนะนำขั้นตอนปฐมนิเทศถัดไป");
+      showToast("🎉 ยินดีด้วยครับ! กรมธุรกิจพลังงานตอบรับเข้าฝึกงานเรียบร้อยแล้ว ระบบจะล็อกเป้าหมายการตอกบัตรและเบี้ยเลี้ยงต่อไป");
     }
   }
 }
@@ -582,155 +665,16 @@ function moveCompanyDrag(evt, newStatus) {
 }
 
 function deleteCompany(id) {
-  if (confirm("คุณแน่ใจหรือไม่ที่จะลบรายชื่อสถานประกอบการนี้?")) {
+  if (confirm("ต้องการลบเป้าหมายการสมัครแผนกนี้หรือไม่?")) {
     state.ilmCompanies = state.ilmCompanies.filter(c => c.id !== id);
     ILMHub.saveState();
     renderKanbanHTML();
-    showToast("🗑️ ลบสถานประกอบการเรียบร้อย");
-  }
-}
-
-function openAddCompanyModal() {
-  openModal('🏢 ค้นหา & เพิ่มรายชื่อบริษัทที่สนใจ', `
-    <div style="text-align:left; font-family:Sarabun, sans-serif;">
-      <div class="i-fg">
-        <label>ชื่อหน่วยงาน/สถานประกอบการ:</label>
-        <input type="text" id="k-name" placeholder="ตัวอย่าง: SCG Chemicals, ปตท.">
-      </div>
-      <div class="i-fg">
-        <label>กลุ่มงานวัสดุศาสตร์ย่อย:</label>
-        <select id="k-field">
-          <option value="Polymer">Polymer (พอลิเมอร์/พลาสติก)</option>
-          <option value="Metal">Metal (โลหกรรม/เหล็ก/อลูมิเนียม)</option>
-          <option value="Ceramic">Ceramic (เซรามิก/วัสดุทนไฟ/แก้ว)</option>
-          <option value="Electronics">Semiconductor & Electronic Materials</option>
-        </select>
-      </div>
-      <div class="i-fg">
-        <label>เบี้ยเลี้ยงสนับสนุนรายวัน (บาท):</label>
-        <input type="number" id="k-salary" value="400">
-      </div>
-      <div class="i-fg">
-        <label>ที่ตั้งสำนักงาน/โรงงาน:</label>
-        <input type="text" id="k-address" placeholder="ตัวอย่าง: นิคมอุตสาหกรรมมาบตาพุด ระยอง">
-      </div>
-      <div class="i-fg">
-        <label>ช่องทางติดต่อ HR / ข้อมูลสมัครงาน:</label>
-        <input type="text" id="k-contact" placeholder="เบอร์โทร / อีเมลติดต่อ">
-      </div>
-      <div style="display:flex; gap:10px; margin-top:20px;">
-        <button class="i-btn i-btn-primary" style="flex:1; justify-content:center;" onclick="saveNewCompany()">💾 บันทึกข้อมูลบริษัท</button>
-        <button class="i-btn" style="flex:1; justify-content:center;" onclick="closeModal()">ยกเลิก</button>
-      </div>
-    </div>
-  `);
-}
-
-function saveNewCompany() {
-  const name = document.getElementById('k-name').value;
-  const field = document.getElementById('k-field').value;
-  const salary = parseFloat(document.getElementById('k-salary').value) || 0;
-  const address = document.getElementById('k-address').value;
-  const contact = document.getElementById('k-contact').value;
-  
-  if (!name.trim()) {
-    alert("กรุณากรอกชื่อบริษัท");
-    return;
-  }
-  
-  const newComp = {
-    id: 'c_' + Date.now(),
-    name, field, status: 'interested', salary, address, contact
-  };
-  
-  state.ilmCompanies.push(newComp);
-  ILMHub.saveState();
-  closeModal();
-  renderKanbanHTML();
-  showToast("✅ เพิ่มสถานประกอบการลงบอร์ดสำเร็จ");
-}
-
-function openDocumentHubModal() {
-  openModal('📁 คลังไฟล์เอกสารการยื่นฝึกงานส่วนบุคคล', `
-    <div style="text-align:left; font-family:Sarabun, sans-serif;">
-      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px;">ตรวจสอบและจัดเตรียมคลังไฟล์ PDF ของคุณสำหรับส่งต่อให้ฝ่ายทรัพยากรบุคคล</p>
-      
-      <div style="display:flex; flex-direction:column; gap:10px;">
-        <div style="border:1px solid var(--i-border); padding:12px; border-radius:10px; background:var(--bg); display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <div style="font-weight:700; font-size:0.9rem;">📝 Resume_Materials_Eng.pdf</div>
-            <div style="font-size:0.75rem; color:var(--text-muted);">ขนาดไฟล์: 1.2 MB | ใช้ยื่นสมัครงานทางเทคนิค</div>
-          </div>
-          <button class="i-btn" style="padding:4px 10px; font-size:0.75rem;" onclick="showToast('✓ ลิงก์ Resume พร้อมใช้')">คัดลอกลิงก์ไฟล์</button>
-        </div>
-        
-        <div style="border:1px solid var(--i-border); padding:12px; border-radius:10px; background:var(--bg); display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <div style="font-weight:700; font-size:0.9rem;">📊 Academic_Transcript_Nitipat.pdf</div>
-            <div style="font-size:0.75rem; color:var(--text-muted);">ขนาดไฟล์: 850 KB | แสดงผลการเรียนรายเทอมผ่านเกณฑ์</div>
-          </div>
-          <button class="i-btn" style="padding:4px 10px; font-size:0.75rem;" onclick="showToast('✓ ลิงก์ Transcript พร้อมใช้')">คัดลอกลิงก์ไฟล์</button>
-        </div>
-        
-        <div style="border:1px solid var(--i-border); padding:12px; border-radius:10px; background:var(--bg); display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <div style="font-weight:700; font-size:0.9rem;">🎨 Portfolio_Metallurgy_Focus.pdf</div>
-            <div style="font-size:0.75rem; color:var(--text-muted);">ขนาดไฟล์: 4.8 MB | แนบภาพโปรเจคแล็บโลหกรรม</div>
-          </div>
-          <button class="i-btn" style="padding:4px 10px; font-size:0.75rem;" onclick="showToast('✓ ลิงก์ Portfolio พร้อมใช้')">คัดลอกลิงก์ไฟล์</button>
-        </div>
-      </div>
-      
-      <button class="i-btn i-btn-primary" style="margin-top:20px; width:100%; justify-content:center;" onclick="closeModal()">ตกลง</button>
-    </div>
-  `);
-}
-
-function openEmailGeneratorModal() {
-  const activeComp = state.ilmCompanies.find(c => c.status === 'accepted') || state.ilmCompanies[0] || { name: 'SCG Chemicals' };
-  
-  openModal('✉️ ตัวช่วยร่างจดหมายอัจฉริยะติดต่อ HR', `
-    <div style="text-align:left; font-family:Sarabun, sans-serif;">
-      <div class="i-fg">
-        <label>เลือกเทมเพลตจดหมาย:</label>
-        <select id="email-t-select" onchange="updateEmailTextarea(this.value, '${activeComp.name}')">
-          <option value="th_request">ขอความอนุเคราะห์เข้าฝึกงาน (ภาษาไทย - แนะนำ)</option>
-          <option value="en_request">Internship Application Letter (ภาษาอังกฤษ)</option>
-          <option value="th_followup">ติดตามผลการพิจารณาสมัครงาน</option>
-        </select>
-      </div>
-      
-      <div class="i-fg">
-        <label>เนื้อหาอีเมลติดต่อ HR:</label>
-        <textarea id="email-text-box" style="height:250px; font-family:Courier, Sarabun, monospace; font-size:0.85rem; line-height:1.5;">${ILMHub.getEmailTemplate('th_request', activeComp.name)}</textarea>
-      </div>
-      
-      <div style="display:flex; gap:10px; margin-top:20px;">
-        <button class="i-btn i-btn-primary" style="flex:2; justify-content:center;" onclick="copyEmailToClipboard()">📋 คัดลอกเนื้อหาไปยังคลิปบอร์ด</button>
-        <button class="i-btn" style="flex:1; justify-content:center;" onclick="closeModal()">ปิดหน้าต่าง</button>
-      </div>
-    </div>
-  `);
-}
-
-function updateEmailTextarea(type, companyName) {
-  const box = document.getElementById('email-text-box');
-  if (box) {
-    box.value = ILMHub.getEmailTemplate(type, companyName);
-  }
-}
-
-function copyEmailToClipboard() {
-  const box = document.getElementById('email-text-box');
-  if (box) {
-    navigator.clipboard.writeText(box.value);
-    showToast('📋 คัดลอกเนื้อหาเรียบร้อยแล้ว! สามารถนำไปแปะส่งอีเมลได้ทันที');
-    closeModal();
+    showToast("🗑️ ลบข้อมูลเรียบร้อย");
   }
 }
 
 // ══════════════════════════════════════════════════
-// PHASE 2: ปฐมนิเทศ & ตรวจสอบ (Oct - Mar)
+// PHASE 2: ปฐมนิเทศ & อบรมเซฟตี้คลังแก๊ส (เตรียมตัว)
 // ══════════════════════════════════════════════════
 function renderPhase2(container) {
   const sems = state.ilmProfile.seminars || [];
@@ -738,8 +682,10 @@ function renderPhase2(container) {
   container.innerHTML = `
     <!-- Pre-internship Seminar Progress Checklist -->
     <div class="i-card">
-      <h3><span class="c-icon">📅</span> บันทึกการร่วมฟังสัมมนาเตรียมความพร้อม (4 ครั้งหลัก)</h3>
-      <p style="font-size:0.9rem; color:var(--text-muted); margin-bottom:20px;">การเข้าร่วมฟังสัมมนาเตรียมความพร้อมฝึกงานตามกำหนดการภาควิชาฯ เพื่อเตรียมความเข้าใจหลักสูตร</p>
+      <h3><span class="c-icon">📅</span> บันทึกการเข้าร่วมกิจกรรมสัมมนาความพร้อม (4 ครั้งหลัก)</h3>
+      <p style="font-size:0.9rem; color:var(--text-muted); margin-bottom:20px;">
+        เช็คลิสต์บันทึกความเข้าใจฟังสัมมนาเตรียมความพร้อมฝึกงาน ซึ่งจัดขึ้นเป็นทางการโดยคณะและภาควิชาวิศวกรรมวัสดุ
+      </p>
       
       <div style="display:flex; flex-direction:column; gap:15px;">
         ${sems.map((sem, index) => `
@@ -749,19 +695,19 @@ function renderPhase2(container) {
                 <input type="checkbox" style="width:20px; height:20px; cursor:pointer;" ${sem.attended ? 'checked' : ''} onchange="toggleSeminar(${sem.id}, this.checked)">
                 <div>
                   <span style="font-weight:700; font-size:0.95rem;">ครั้งที่ ${sem.id}: ${sem.title}</span>
-                  <div style="font-size:0.8rem; color:var(--text-muted);">กำหนดนัดสัมมนา: ${sem.date}</div>
+                  <div style="font-size:0.8rem; color:var(--text-muted);">วันจัดงาน: 📅 ${sem.date}</div>
                 </div>
               </div>
               <span style="background:${sem.attended ? 'rgba(16, 185, 129, 0.15)' : 'rgba(244, 63, 94, 0.15)'}; color:${sem.attended ? 'var(--i-emerald)' : 'var(--i-rose)'}; font-size:0.8rem; font-weight:700; padding:4px 12px; border-radius:10px;">
-                ${sem.attended ? '✓ บันทึกเข้าร่วมแล้ว' : 'ยังไม่ได้ลงเวลา'}
+                ${sem.attended ? '✓ เข้าร่วมแล้ว' : 'ยังไม่บันทึกร่วมงาน'}
               </span>
             </div>
             
             ${sem.attended ? `
               <div style="border-top:1px solid var(--i-border); padding-top:10px; display:flex; flex-direction:column; gap:8px;">
                 <div class="i-fg" style="margin-bottom:0;">
-                  <label style="font-size:0.75rem;">สรุปเนื้อหาสำคัญหรือคำสำคัญที่สนใจ:</label>
-                  <input type="text" value="${sem.note || ''}" placeholder="ระบุสิ่งที่ประทับใจจากการฟังบรรยาย..." onchange="saveSeminarNote(${sem.id}, this.value)" style="padding:6px 12px; font-size:0.85rem;">
+                  <label style="font-size:0.75rem;">สรุปเนื้อหาสำคัญความพร้อม:</label>
+                  <input type="text" value="${sem.note || ''}" placeholder="ระบุสิ่งที่จดจำ เช่น กฎความปลอดภัย, ทฤษฎีวัสดุชำรุด..." onchange="saveSeminarNote(${sem.id}, this.value)" style="padding:6px 12px; font-size:0.85rem;">
                 </div>
               </div>
             ` : ''}
@@ -770,46 +716,81 @@ function renderPhase2(container) {
       </div>
     </div>
 
-    <!-- Official Orientation Quiz Simulator Card -->
-    <div class="i-card" id="ilm-quiz-simulator-card">
-      <!-- Renders dynamically based on status -->
-      <h3><span class="c-icon">📝</span> แบบทดสอบความรู้และสิทธิ์ออกฝึกงาน (Orientation Quiz)</h3>
-      <div id="ilm-quiz-container">
-        <!-- Inside renderQuizHTML -->
+    <!-- Fuel Storage & PPE Safety Risk Assessor (Specialised Feature 5) -->
+    <div class="i-card">
+      <h3><span class="c-icon">🛡️</span> ตัวประเมินความปลอดภัยภัยคลังปิโตรเลียมและชุด PPE (Safety PPE Assessor)</h3>
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px; line-height:1.5;">
+        เลือกประเภทเขตควบคุมพลังงานที่คุณต้องออกปฏิบัติงานร่วมกับเจ้าหน้าที่ตรวจตราของกรมธุรกิจพลังงาน เพื่อวิเคราะห์ปัจจัยอันตรายและชุดป้องกันอันตรายส่วนบุคคลที่ต้องเตรียมสวมใส่
+      </p>
+      
+      <div class="i-fg" style="margin-bottom:20px;">
+        <label>เลือกประเภทหน้างานปฏิบัติการ:</label>
+        <select id="ppe-site-select" onchange="updatePPESafetyAssessor(this.value)">
+          <option value="station">สถานีบริการน้ำมันปั๊มเชื้อเพลิงทั่วไป (Gas/LPG Station)</option>
+          <option value="depot">คลังปิโตรเลียมดิบและเชื้อเพลิงหลักขนาดใหญ่ (Oil Storage Depot)</option>
+          <option value="pipeline" selected>ท่อส่งปิโตรเลียม/คลังเก็บแก๊ส LPG แรงดันสูง (Pipeline & LPG Terminal)</option>
+        </select>
+      </div>
+
+      <div id="ppe-safety-mount" style="background:var(--bg); border:1px solid var(--i-border); border-radius:14px; padding:20px;">
+        <!-- Loaded dynamically -->
       </div>
     </div>
 
-    <!-- Dress Code & steps checklist -->
-    <div class="i-grid-2">
-      <div class="i-card">
-        <h3><span class="c-icon">👔</span> ระเบียบการแต่งกายปฏิบัติงานคณะ (Dress Code)</h3>
-        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px; line-height:1.5;">
-          การสวมใส่อุปกรณ์คุ้มครองความปลอดภัยส่วนบุคคล (PPE) ถือเป็นเกณฑ์บังคับในการเข้าพื้นที่สนาม
-        </p>
-        <div style="font-size:0.85rem; line-height:1.6; display:flex; flex-direction:column; gap:8px; text-align:left;">
-          <div style="background:rgba(30, 58, 138, 0.04); padding:12px; border-radius:10px;">
-            <strong>🧑 นิสิตชาย/ปฏิบัติการภาคสนาม</strong>: สวมเสื้อเชิ้ตขาวหรือเสื้อช็อปปฏิบัติการวิศวกรรมวัสดุกรมท่า สวมกางเกงสแล็คขายาวสีสุภาพกรมท่า/ดำ สวมหมวกนิรภัย (Helmet) แว่นตานิรภัยเซฟตี้ และรองเท้าหุ้มส้นเสริมหัวเหล็กป้องกันการเจาะกระแทก
-          </div>
-          <div style="background:rgba(217, 70, 239, 0.04); padding:12px; border-radius:10px;">
-            <strong>👩 นิสิตหญิง/ปฏิบัติการภาคสนาม</strong>: สวมเสื้อเชิ้ตขาวหรือเสื้อช็อปวิศวกรรมวัสดุกรมท่า สวมกางเกงขายาวสีสุภาพสำหรับการเข้าไลน์อุตสาหกรรม รวบผมให้เรียบร้อยเพื่อป้องกันเครื่องจักรดึงรั้ง และสวมอุปกรณ์เซฟตี้ครบชุด
-          </div>
-        </div>
-      </div>
-      
-      <div class="i-card">
-        <h3><span class="c-icon">📋</span> ตารางขั้นตอนความสำเร็จ (Steps Checklist)</h3>
-        <div style="display:flex; flex-direction:column; gap:10px; font-size:0.85rem;">
-          <label style="display:flex; align-items:center; gap:10px;"><input type="checkbox" checked disabled> ลงทะเบียนความสนใจที่สถานประกอบการ (Phase 1)</label>
-          <label style="display:flex; align-items:center; gap:10px;"><input type="checkbox" checked disabled> ยื่นเอกสารแบบคำร้องขออนุมัติคณะ</label>
-          <label style="display:flex; align-items:center; gap:10px;"><input type="checkbox" ${state.ilmProfile.quizPassed ? 'checked' : ''} disabled> สอบแบบทดสอบปฐมนิเทศครบถ้วน 100%</label>
-          <label style="display:flex; align-items:center; gap:10px;"><input type="checkbox" ${sems.filter(s=>s.attended).length === 4 ? 'checked' : ''} disabled> ผ่านชั่วโมงสัมมนาปฐมนิเทศและปัจฉิมนิเทศครบ 4 ครั้ง</label>
-          <label style="display:flex; align-items:center; gap:10px;"><input type="checkbox" ${state.ilmLogs.length > 0 ? 'checked' : ''} disabled> รับหนังสือตอบรับอย่างเป็นทางการและเตรียมเดินทางฝึกงาน</label>
-        </div>
+    <!-- Official Orientation Quiz Simulator Card -->
+    <div class="i-card" id="ilm-quiz-simulator-card">
+      <h3><span class="c-icon">📝</span> แบบทดสอบความรู้และสิทธิ์ออกปฏิบัติงาน (Energy Safety Quiz)</h3>
+      <div id="ilm-quiz-container">
+        <!-- Inside renderQuizHTML -->
       </div>
     </div>
   `;
 
   renderQuizHTML();
+  updatePPESafetyAssessor('pipeline'); // Default load pipeline
+}
+
+function updatePPESafetyAssessor(siteKey) {
+  const mount = document.getElementById('ppe-safety-mount');
+  if (!mount) return;
+
+  const data = ILMHub.getSafetyRiskLevels()[siteKey];
+  if (!data) return;
+
+  let riskColor = 'var(--i-emerald)';
+  if (siteKey === 'depot') riskColor = 'var(--i-gold)';
+  else if (siteKey === 'pipeline') riskColor = 'var(--i-rose)';
+
+  mount.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--i-border); padding-bottom:10px; margin-bottom:15px;">
+      <span style="font-weight:700; font-size:1rem; color:var(--i-primary-light);">${data.title}</span>
+      <span style="background:${riskColor}15; color:${riskColor}; font-weight:800; font-size:0.8rem; padding:4px 10px; border-radius:8px; border:1px solid ${riskColor}30;">
+        ⚠️ ระดับภัย: ${data.risk}
+      </span>
+    </div>
+    
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+      <div>
+        <div style="font-weight:700; font-size:0.85rem; color:var(--text-muted); margin-bottom:8px;">🔥 ปัจจัยอันตรายความปลอดภัย:</div>
+        <ul style="margin:0; padding-left:15px; font-size:0.8rem; line-height:1.6; display:flex; flex-direction:column; gap:4px;">
+          ${data.hazards.map(h => `<li>${h}</li>`).join('')}
+        </ul>
+      </div>
+      <div>
+        <div style="font-weight:700; font-size:0.85rem; color:var(--text-muted); margin-bottom:8px;">🛡️ อุปกรณ์นิรภัย PPE ที่ต้องสวมใส่:</div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+          ${data.ppe.map(p => `<span style="font-size:0.75rem; background:rgba(30, 58, 138, 0.05); color:var(--i-primary); border:1px solid rgba(30, 58, 138, 0.15); padding:4px 8px; border-radius:6px; font-weight:600;">🛡️ ${p}</span>`).join('')}
+        </div>
+      </div>
+    </div>
+    
+    <div style="border-top:1px solid var(--i-border); padding-top:12px; margin-top:15px; font-size:0.8rem; line-height:1.5;">
+      <strong>📝 ระเบียบปฏิบัติหน้างานเพื่อความปลอดภัย:</strong>
+      <ol style="margin:5px 0 0 15px; padding:0; display:flex; flex-direction:column; gap:4px;">
+        ${data.guidelines.map(g => `<li>${g}</li>`).join('')}
+      </ol>
+    </div>
+  `;
 }
 
 function toggleSeminar(id, val) {
@@ -818,7 +799,7 @@ function toggleSeminar(id, val) {
     sem.attended = val;
     ILMHub.saveState();
     renderILMContent();
-    showToast(`✓ อัปเดตเข้าร่วมสัมมนาครั้งที่ ${id} สำเร็จ`);
+    showToast(`✓ อัปเดตเช็คชื่อการเข้าร่วมงานสัมมนาครั้งที่ ${id}`);
   }
 }
 
@@ -827,7 +808,7 @@ function saveSeminarNote(id, val) {
   if (sem) {
     sem.note = val;
     ILMHub.saveState();
-    showToast("✓ บันทึกสรุปเนื้อหาฟังสัมมนาสำเร็จ");
+    showToast("✓ บันทึกโน้ตความเข้าใจแล้ว");
   }
 }
 
@@ -843,13 +824,13 @@ function renderQuizHTML() {
     container.innerHTML = `
       <div style="text-align:center; padding:30px 15px; background:rgba(16, 185, 129, 0.08); border-radius:16px; border:1px solid rgba(16, 185, 129, 0.2);">
         <div style="font-size:3rem; margin-bottom:15px;">🎉</div>
-        <h4 style="font-size:1.2rem; font-weight:700; color:var(--i-emerald); margin:0 0 8px 0;">สอบผ่านความพร้อม 100% เรียบร้อยแล้ว!</h4>
-        <p style="font-size:0.9rem; color:var(--text-muted); margin-bottom:20px;">สิทธิ์และคุณสมบัติสำหรับการออกฝึกงานภาคสนามตามระเบียบคณะวิศวกรรมศาสตร์ได้รับการยืนยันอย่างเป็นทางการ</p>
+        <h4 style="font-size:1.2rem; font-weight:700; color:var(--i-emerald); margin:0 0 8px 0;">สอบผ่านความปลอดภัยพลังงาน 100% เรียบร้อย!</h4>
+        <p style="font-size:0.9rem; color:var(--text-muted); margin-bottom:20px;">สิทธิ์และระดับความปลอดภัยเพื่อการออกหน้างานและการตอกบัตรเช็คอินได้รับการอนุมัติอย่างเป็นทางการ</p>
         <div style="font-size:0.85rem; font-weight:600; display:inline-block; border:1px dashed var(--i-emerald); color:var(--i-emerald); padding:6px 16px; border-radius:8px;">
-          คะแนนสอบ: ${state.ilmProfile.quizScore} / 10 เต็ม (ปลดล็อคโมดูลตอกบัตรและเวลาทำงานแล้ว)
+          คะแนนสอบของคุณ: ${state.ilmProfile.quizScore} / 10 คะแนนเต็ม (ระบบลงเวลาเช็คอินตอกบัตรเปิดสิทธิ์แล้ว)
         </div>
         <div style="margin-top:20px;">
-          <button class="i-btn" onclick="state.ilmProfile.quizPassed = false; activeQuizIdx = 0; userAnswers = {}; ILMHub.saveState(); renderILMContent();">✍️ รีเซ็ตและทำข้อสอบใหม่อีกครั้ง</button>
+          <button class="i-btn" onclick="state.ilmProfile.quizPassed = false; activeQuizIdx = 0; userAnswers = {}; ILMHub.saveState(); renderILMContent();">✍️ รีเซ็ตและเข้าทำข้อสอบอีกครั้ง</button>
         </div>
       </div>
     `;
@@ -859,7 +840,7 @@ function renderQuizHTML() {
   const q = questions[activeQuizIdx];
   container.innerHTML = `
     <div style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
-      <span style="font-size:0.85rem; font-weight:700; color:var(--i-primary-light);">ข้อที่ ${activeQuizIdx + 1} จากทั้งหมด 10 ข้อ</span>
+      <span style="font-size:0.85rem; font-weight:700; color:var(--i-primary-light);">คำถามข้อที่ ${activeQuizIdx + 1} จากทั้งหมด 10 ข้อ</span>
       <span style="font-size:0.8rem; background:rgba(0,0,0,0.05); padding:2px 8px; border-radius:6px;">คะแนนปัจจุบัน: ${Object.keys(userAnswers).filter(k=>userAnswers[k]===questions[k].ans).length}</span>
     </div>
     
@@ -909,17 +890,17 @@ function submitQuiz() {
   if (correctCount === 10) {
     state.ilmProfile.quizPassed = true;
     ILMHub.saveState();
-    showToast("🎉 ยอดเยี่ยมมากครับ! คุณทำข้อสอบถูก 100% ปลดล็อคระบบตอกบัตรเช็คอินฝึกงานเรียบร้อยแล้ว!");
+    showToast("🎉 ถูกใจมากครับ! คุณตอบคำถามปลอดภัยพลังงานถูกต้อง 100% เต็ม ระบบเปิดใช้งานเช็คอินแล้ว!");
     renderILMContent();
   } else {
     state.ilmProfile.quizPassed = false;
     ILMHub.saveState();
-    openModal('❌ สอบไม่ผ่านเกณฑ์ปฐมนิเทศ', `
+    openModal('❌ สอบไม่ผ่านเกณฑ์ปฐมนิเทศความปลอดภัย', `
       <div style="text-align:center; font-family:Sarabun, sans-serif;">
         <div style="font-size:3rem; margin-bottom:15px;">⚠️</div>
-        <h4 style="color:var(--i-rose); font-weight:700; font-size:1.15rem; margin-bottom:10px;">คะแนนสอบของคุณ: ${correctCount} / 10 คะแนน</h4>
+        <h4 style="color:var(--i-rose); font-weight:700; font-size:1.15rem; margin-bottom:10px;">คะแนนรวมของคุณ: ${correctCount} / 10 คะแนน</h4>
         <p style="font-size:0.9rem; line-height:1.6; color:var(--text-muted); margin-bottom:20px;">
-          ระเบียบข้อบังคับคณะกำหนดให้ต้องสอบผ่านความเข้าใจกฎระเบียบฝึกงาน **100% เต็ม (10 คะแนนเต็ม)** จึงจะมีสิทธิ์เริ่มฝึกงานในตารางได้ กรุณาตรวจทบทวนคำอธิบายและเข้าทำข้อสอบอีกครั้งครับ
+          เกณฑ์การฝึกงานวิศวกรรม มก. กำหนดให้คุณต้องผ่านความเข้าใจระเบียบเซฟตี้ **100% เต็ม (10 คะแนน)** จึงจะมีสิทธิ์ตอกบัตรได้ กรุณาตรวจทบทวนและทำแบบทดสอบอีกครั้งเพื่อความปลอดภัยครับ
         </p>
         <button class="i-btn i-btn-primary" style="width:100%; justify-content:center;" onclick="closeModal()">✍️ ตกลง (พยายามอีกครั้ง)</button>
       </div>
@@ -931,46 +912,52 @@ function submitQuiz() {
 }
 
 // ══════════════════════════════════════════════════
-// PHASE 3: ปฏิบัติงานตอกบัตร (Apr - May)
+// PHASE 3: ปฏิบัติงานตอกบัตร & งบการเงินฝึกงาน (ระหว่างฝึก)
 // ══════════════════════════════════════════════════
 let sigPadCanvas = null;
 let sigPadCtx = null;
 let isDrawingSig = false;
 
 function renderPhase3(container) {
-  // Prerequisite check: must pass the quiz first!
   if (!state.ilmProfile.quizPassed) {
     container.innerHTML = `
       <div class="i-card" style="text-align:center; padding:50px 20px;">
         <div style="font-size:4rem; margin-bottom:20px;">🔒</div>
-        <h3 style="margin-bottom:10px; justify-content:center;">ฟีเจอร์ลงเวลาฝึกงานยังไม่เปิดใช้งาน</h3>
+        <h3 style="margin-bottom:10px; justify-content:center;">ฟีเจอร์ลงเวลาและ Timesheet ยังไม่ปลดล็อค</h3>
         <p style="max-width:500px; margin:0 auto 20px auto; color:var(--text-muted); line-height:1.6;">
-          คุณต้องทำการทำความเข้าใจระเบียบฝึกงาน และทำแบบทดสอบปฐมนิเทศคณะวิศวกรรมศาสตร์ในหน้า **"2. ปฐมนิเทศ"** ให้ได้คะแนน 100% เต็มก่อน จึงจะปลดล็อคระบบตอกบัตรและ timesheet ดิจิทัลได้ครับ
+          คุณจำเป็นต้องเข้ารับทราบกฎและตอบคำถามปฐมนิเทศความปลอดภัยด้านพลังงานในหน้า **"2. เตรียมตัว & เซฟตี้"** ให้ผ่านเกณฑ์คะแนนเต็ม 100% ก่อน เพื่อเปิดใช้ระบบ Timesheet และเครื่องคำนวณเบี้ยเลี้ยงครับ
         </p>
-        <button class="i-btn i-btn-primary" onclick="switchILMTab('prep')">✍️ ไปทำข้อสอบปฐมนิเทศ</button>
+        <button class="i-btn i-btn-primary" onclick="switchILMTab('prep')">✍️ ไปสอบใบรับรองเซฟตี้</button>
       </div>
     `;
     return;
   }
 
-  // Calculate Cumulative hours progress
   const targetHours = 240;
   const currentHours = state.ilmLogs ? state.ilmLogs.reduce((sum, log) => sum + (parseFloat(log.hours) || 0), 0) : 0;
   const progressPercent = Math.min(100, Math.round((currentHours / targetHours) * 100));
 
-  // Determine current active check-in state
   const isCheckedIn = state.ilmProfile.isCheckedIn || false;
   const checkInTime = state.ilmProfile.checkInTime ? new Date(state.ilmProfile.checkInTime) : null;
   const elapsedStr = isCheckedIn ? calculateElapsedTime(checkInTime) : '--:--:--';
 
+  // Calculate gross internship salary and net savings (Specialised Feature 10)
+  const commuteCost = state.ilmProfile.commute.cost || 60;
+  const acceptedComp = state.ilmCompanies.find(c => c.status === 'accepted') || { salary: 0 };
+  const dailySalary = acceptedComp.salary || 0;
+  const totalDays = state.ilmLogs ? state.ilmLogs.length : 0;
+  const totalGrossIncome = totalDays * dailySalary;
+  const totalCommuteExpense = totalDays * commuteCost;
+  const netEarnings = totalGrossIncome - totalCommuteExpense;
+
   container.innerHTML = `
-    <!-- Top Hour Accumulator Gauge -->
+    <!-- Top Gauge & Live Checkin -->
     <div class="i-grid-2">
       <div class="i-card" style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
-        <h3><span class="c-icon">⏱️</span> เกจชั่วโมงปฏิบัติงานสะสม (Cumulative Hours)</h3>
+        <h3><span class="c-icon">⏱️</span> เกจวัดเวลาปฏิบัติงานสะสม (Target 240 Hr)</h3>
         
         <div class="i-circle-progress">
-          <svg width="180" height="180" viewBox="0 0 100 100">
+          <svg width="170" height="170" viewBox="0 0 100 100">
             <circle cx="50" cy="50" r="40" stroke="var(--i-border)" stroke-width="8" fill="none" />
             <circle cx="50" cy="50" r="40" stroke="var(--i-emerald)" stroke-width="8" fill="none"
               stroke-dasharray="251.2" stroke-dashoffset="${251.2 - (251.2 * progressPercent) / 100}"
@@ -982,61 +969,86 @@ function renderPhase3(container) {
           </div>
         </div>
         
-        <div style="font-size:0.9rem; font-weight:700; color:${progressPercent >= 100 ? 'var(--i-emerald)' : 'var(--i-gold)'}; margin-top:10px;">
-          ${progressPercent >= 100 ? '🎉 สะสมชั่วโมงฝึกงานผ่านเกณฑ์ขั้นต่ำแล้ว!' : `สะสมชั่วโมงงานสำเร็จแล้ว ${progressPercent}%`}
+        <div style="font-size:0.9rem; font-weight:700; color:${progressPercent >= 100 ? 'var(--i-emerald)' : 'var(--i-gold)'}; margin-top:5px;">
+          ${progressPercent >= 100 ? '🎉 ฝึกครบตามเงื่อนไขชั่วโมงสะสมขั้นต่ำ มก. แล้ว!' : `สะสมเวลาสำเร็จแล้ว ${progressPercent}% (${totalDays} วันทำการ)`}
         </div>
       </div>
 
-      <!-- Live GPS Check-in card -->
+      <!-- Live GPS Checkin card -->
       <div class="i-card" style="position:relative; overflow:hidden;">
         ${isCheckedIn ? `<div style="position:absolute; top:12px; right:12px; width:12px; height:12px; border-radius:50%; background:var(--i-emerald); box-shadow:0 0 8px var(--i-emerald); animation:pulse 1.5s infinite;"></div>` : ''}
-        <h3><span class="c-icon">📍</span> ระบบตอกบัตรลงเวลาฝึกงาน (GPS Check-in)</h3>
+        <h3><span class="c-icon">📍</span> ลงเวลางานตรวจหน้างานพลังงาน (GPS Check-in)</h3>
         
         <div style="text-align:center; padding:15px 0;">
-          <div style="font-size:0.9rem; color:var(--text-muted); margin-bottom:8px;">ตอกบัตรเข้างานประจำวัน ณ พิกัดสถานประกอบการ</div>
+          <div style="font-size:0.9rem; color:var(--text-muted); margin-bottom:8px;">ตอกเวลานาฬิกาเข้างาน ณ พิกัดกองความปลอดภัย</div>
           <div style="font-family:'JetBrains Mono', monospace; font-size:1.8rem; font-weight:700; margin-bottom:12px; color:${isCheckedIn ? 'var(--i-emerald)' : 'var(--text-muted)'};" id="ilm-clock-timer">
             ${elapsedStr}
           </div>
         </div>
 
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-          <button class="i-btn i-btn-primary i-btn-emerald" id="checkin-btn" style="justify-content:center;" ${isCheckedIn ? 'disabled' : ''} onclick="triggerGPSClock('in')">ตอกบัตรเข้างาน (In)</button>
-          <button class="i-btn i-btn-primary i-btn-rose" id="checkout-btn" style="justify-content:center;" ${!isCheckedIn ? 'disabled' : ''} onclick="triggerGPSClock('out')">เช็คเอาท์ออกงาน (Out)</button>
+          <button class="i-btn i-btn-primary i-btn-emerald" id="checkin-btn" style="justify-content:center;" ${isCheckedIn ? 'disabled' : ''} onclick="triggerGPSClock('in')">ตอกบัตรเข้า (In)</button>
+          <button class="i-btn i-btn-primary i-btn-rose" id="checkout-btn" style="justify-content:center;" ${!isCheckedIn ? 'disabled' : ''} onclick="triggerGPSClock('out')">ตอกบัตรออก (Out)</button>
         </div>
 
         <div style="margin-top:15px; padding:10px; border-radius:8px; border:1px solid var(--i-border); background:var(--bg); font-size:0.75rem;">
           <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-            <span>พิกัด GPS โรงงาน: SCG Chemicals</span>
-            <span style="font-weight:700;">12.7230, 101.1400 (รัศมี 300ม.)</span>
+            <span>พิกัด GPS กรมธุรกิจพลังงาน:</span>
+            <span style="font-weight:700;">13.8234, 100.5623 (รัศมี 300ม.)</span>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span>จำลองตำแหน่งเช็คอินหน้างาน (Simulate Location):</span>
+            <span>จำลองพิกัดเสมือนหน้างาน (GPS Simulation):</span>
             <input type="checkbox" id="gps-simulate-chk" ${state.ilmProfile.companyLocation.simulateGPS ? 'checked' : ''} onchange="toggleGPSSimulation(this.checked)" style="width:14px; height:14px; cursor:pointer;">
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Timesheet Calendar Grid & Daily Reflection Logger -->
+    <!-- Energy Internship Commute & Salary Financial Ledger (Specialised Feature 10) -->
+    <div class="i-card">
+      <h3><span class="c-icon" style="color:var(--i-gold); background:rgba(180,83,9,0.1);">💰</span> เครื่องประเมินรายรับและเป้าหมายเก็บออม (Internship Budget & Savings Estimator)</h3>
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px;">ระบบวิเคราะห์เงินสะสมโดยคำนวณเบี้ยเลี้ยงสะสม หักออกด้วยค่าพาหนะเดินทางที่บันทึกลง MoneyPod ประจำวัน</p>
+      
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; font-size:0.85rem;">
+        <div style="padding:12px; border-radius:10px; background:var(--bg); border:1px solid var(--i-border);">
+          <div style="color:var(--text-muted); font-weight:600;">รายรับเบี้ยเลี้ยงสะสม (Gross):</div>
+          <div style="font-size:1.15rem; font-weight:800; color:var(--i-emerald); margin-top:4px;">+${totalGrossIncome} บาท</div>
+          <div style="font-size:0.75rem; color:var(--text-muted);">คำนวณวันละ ${dailySalary} บาท (ฝึกงาน ${totalDays} วัน)</div>
+        </div>
+        <div style="padding:12px; border-radius:10px; background:var(--bg); border:1px solid var(--i-border);">
+          <div style="color:var(--text-muted); font-weight:600;">ค่าเดินทางสะสม (MoneyPod Expense):</div>
+          <div style="font-size:1.15rem; font-weight:800; color:var(--i-rose); margin-top:4px;">-${totalCommuteExpense} บาท</div>
+          <div style="font-size:0.75rem; color:var(--text-muted);">คิดอัตราไป-กลับวันละ ${commuteCost} บาท</div>
+        </div>
+        <div style="padding:12px; border-radius:10px; background:rgba(30, 58, 138, 0.04); border:1.5px solid var(--i-primary-light);">
+          <div style="color:var(--i-primary); font-weight:700;">เงินเก็บออมสุทธิ (Net Savings):</div>
+          <div style="font-size:1.25rem; font-weight:850; color:${netEarnings >= 0 ? 'var(--i-emerald)' : 'var(--i-rose)'}; margin-top:4px;">
+            ${netEarnings} บาท
+          </div>
+          <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">ยอดเงินคงเหลือจำลองค่ายฝึกงาน</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Timesheet refletions log list -->
     <div class="i-card">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
-        <h3><span class="c-icon">📅</span> ตารางบันทึกรายงานรายวันดิจิทัล (Digital Timesheet)</h3>
+        <h3><span class="c-icon">📅</span> ตารางบันทึกการเรียนรู้รายวันดิจิทัล (Digital Timesheet Logs)</h3>
         <div style="display:flex; gap:10px;">
-          <button class="i-btn sm" onclick="openCommuteSetupModal()">🚗 ตั้งค่าค่าเดินทาง</button>
+          <button class="i-btn sm" onclick="openCommuteSetupModal()">🚗 ตั้งค่าพาหนะ</button>
           <button class="i-btn sm" onclick="openSignatureCanvasModal()">✍️ สลักลายเซ็นพี่เลี้ยง</button>
-          <button class="i-btn i-btn-primary sm" onclick="openNewLogWindow()">+ เพิ่มบันทึกย้อนหลัง</button>
+          <button class="i-btn i-btn-primary sm" onclick="openNewLogWindow()">+ เพิ่มบันทึกวันย้อนหลัง</button>
         </div>
       </div>
       
-      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px;">คลิกเลือกที่การ์ดวันที่ที่ลงเวลาไว้เพื่อตรวจสอบ รายงาน รายละเอียดการทำงาน หรืออัปเดตบันทึก Daily Log ประจำวัน</p>
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px;">*ทุกครั้งที่คุณเช็คเอาท์ ข้อมูลล็อกรายวันจะได้รับการจัดเก็บในระบบและทำการสั่งซิงค์ไดนามิกไปอัปเดตลงหน้าฐานข้อมูล Notion และ Google Calendar อัจฉริยะทันที</p>
       
-      <div style="display:flex; flex-direction:column; gap:10px; max-height:300px; overflow-y:auto; border:1px solid var(--i-border); border-radius:12px; padding:10px; background:var(--bg);">
+      <div style="display:flex; flex-direction:column; gap:10px; max-height:280px; overflow-y:auto; border:1px solid var(--i-border); border-radius:12px; padding:10px; background:var(--bg);">
         ${renderDailyLogsList()}
       </div>
     </div>
   `;
 
-  // Start real-time active timer update if checked in
   if (isCheckedIn) {
     startClockTimerUpdate(checkInTime);
   }
@@ -1067,28 +1079,28 @@ function startClockTimerUpdate(startTime) {
 function toggleGPSSimulation(val) {
   state.ilmProfile.companyLocation.simulateGPS = val;
   ILMHub.saveState();
-  showToast(val ? "✓ เปิดใช้งานระบบจำลองพิกัดเช็คอินโรงงานสำเร็จ" : "✓ ใช้ GPS จริงเครื่องของคุณในการเช็คอิน");
+  showToast(val ? "✓ เปิดการจำลองพิกัด ณ กรมธุรกิจพลังงาน ( energy Complex )" : "✓ ใช้เซ็นเซอร์ GPS จริงโทรศัพท์เพื่อเช็คพิกัด");
 }
 
 function openCommuteSetupModal() {
-  const comm = state.ilmProfile.commute || { type: 'motorcycle', cost: 40 };
-  openModal('🚗 ตั้งค่าค่าเดินทางประจำวัน (MoneyPod Sync)', `
+  const comm = state.ilmProfile.commute || { type: 'motorcycle', cost: 60 };
+  openModal('🚗 ตั้งค่าค่าเดินทางรายวัน (MoneyPod Sync)', `
     <div style="text-align:left; font-family:Sarabun, sans-serif;">
       <div class="i-fg">
-        <label>ประเภทการเดินทาง:</label>
+        <label>ประเภทการเดินทางไปกระทรวงพลังงาน:</label>
         <select id="comm-type">
           <option value="motorcycle" ${comm.type === 'motorcycle' ? 'selected' : ''}>รถจักรยานยนต์ / วินมอเตอร์ไซค์</option>
-          <option value="bts_mrt" ${comm.type === 'bts_mrt' ? 'selected' : ''}>รถไฟฟ้า BTS / MRT</option>
+          <option value="bts_mrt" ${comm.type === 'bts_mrt' ? 'selected' : ''}>รถไฟฟ้า BTS / MRT (สถานีห้าแยกลาดพร้าว/พหลโยธิน)</option>
           <option value="car" ${comm.type === 'car' ? 'selected' : ''}>รถยนต์ส่วนตัว / ค่าน้ำมัน</option>
-          <option value="bus" ${comm.type === 'bus' ? 'selected' : ''}>รถโดยสารประจำทาง (รถเมล์)</option>
+          <option value="bus" ${comm.type === 'bus' ? 'selected' : ''}>รถโดยสารประจำทาง (ขสมก.)</option>
         </select>
       </div>
       <div class="i-fg">
-        <label>ค่าเดินทางเฉลี่ยไป-กลับ (บาท):</label>
+        <label>ค่าใช้จ่ายเฉลี่ยไป-กลับต่อวัน (บาท):</label>
         <input type="number" id="comm-cost" value="${comm.cost}">
       </div>
       <div style="font-size:0.75rem; color:var(--text-muted); background:var(--bg); padding:10px; border-radius:8px; margin-bottom:15px;">
-        *ทุกครั้งที่คุณทำรายการ **"ตอกบัตรเข้างาน (In)"** ระบบจะหักลบกระเป๋าเงินจำลองเดิมใน MoneyPod ให้อัตโนมัติ เพื่อคอยตรวจสอบภาระค่าครองชีพช่วงฝึกงาน
+        *ระบบความปลอดภัยทางการเงินจะช่วยคำนวณและทำการ **หักออกจากกระเป๋าเงิน MoneyPod อัตโนมัติ** ทุกครั้งที่คุณกดตอกบัตรเช็คอินเข้าฝึกงานในแต่ละวัน
       </div>
       
       <div style="display:flex; gap:10px; margin-top:20px;">
@@ -1106,13 +1118,14 @@ function saveCommuteSetup() {
   state.ilmProfile.commute = { type, cost };
   ILMHub.saveState();
   closeModal();
-  showToast("✓ อัปเดตค่าเดินทางระบบ MoneyPod เรียบร้อยแล้ว");
+  renderILMContent();
+  showToast("✓ อัปเดตการตั้งค่าค่าพาหนะทางการเงินเรียบร้อย");
 }
 
 function openSignatureCanvasModal() {
   openModal('✍️ ลายมือชื่ออิเล็กทรอนิกส์พี่เลี้ยง (Canvas Signature)', `
     <div style="text-align:left; font-family:Sarabun, sans-serif;">
-      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:10px;">วาดสลักลายเซ็นดิจิทัลของพี่เลี้ยงควบคุมหน้างานด้านล่างเพื่อใช้เซ็นปิดแผ่นใบลงเวลาของคณะ</p>
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:10px;">วาดสลักลายมือชื่อของข้าราชการพี่เลี้ยงคุมงาน หรือผู้ตรวจสอบโรงงานเพื่อบันทึกเก็บไว้ประทับลงใบลงเวลางานประจำสัปดาห์</p>
       
       <canvas id="sig-canvas-box" class="sig-canvas"></canvas>
       
@@ -1136,7 +1149,6 @@ function initSignatureCanvas() {
   sigPadCanvas = canvas;
   sigPadCtx = canvas.getContext('2d');
   
-  // Custom retina scaling
   const rect = canvas.getBoundingClientRect();
   canvas.width = rect.width;
   canvas.height = rect.height;
@@ -1145,7 +1157,6 @@ function initSignatureCanvas() {
   sigPadCtx.lineWidth = 3;
   sigPadCtx.lineCap = 'round';
   
-  // Set draw events
   canvas.addEventListener('mousedown', startDrawing);
   canvas.addEventListener('mousemove', draw);
   canvas.addEventListener('mouseup', stopDrawing);
@@ -1202,13 +1213,14 @@ function saveSigCanvas() {
     state.ilmProfile.supervisorSignature = dataUrl;
     ILMHub.saveState();
     closeModal();
-    showToast("✓ บันทึกภาพลายเซ็นผู้ควบคุมความปลอดภัยและพี่เลี้ยงเรียบร้อย");
+    renderILMContent();
+    showToast("✓ บันทึกภาพถ่ายลายเซ็นผู้ควบคุมงานราชการเรียบร้อย");
   }
 }
 
 function renderDailyLogsList() {
   if (!state.ilmLogs || state.ilmLogs.length === 0) {
-    return `<div style="text-align:center; padding:30px; color:var(--text-muted); font-size:0.9rem;">🗓️ ยังไม่มีการตอกบัตรลงเวลาบันทึกช่วงสัปดาห์ปัจจุบัน</div>`;
+    return `<div style="text-align:center; padding:30px; color:var(--text-muted); font-size:0.9rem;">🗓️ ยังไม่มีประวัติการเช็คอินตอกบัตรลงเวลาฝึกงานรายวัน</div>`;
   }
   
   return state.ilmLogs.map((log, i) => `
@@ -1216,102 +1228,86 @@ function renderDailyLogsList() {
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;">
         <div style="display:flex; align-items:center; gap:8px;">
           <span style="font-weight:700; color:var(--i-primary-light);">${log.date}</span>
-          <span style="font-size:0.75rem; background:rgba(0,0,0,0.05); padding:2px 8px; border-radius:8px;">${log.hours} ชม.</span>
+          <span style="font-size:0.75rem; background:rgba(0,0,0,0.05); padding:2px 8px; border-radius:8px;">${log.hours} ชั่วโมง</span>
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
-          ${log.otReason ? '<span style="background:rgba(180, 83, 9, 0.1); color:var(--i-gold); font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:6px;">⚠️ OT</span>' : ''}
+          ${log.otReason ? '<span style="background:rgba(180, 83, 9, 0.1); color:var(--i-gold); font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:6px;">⚠️ กองงานล่วงเวลา (OT)</span>' : ''}
           <button style="border:none; background:transparent; cursor:pointer;" onclick="deleteLogEntry('${log.id}')">🗑️</button>
         </div>
       </div>
       
       <div style="font-size:0.9rem; line-height:1.5; color:var(--text);">${log.task}</div>
-      ${log.otReason ? `<div style="font-size:0.8rem; background:rgba(234, 179, 8, 0.05); padding:8px; border-radius:6px; border-left:3px solid var(--i-gold);"><strong>เหตุผลล่วงเวลา OT</strong>: ${log.otReason}</div>` : ''}
+      ${log.otReason ? `<div style="font-size:0.8rem; background:rgba(234, 179, 8, 0.05); padding:8px; border-radius:6px; border-left:3px solid var(--i-gold);"><strong>เหตุจำเป็นในการทำงานล่วงเวลา</strong>: ${log.otReason}</div>` : ''}
       
       <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--i-border); padding-top:8px; margin-top:4px;">
-        <span style="font-size:0.75rem; color:var(--i-emerald); font-weight:600;">✓ Notion Cloud Synced</span>
-        ${state.ilmProfile.supervisorSignature ? `<img src="${state.ilmProfile.supervisorSignature}" style="height:25px; max-width:80px; object-fit:contain;" title="พี่เลี้ยงเซ็นรับรองแล้ว">` : '<span style="font-size:0.75rem; color:var(--i-rose);">รอลายเซ็นพี่เลี้ยง</span>'}
+        <span style="font-size:0.75rem; color:var(--i-emerald); font-weight:600;">✓ Notion Cloud Synced & Google Calendar Added</span>
+        ${state.ilmProfile.supervisorSignature ? `<img src="${state.ilmProfile.supervisorSignature}" style="height:25px; max-width:80px; object-fit:contain;" title="พี่เลี้ยงข้าราชการเซ็นรับรอง">` : '<span style="font-size:0.75rem; color:var(--i-rose);">รอลายเซ็นพี่เลี้ยง</span>'}
       </div>
     </div>
   `).join('');
 }
 
 function deleteLogEntry(id) {
-  if (confirm("ต้องการลบบันทึกเวลาการฝึกงานของวันนี้หรือไม่?")) {
+  if (confirm("ต้องการลบประวัติลงเวลาฝึกงานของวันนี้ใช่หรือไม่?")) {
     state.ilmLogs = state.ilmLogs.filter(l => l.id !== id);
     ILMHub.saveState();
     renderILMContent();
-    showToast("🗑️ ลบบันทึกเวลาออกสำเร็จ");
+    showToast("🗑️ ลบประวัติตอกเวลากลับเรียบร้อย");
   }
 }
 
 function triggerGPSClock(type) {
   if (type === 'in') {
     if (state.ilmProfile.companyLocation.simulateGPS) {
-      // Simulate direct GPS Check-in at factory coordinates
       state.ilmProfile.isCheckedIn = true;
       state.ilmProfile.checkInTime = new Date().toISOString();
       
-      // Auto MoneyPod integration trigger!
       ILMHub.integrateMoneyManagerCommute();
-      
       ILMHub.saveState();
       renderILMContent();
-      showToast("📍 เช็คอินระบุพิกัดมาบตาพุดสำเร็จ! หักลบค่าใช้จ่าย MoneyPod ประจำวันแล้ว");
+      showToast("📍 เช็คอินความปลอดภัย ณ ค่ายควบคุมพลังงานสำเร็จ! บันทึกค่ารถ MoneyPod แล้ว");
     } else {
       if (!navigator.geolocation) {
-        alert("อุปกรณ์ไม่รองรับการทำงานระบุพิกัด GPS จริง");
+        alert("อุปกรณ์ของคุณไม่รองรับบริการระบุพิกัดจีพีเอสจริง");
         return;
       }
       navigator.geolocation.getCurrentPosition((pos) => {
-        const lat = pos.coords.latitude;
-        const lon = pos.coords.longitude;
-        
-        // Calculate coordinate distance (Simple Manhattan estimate or direct)
-        const targetLat = state.ilmProfile.companyLocation.lat;
-        const targetLon = state.ilmProfile.companyLocation.lon;
-        const radius = state.ilmProfile.companyLocation.radius;
-        
-        // We will allow check-in if within range or show alert
         state.ilmProfile.isCheckedIn = true;
         state.ilmProfile.checkInTime = new Date().toISOString();
         ILMHub.integrateMoneyManagerCommute();
-        
         ILMHub.saveState();
         renderILMContent();
-        showToast("📍 ยืนยันพิกัดเข้าทำงาน GPS จริงสำเร็จ! เริ่มสะสมเวลางาน");
+        showToast("📍 ยืนยันพิกัดเข้าทำหน้าที่ GPS จริงกระทรวงพลังงานเรียบร้อย!");
       }, (err) => {
-        alert("กรุณาเปิดบริการระบุตำแหน่ง GPS เครื่องของคุณ");
+        alert("กรุณาเปิดระบบหาตำแหน่งจีพีเอสเครื่องของคุณ");
       });
     }
   } else {
-    // Check out
     const checkIn = new Date(state.ilmProfile.checkInTime);
     const diffHours = ((Date.now() - checkIn.getTime()) / (1000 * 60 * 60)).toFixed(1);
-    
-    // Check if OT past 17:00
     const nowHour = new Date().getHours();
     const isOT = nowHour >= 17;
     
-    openModal('🏃 เช็คเอาท์เลิกฝึกงานประจำวัน', `
+    openModal('🏃 เช็คเอาท์ตอกกลับบ้านเลิกงานราชการ', `
       <div style="text-align:left; font-family:Sarabun, sans-serif;">
         <div class="i-fg">
-          <label>รวมชั่วโมงปฏิบัติงานวันนี้ (ชม.):</label>
+          <label>ชั่วโมงที่สะสมปฏิบัติงานวันนี้ (ชั่วโมง):</label>
           <input type="number" id="c-hours" value="${diffHours}" step="0.5">
         </div>
         <div class="i-fg">
-          <label>สรุปบันทึกการทำงานความก้าวหน้า:</label>
-          <textarea id="c-task" placeholder="เขียนรายละเอียดเช่น: อบชุบเหล็กกล้าโครงสร้างจุลภาค เตาอบ, ทดสอบแรงดึงพลาสติก..." style="height:100px;"></textarea>
+          <label>สรุปรายละเอียดการตรวจสอบความปลอดภัย/การเรียนรู้วันนี้:</label>
+          <textarea id="c-task" placeholder="เช่น: ร่วมสังเกตการณ์ตรวจวัดสภาพแนวเชื่อมของถังทนแก๊ส LPG, ศึกษาเอกสาร พรบ.ความปลอดภัยพลังงาน, สรุปสถิติ..." style="height:100px;"></textarea>
         </div>
         
         ${isOT ? `
           <div class="i-fg" style="border:1px solid var(--i-gold); background:rgba(180, 83, 9, 0.04); padding:12px; border-radius:10px;">
-            <label style="color:var(--i-gold); font-weight:700;">⚠️ ข้อปฏิบัติด้านความปลอดภัยล่วงเวลา (OT):</label>
-            <input type="text" id="c-ot-reason" placeholder="ระบุเหตุจำเป็นทางเทคนิคที่ได้รับมอบหมายงานช้า..." style="margin-top:5px; border-color:var(--i-gold);">
+            <label style="color:var(--i-gold); font-weight:700;">⚠️ ชี้แจงเหตุผลการทำงานล่วงเวลา (OT):</label>
+            <input type="text" id="c-ot-reason" placeholder="เช่น: ติดตามชุดตรวจออกหน้างานล่าช้า, ประชุมสรุปงานประจำสัปดาห์..." style="margin-top:5px; border-color:var(--i-gold);">
           </div>
         ` : ''}
 
         <div style="display:flex; gap:10px; margin-top:20px;">
-          <button class="i-btn i-btn-primary" style="flex:1; justify-content:center;" onclick="saveCheckOutData(${isOT})">💾 บันทึกตอกเวลากลับ</button>
+          <button class="i-btn i-btn-primary" style="flex:1; justify-content:center;" onclick="saveCheckOutData(${isOT})">💾 บันทึกเวลาเลิกงาน</button>
           <button class="i-btn" style="flex:1; justify-content:center;" onclick="closeModal()">ยกเลิก</button>
         </div>
       </div>
@@ -1325,7 +1321,7 @@ function saveCheckOutData(isOT) {
   const otReason = isOT ? document.getElementById('c-ot-reason').value : '';
   
   if (!task.trim()) {
-    alert("กรุณากรอกบันทึกการปฏิบัติงานประจำวันนี้");
+    alert("กรุณากรอกสรุปปฏิบัติหน้าที่ในวันนี้");
     return;
   }
   
@@ -1338,39 +1334,35 @@ function saveCheckOutData(isOT) {
   };
   
   state.ilmLogs.unshift(log);
-  
-  // Reset clock-in status
   state.ilmProfile.isCheckedIn = false;
   state.ilmProfile.checkInTime = null;
-  
   ILMHub.saveState();
   
-  // Sync log to Notion GAS
   ILMHub.syncDailyLogToNotion(log).then(res => {
     if (res && res.success) {
-      showToast("✓ ซิงค์ตารางเวลา Daily Log ขึ้น Notion สำเร็จแล้ว");
+      showToast("✓ ซิงค์ข้อมูลเข้าบันทึก Notion สำเร็จ");
     }
   }).catch(e => console.warn(e));
   
   closeModal();
   renderILMContent();
-  showToast("🏃 บันทึกเช็คเอาท์และคำนวณเวลาการทำงานสำเร็จ!");
+  showToast("🏃 บันทึกเวลาออกจากงานราชการและสรุปสถิติเรียบร้อย");
 }
 
 function openNewLogWindow() {
-  openModal('📝 เพิ่มบันทึกเวลาปฏิบัติงานย้อนหลัง', `
+  openModal('📝 เพิ่มประวัติตอกเวลากลับย้อนหลัง', `
     <div style="text-align:left; font-family:Sarabun, sans-serif;">
       <div class="i-fg">
-        <label>วันที่ย้อนหลัง:</label>
+        <label>เลือกวันที่ย้อนหลัง:</label>
         <input type="date" id="add-date" value="${new Date().toISOString().split('T')[0]}">
       </div>
       <div class="i-fg">
-        <label>จำนวนชั่วโมงทำงานจริง (ชม.):</label>
+        <label>ชั่วโมงเข้าเวรทำงานจริง (ชั่วโมง):</label>
         <input type="number" id="add-hours" value="8" step="0.5">
       </div>
       <div class="i-fg">
-        <label>บันทึกการทำงานประจำวัน:</label>
-        <textarea id="add-task" placeholder="เขียนบันทึกรายงานและคำสำคัญสายวัสดุศาสตร์..." style="height:100px;"></textarea>
+        <label>บันทึกสรุปข้อมูลการศึกษาและวิเคราะห์วัสดุ:</label>
+        <textarea id="add-task" placeholder="เขียนรายละเอียดงาน..." style="height:100px;"></textarea>
       </div>
       
       <div style="display:flex; gap:10px; margin-top:20px;">
@@ -1400,150 +1392,137 @@ function saveManualLog() {
   ILMHub.saveState();
   closeModal();
   renderILMContent();
-  showToast("✓ บันทึกประวัติเวลาเรียบร้อยแล้ว");
+  showToast("✓ ทำการแทรกประวัติตอกเวลากลับสำเร็จ");
 }
 
 // ══════════════════════════════════════════════════
-// PHASE 4: สรุปและปิดเล่มส่ง (June)
+// PHASE 4: เขียนรายงานวิจัย & ปิดเล่มส่งงาน (ปิดงาน)
 // ══════════════════════════════════════════════════
 function renderPhase4(container) {
+  const activeComp = state.ilmCompanies.find(c => c.status === 'accepted') || { name: 'กรมธุรกิจพลังงาน' };
+
   container.innerHTML = `
-    <!-- Top SOS Emergency Overlay & Claims Benefits -->
+    <!-- Emergency SOS & claims -->
     <div class="i-grid-2">
       <div class="i-card" style="background:linear-gradient(135deg, var(--i-rose), #991b1b); color:white; border:none; text-align:center;">
-        <h3 style="color:white; justify-content:center;">🚨 ปุ่มด่วนแจ้งเหตุฉุกเฉินโรงงาน (SOS Button)</h3>
-        <p style="font-size:0.85rem; opacity:0.9; margin-bottom:20px;">ปุ่มสำหรับนิสิตยื่นส่งพิกัดฉุกเฉินและต่อสายด่วนฝ่ายกิจการนิสิต มก. ตึก 3 ชั้น 1 ทันที</p>
+        <h3 style="color:white; justify-content:center;">🚨 โทรออกฉุกเฉิน / ยื่นพิกัดหน้างานกรมฯ</h3>
+        <p style="font-size:0.85rem; opacity:0.9; margin-bottom:20px;">
+          ปุ่มโทรด่วนแจ้งพิกัดอุปสรรคหรืออุบัติเหตุแก่หน่วยกิจการนิสิตคณะวิศวกรรมศาสตร์ มก. ตึก 3 ชั้น 1 ทันที
+        </p>
         <button class="i-btn" style="padding:16px 24px; font-size:1.1rem; font-weight:700; color:var(--i-rose); background:white; width:80%; justify-content:center;" onclick="triggerSOSOverlay()">
-          🚨 กดโทรออกสายด่วน SOS คณะ
+          🚨 กดโทรแจ้งเหตุฉุกเฉินคณะ มก.
         </button>
       </div>
 
       <div class="i-card">
-        <h3><span class="c-icon">🏥</span> วงเงินประกันภัยสวัสดิภาพ (Siam Smile Claims)</h3>
+        <h3><span class="c-icon">🏥</span> วงเงินเบิกค่ารักษาประกันสวัสดิภาพ มก.</h3>
         <div style="font-size:0.85rem; line-height:1.5; display:flex; flex-direction:column; gap:8px;">
           <div style="background:var(--bg); border:1px solid var(--i-border); padding:10px; border-radius:10px; display:flex; justify-content:space-between; align-items:center;">
-            <span>การเคลมทั่วไปผู้ป่วยนอก (OPD):</span>
+            <span>เคลมผู้ป่วยนอก (OPD):</span>
             <span style="font-weight:700; color:var(--i-rose);">สูงสุด 2,000 บาท/ครั้ง</span>
           </div>
           <div style="background:var(--bg); border:1px solid var(--i-border); padding:10px; border-radius:10px; display:flex; justify-content:space-between; align-items:center;">
-            <span>เคลมผู้ป่วยในเข้าพยาบาล (IPD):</span>
+            <span>เคลมผู้ป่วยในรักษาพยาบาล (IPD):</span>
             <span style="font-weight:700; color:var(--i-rose);">สูงสุด 8,000 บาท/ครั้ง</span>
           </div>
-          <button class="i-btn sm" onclick="openClaimAssistantModal()">📄 ระบบช่วยเตรียมเคลมประกัน (Claim Assistant)</button>
+          <button class="i-btn sm" onclick="openClaimAssistantModal()">📄 เช็คลิสต์เคลมประกันอุบัติเหตุ</button>
         </div>
       </div>
     </div>
 
-    <!-- Materials Characterization Wiki & Course Mapper -->
+    <!-- Materials Glossary & Course theory mapper -->
     <div class="i-card">
-      <h3><span class="c-icon">📚</span> ค้นหาคำศัพท์วัสดุศาสตร์ & เชื่อมโยงรายวิชาศึกษา (Glossary Mapper)</h3>
-      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px;">พิมพ์คำศัพท์เทคนิคภาษาอังกฤษของเครื่องจักรหรือกลไกที่ทำ เพื่อค้นหารายวิชาบังคับก่อนหรือรหัสวิชาของ มก. สำหรับนำไปเขียนโครงร่างบทที่ 2 ของเล่มรายงาน</p>
+      <h3><span class="c-icon">📚</span> ดัชนีทฤษฎีความชำรุดและความเสียหายของวัสดุ (Corrosion & Energy Standards)</h3>
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px;">
+        พิมพ์คำค้นหาคำศัพท์วัสดุศาสตร์เฉพาะทางในระบบคลังปิโตรเลียม เพื่อค้นหาวิชาเรียนของ มก. และข้อแนะนำทริปในการนำไปประยุกต์เขียนสรุปในบทที่ 2 ของเล่มรายงาน
+      </p>
       
       <div class="i-fg">
-        <input type="text" id="glossary-search" placeholder="พิมพ์เช่น: Metallurgy, Polymer, Sintering, Tensile..." oninput="searchTechnicalGlossary(this.value)">
+        <input type="text" id="glossary-search" placeholder="พิมพ์คำศัพท์ เช่น: Corrosion, NDT, Cathodic, Welding, Hydrogen..." oninput="searchTechnicalGlossary(this.value)">
       </div>
       
       <div id="glossary-mount" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; max-height:220px; overflow-y:auto; padding-right:5px;">
-        <!-- Renders dynamically inside search -->
+        <!-- Loaded dynamically -->
       </div>
     </div>
 
-    <!-- Real-time PM 2.5 Air Quality API card -->
+    <!-- Specialised Feature 12: Energy Safety Project Idea Generator -->
+    <div class="i-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+        <h3><span class="c-icon" style="color:var(--i-gold); background:rgba(180,83,9,0.1);">💡</span> ตัวแนะแนวไอเดียโครงงานฝึกงานสายพลังงาน/ความปลอดภัย (Energy Project Ideas)</h3>
+        <button class="i-btn sm i-btn-primary" onclick="generateEnergyProjectIdeasHTML()">🔄 สุ่มเสนอแนวคิดหัวข้ออื่น</button>
+      </div>
+      <p style="font-size:0.85rem; color:var(--text-muted); line-height:1.5; margin-bottom:15px;">
+        สำหรับการฝึกงาน ณ กรมธุรกิจพลังงาน (กระทรวงพลังงาน) ที่เน้นระบบราชการและการควบคุมความปลอดภัย โครงงานของคุณควรเน้นการวิเคราะห์สภาพความเสี่ยง การประเมินสนิมเหล็กถัง หรือการตรวจหาจุดบกพร่องตามมาตรฐานวิศวกรรม แทนการใช้เครื่องมือแล็บขั้นสูง:
+      </p>
+      <div id="energy-project-mount" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <!-- Loaded dynamically -->
+      </div>
+    </div>
+
+    <!-- PM 2.5 Air quality detector -->
     <div class="i-card">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-        <h3><span class="c-icon">😷</span> ตรวจสอบดัชนีคุณภาพอากาศ PM 2.5 บริเวณโรงงาน (API Live)</h3>
-        <button class="i-btn sm i-btn-primary" onclick="refreshAirQuality()">🔄 ดึงค่าสภาพอากาศล่าสุด</button>
+        <h3><span class="c-icon">😷</span> ตรวจดัชนีฝุ่นและมลพิษ PM 2.5 บริเวณเขตตรวจงาน (Live API)</h3>
+        <button class="i-btn sm i-btn-primary" onclick="refreshAirQuality()">🔄 ดึงข้อมูลมลพิษแก๊สแก๊สเรียลไทม์</button>
       </div>
       <div id="aqi-mount-card" style="padding:15px; border-radius:12px; background:var(--bg); border:1px solid var(--i-border); margin-top:15px; display:flex; align-items:center; gap:20px;">
         <div style="font-size:2rem;">🍃</div>
         <div>
-          <div style="font-weight:700;" id="aqi-title">กำลังดึงข้อมูลคุณภาพอากาศมาบตาพุด...</div>
-          <div style="font-size:0.8rem; color:var(--text-muted);" id="aqi-desc">เชื่อมต่อ API Open-Meteo Air Quality</div>
+          <div style="font-weight:700;" id="aqi-title">กำลังดึงพิกัดอากาศทางภูมิศาสตร์...</div>
+          <div style="font-size:0.8rem; color:var(--text-muted);" id="aqi-desc">ดึงข้อมูลสภาพแวดล้อม Open-Meteo Air Quality</div>
         </div>
       </div>
     </div>
 
-    <!-- AI Report Compiler & Envelope & Digital Certificate Card -->
+    <!-- AI Report Compiler & Envelope Advisory instead of PNG Certificate -->
     <div class="i-grid-2">
       <div class="i-card">
-        <h3><span class="c-icon">📝</span> ตัวรวบรวมร่างรายงานเล่มจบ (AI Compiler)</h3>
+        <h3><span class="c-icon">📝</span> เครื่องรวบรวมร่างบทความรายงานเล่มจบ (AI Compiler)</h3>
         <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px; line-height:1.5;">
-          รวบรวมประวัติการตอกเวลางาน ประวัติผู้ใช้ และข้อมูลสถานประกอบการ ออกมาเป็นร่างเอกสารบทความโครงร่างรายงาน (.md) ส่งงานอาจารย์ในคลิกเดียว
+          ประมวลผลข้อมูลโปรไฟล์นิสิต มก. และประวัติตารางตอกเวลางานรายวัน สังเคราะห์ออกมาเป็นร่างไฟล์รูปเล่มวิชาการ (.md) เพื่อประหยัดเวลาคัดลอกลง Word
         </p>
-        <button class="i-btn i-btn-primary" onclick="compileReportMarkdownModal()">
-          <span>📝</span> สร้างข้อเขียนรายงานฝึกงาน (Markdown)
+        <button class="i-btn i-btn-primary" style="width:100%; justify-content:center;" onclick="compileReportMarkdownModal()">
+          <span>📝</span> สร้างโครงร่างเล่มรายงาน (Markdown)
         </button>
       </div>
 
-      <div class="i-card" style="border:2px solid var(--i-gold); background:rgba(180, 83, 9, 0.02);">
-        <h3><span class="c-icon" style="background:rgba(180,83,9,0.1); color:var(--i-gold);">📜</span> เกียรติบัตรรับรองดิจิทัล (E-Certificate Wallet)</h3>
+      <div class="i-card" style="border:2.5px solid var(--i-gold); background:rgba(180, 83, 9, 0.02);">
+        <h3><span class="c-icon" style="background:rgba(180,83,9,0.1); color:var(--i-gold);">📜</span> จัดเตรียมจดหมายซองเอกสารปิดผนึกตัวจริง (Envelope Advisory)</h3>
         <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px; line-height:1.5;">
-          เมื่อสะสมชั่วโมงครบ 240 ชั่วโมง คุณสามารถทำการพิมพ์ใบประเมินและสกัดรูป E-Certificate ความละเอียดสูง สำหรับนำไปอัปโหลดประกอบ Portfolio ของคุณ
+          เช็คลิสต์แนะนำเอกสารจริงที่คุณต้องบรรจุใส่ซองสีน้ำตาลและพิมพ์ฉลากสติ๊กเกอร์จ่าหน้าเพื่อนำส่งห้องธุรการประสานงานของวิศวกรรมวัสดุ มก.
         </p>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <button class="i-btn i-btn-primary" style="background:linear-gradient(135deg, var(--i-gold), #78350f);" onclick="ILMHub.generateECompletionCertificate()">
-            <span>📜</span> ดาวน์โหลดเกียรติบัตร (PNG)
+          <button class="i-btn i-btn-primary" style="background:linear-gradient(135deg, var(--i-gold), #78350f); flex:1; justify-content:center;" onclick="openEnvelopePrinterModal()">
+            <span>🖨️</span> จัดวางและพิมพ์ฉลากซองจดหมาย
           </button>
-          <button class="i-btn" onclick="openLinkedInPostModal()">
+          <button class="i-btn" style="flex:1; justify-content:center;" onclick="openLinkedInPostModal()">
             <span>🤝</span> ร่างข้อความโพสต์ LinkedIn
           </button>
         </div>
       </div>
     </div>
-
-    <!-- Print Envelope labels -->
-    <div class="i-card">
-      <h3><span class="c-icon">🖨️</span> จ่าหน้าซองจดหมายส่งเล่มที่ภาควิชา (Envelope Label Auto-Printer)</h3>
-      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:20px; line-height:1.5;">
-        ช่วยเรียบเรียงและพิมพ์ฉลากสีส้มขนาดกระดาษสติ๊กเกอร์ A4 สำหรับจ่าหน้าผนึกซองสีน้ำตาลนำส่งใบลงเวลาและรายงานแก่ภาควิชาวิศวกรรมวัสดุ
-      </p>
-      <button class="i-btn" onclick="openEnvelopePrinterModal()">
-        <span>🖨️</span> จัดโครงฉลากจ่าหน้าซองจดหมาย
-      </button>
-    </div>
   `;
 
   searchTechnicalGlossary('');
+  generateEnergyProjectIdeasHTML();
   refreshAirQuality();
 }
 
-function triggerSOSOverlay() {
-  openModal('🚨 ยืนยันการติดต่อ SOS ด่วน', `
-    <div style="text-align:center; font-family:Sarabun, sans-serif; padding:15px;">
-      <div style="font-size:3rem; margin-bottom:15px; animation:pulse 1s infinite;">🚨</div>
-      <h3 style="color:var(--i-rose); font-weight:700;">สัญญาณฉุกเฉินผู้ใช้ฝึกงาน</h3>
-      <p style="font-size:0.9rem; line-height:1.6; color:var(--text-muted); margin-bottom:20px;">
-        ระบบกำลังระบุข้อมูลพิกัดปัจจุบันของคุณและเปิดใช้งานเบอร์โทรด่วนสายตรงฝ่ายกิจการนิสิตคณะวิศวกรรมศาสตร์ มก. (เบอร์ 02-797-0969)
-      </p>
-      
-      <div style="background:var(--bg); border:1px solid var(--i-border); padding:12px; border-radius:10px; font-size:0.85rem; text-align:left; margin-bottom:20px;">
-        📍 <strong>ตำแหน่งหน้างานของคุณ</strong>: 12.7230, 101.1400 (มาบตาพุด ระยอง)<br>
-        🏥 <strong>สถานพยาบาลใกล้ที่สุด</strong>: โรงพยาบาลกรุงเทพ ระยอง (โทร 038-921-999)
-      </div>
-      
-      <div style="display:flex; gap:10px;">
-        <a href="tel:027970969" class="i-btn i-btn-primary i-btn-rose" style="flex:2; justify-content:center; text-decoration:none;">🚨 ยืนยันกดโทรสายด่วน 02-797-0969</a>
-        <button class="i-btn" style="flex:1; justify-content:center;" onclick="closeModal()">ยกเลิก</button>
-      </div>
-    </div>
-  `);
-}
+function generateEnergyProjectIdeasHTML() {
+  const mount = document.getElementById('energy-project-mount');
+  if (!mount) return;
 
-function openClaimAssistantModal() {
-  openModal('📄 ตัวช่วยเคลมประกัน (KU Claim Assistant)', `
-    <div style="text-align:left; font-family:Sarabun, sans-serif;">
-      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px;">รายการเอกสารสำคัญที่นิสิตต้องยื่นต่อคณะเพื่อเบิกสิทธิ์สวัสดิภาพนิสิต มก. กรณีประสบอุบัติเหตุระหว่างฝึกงาน:</p>
-      
-      <div style="display:flex; flex-direction:column; gap:10px; font-size:0.9rem;">
-        <label style="display:flex; align-items:center; gap:10px; padding:10px; background:var(--bg); border-radius:8px;"><input type="checkbox"> ใบเสร็จรับเงินฉบับจริง (ตัวจริงเท่านั้น)</label>
-        <label style="display:flex; align-items:center; gap:10px; padding:10px; background:var(--bg); border-radius:8px;"><input type="checkbox"> ใบรับรองแพทย์ระบุสาเหตุอุบัติเหตุชัดเจน (ตัวจริง)</label>
-        <label style="display:flex; align-items:center; gap:10px; padding:10px; background:var(--bg); border-radius:8px;"><input type="checkbox"> สำเนาบัตรนิสิตและสำเนาบัตรประชาชน (เซ็นรับรองสำเนาถูกต้อง)</label>
-        <label style="display:flex; align-items:center; gap:10px; padding:10px; background:var(--bg); border-radius:8px;"><input type="checkbox"> สำเนาหน้าสมุดบัญชีธนาคารผู้ยื่น (สำหรับโอนเงินเคลมช่วยเหลือ)</label>
-      </div>
-      
-      <button class="i-btn i-btn-primary" style="margin-top:20px; width:100%; justify-content:center;" onclick="closeModal()">รับทราบและปิดหน้าต่าง</button>
+  const data = ILMHub.getEnergyProjectIdeas();
+  // Shuffle/select 2 ideas to show
+  const shuffled = [...data].sort(() => 0.5 - Math.random()).slice(0, 2);
+
+  mount.innerHTML = shuffled.map(item => `
+    <div style="border:1px solid var(--i-border); padding:14px; border-radius:12px; background:var(--i-card-bg); text-align:left;">
+      <div style="font-weight:700; color:var(--i-gold); font-size:0.85rem; margin-bottom:6px; line-height:1.4;">💡 หัวข้อ: ${item.title}</div>
+      <div style="font-size:0.75rem; color:var(--text); line-height:1.5;">${item.desc}</div>
     </div>
-  `);
+  `).join('');
 }
 
 function searchTechnicalGlossary(query) {
@@ -1554,18 +1533,18 @@ function searchTechnicalGlossary(query) {
   const filtered = data.filter(item => item.term.toLowerCase().includes(query.toLowerCase()) || item.definition.includes(query));
 
   if (filtered.length === 0) {
-    mount.innerHTML = `<div style="grid-column: span 2; text-align:center; padding:20px; color:var(--text-muted);">ไม่พบคำศัพท์วัสดุศาสตร์ที่เกี่ยวข้อง</div>`;
+    mount.innerHTML = `<div style="grid-column: span 2; text-align:center; padding:20px; color:var(--text-muted);">ไม่พบคำศัพท์วัสดุกัดกร่อน/ระบบพลังงานที่เกี่ยวข้อง</div>`;
     return;
   }
 
   mount.innerHTML = filtered.map(item => `
-    <div style="border:1px solid var(--i-border); padding:14px; border-radius:12px; background:var(--i-card-bg); text-align:left;">
-      <div style="font-weight:700; color:var(--i-primary-light); font-size:0.9rem; margin-bottom:4px;">${item.term}</div>
-      <div style="font-size:0.8rem; color:var(--text); margin-bottom:8px;">${item.definition}</div>
-      <div style="font-size:0.75rem; background:rgba(30, 58, 138, 0.05); color:var(--i-primary); padding:4px 8px; border-radius:6px; font-weight:600; display:inline-block;">
-        🔗 อ้างอิงวิชา: ${item.courseCode} ${item.courseName}
+    <div style="border:1px solid var(--i-border); padding:12px; border-radius:12px; background:var(--i-card-bg); text-align:left;">
+      <div style="font-weight:700; color:var(--i-primary-light); font-size:0.85rem; margin-bottom:4px;">${item.term}</div>
+      <div style="font-size:0.75rem; color:var(--text); margin-bottom:8px; line-height:1.4;">${item.definition}</div>
+      <div style="font-size:0.7rem; background:rgba(30, 58, 138, 0.05); color:var(--i-primary); padding:2px 6px; border-radius:4px; font-weight:600; display:inline-block;">
+        🔗 รายวิชา มก.: ${item.courseCode} ${item.courseName}
       </div>
-      <div style="font-size:0.7rem; color:var(--i-gold); margin-top:6px;">💡 Tips: ${item.tips}</div>
+      <div style="font-size:0.7rem; color:var(--i-gold); margin-top:5px; font-weight:600;">💡 Tips: ${item.tips}</div>
     </div>
   `).join('');
 }
@@ -1576,44 +1555,344 @@ async function refreshAirQuality() {
   const card = document.getElementById('aqi-mount-card');
   if (!title || !desc || !card) return;
 
-  title.innerText = "กำลังคำนวณตำแหน่งโรงงานเชื่อม API สภาพอากาศ...";
+  title.innerText = "กำลังสืบค้นพิกัดอากาศกระทรวงพลังงาน...";
   
-  // SCG Rayong coordinates
-  const lat = 12.7230;
-  const lon = 101.1400;
+  // Department of Energy Business coordinates
+  const lat = 13.8234;
+  const lon = 100.5623;
   
   const res = await ILMHub.getLiveAirQuality(lat, lon);
   if (res.success) {
     let textcolor = 'var(--i-emerald)';
     let bordercolor = 'var(--i-emerald)';
-    let advice = 'คุณภาพอากาศปกติ (Good) ปลอดภัยต่อการออกหน้างานสนาม';
+    let advice = 'สภาพอากาศปลอดภัย เหมาะสำหรับการลงพื้นที่ตรวจสอบปั๊มน้ำมัน';
     
     if (res.aqi > 50 && res.aqi <= 100) {
       textcolor = 'var(--i-gold)';
       bordercolor = 'var(--i-gold)';
-      advice = 'คุณภาพอากาศปานกลาง (Moderate) สวมหน้ากากปกติในที่ปิด';
+      advice = 'ระดับมลพิษปานกลาง แนะนำให้เตรียมสวมหน้ากากเซฟตี้ทั่วไปหน้างาน';
     } else if (res.aqi > 100) {
       textcolor = 'var(--i-rose)';
       bordercolor = 'var(--i-rose)';
-      advice = 'เริ่มมีผลต่อสุขภาพ (Unhealthy) สวมหน้ากาก N95 ทันทีเมื่อเข้าเขตโรงงาน';
+      advice = 'มีมลพิษเริ่มส่งผลลบต่อปอด บังคับสวมหน้ากากกรองเคมี/N95 ทันทีเมื่อออกคลังแก๊ส';
     }
     
     title.innerHTML = `<span style="color:${textcolor}; font-weight:700;">PM 2.5: ${res.pm25} µg/m³ (AQI: ${res.aqi})</span>`;
     desc.innerHTML = `<span style="font-size:0.8rem; font-weight:600; color:${textcolor};">${advice}</span>`;
     card.style.borderColor = bordercolor;
   } else {
-    title.innerText = "PM 2.5: 12.5 µg/m³ (ดัชนีประเมินออฟไลน์)";
-    desc.innerText = "คุณภาพอากาศดีมาก (Good) ปลอดภัยสำหรับการเข้าหน้างานโรงงาน";
+    title.innerText = "PM 2.5: 14.2 µg/m³ (ดัชนีตรวจสภาพอากาศออฟไลน์)";
+    desc.innerText = "ดัชนีปกติ อากาศปลอดภัยพร้อมสำหรับการทำงานอุตสาหกรรม";
     card.style.borderColor = 'var(--i-emerald)';
   }
+}
+
+// ══════════════════════════════════════════════════
+// MODAL DIALOGS IMPLEMENTATIONS
+// ══════════════════════════════════════════════════
+
+// Customizable Milestone Schedule Settings (Specialised Feature 2)
+function openScheduleSettingsModal() {
+  const sch = state.ilmProfile.schedule || {};
+  openModal('⚙️ ตั้งค่ากำหนดการของคณะ / กรมธุรกิจพลังงาน', `
+    <div style="text-align:left; font-family:Sarabun, sans-serif; max-height:450px; overflow-y:auto; padding-right:5px;">
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px;">เมื่อคุณได้ยินข่าวประกาศกำหนดการใหม่จากคณะวิศวกรรมศาสตร์ มก. สามารถป้อนบันทึกเพื่อให้อัปเดตวันนับถอยหลังและตารางทั้งหมดไดนามิก:</p>
+      
+      <div class="i-fg">
+        <label>1. วันชี้แจงเตรียมตัววิชาฝึกงานภาควิชาฯ:</label>
+        <input type="date" id="sch-advising" value="${sch.advisingDate || ''}">
+      </div>
+      <div class="i-fg">
+        <label>2. วันสิ้นสุดการลงทะเบียนใบคำร้อง (wt.eng.ku.ac.th):</label>
+        <input type="date" id="sch-registration" value="${sch.registrationDeadline || ''}">
+      </div>
+      <div class="i-fg">
+        <label>3. วันเข้าอบรมความพร้อม ครั้งที่ 1 (จริยธรรม):</label>
+        <input type="date" id="sch-seminar1" value="${sch.prepSeminar1 || ''}">
+      </div>
+      <div class="i-fg">
+        <label>4. วันเข้าอบรมความพร้อม ครั้งที่ 2 (เขียนเล่ม/รายงาน):</label>
+        <input type="date" id="sch-seminar2" value="${sch.prepSeminar2 || ''}">
+      </div>
+      <div class="i-fg">
+        <label>5. วันสัมมนาปฐมนิเทศฝึกงาน (นิสิตทุกคนบังคับ):</label>
+        <input type="date" id="sch-orientation" value="${sch.orientationDate || ''}">
+      </div>
+      <div class="i-fg">
+        <label>6. วันเริ่มต้นลงบันทึกฝึกงานวันแรก:</label>
+        <input type="date" id="sch-start" value="${sch.startDate || ''}">
+      </div>
+      <div class="i-fg">
+        <label>7. วันที่เลิกฝึกงานวันสุดท้าย:</label>
+        <input type="date" id="sch-end" value="${sch.endDate || ''}">
+      </div>
+      <div class="i-fg">
+        <label>8. วันเส้นตายส่งซองจดหมายรายงานและประเมินผล:</label>
+        <input type="date" id="sch-submission" value="${sch.submissionDeadline || ''}">
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:20px; position:sticky; bottom:0; background:var(--surface); padding-top:10px;">
+        <button class="i-btn i-btn-primary" style="flex:1; justify-content:center;" onclick="saveScheduleSettings()">💾 บันทึกกำหนดการ</button>
+        <button class="i-btn" style="flex:1; justify-content:center;" onclick="closeModal()">ยกเลิก</button>
+      </div>
+    </div>
+  `);
+}
+
+function saveScheduleSettings() {
+  const schedule = {
+    advisingDate: document.getElementById('sch-advising').value,
+    registrationDeadline: document.getElementById('sch-registration').value,
+    prepSeminar1: document.getElementById('sch-seminar1').value,
+    prepSeminar2: document.getElementById('sch-seminar2').value,
+    orientationDate: document.getElementById('sch-orientation').value,
+    startDate: document.getElementById('sch-start').value,
+    endDate: document.getElementById('sch-end').value,
+    submissionDeadline: document.getElementById('sch-submission').value
+  };
+
+  state.ilmProfile.schedule = schedule;
+  
+  // Sync seminar dates
+  if (schedule.advisingDate) state.ilmProfile.seminars[0].date = schedule.advisingDate;
+  if (schedule.prepSeminar1) state.ilmProfile.seminars[1].date = schedule.prepSeminar1;
+  if (schedule.prepSeminar2) state.ilmProfile.seminars[2].date = schedule.prepSeminar2;
+  if (schedule.orientationDate) state.ilmProfile.seminars[3].date = schedule.orientationDate;
+
+  ILMHub.saveState();
+  closeModal();
+  renderILMContent();
+  showToast("✓ ทำการบันทึกกำหนดการไดนามิกใหม่เข้าระบบคลาวด์เรียบร้อย!");
+}
+
+// Energy Technical Interview Simulator modal (Specialised Feature 3)
+let activeCardIdx = 0;
+let cardFlipped = false;
+function openInterviewSimulatorModal() {
+  activeCardIdx = 0;
+  cardFlipped = false;
+  openInterviewSimulatorView();
+}
+
+function openInterviewSimulatorView() {
+  const list = ILMHub.getEnergyInterviewQuestions();
+  const card = list[activeCardIdx];
+  
+  openModal('🗣️ เครื่องจำลองซ้อมตอบคำถามสัมภาษณ์งานกรมธุรกิจพลังงาน', `
+    <div style="text-align:center; font-family:Sarabun, sans-serif;">
+      <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">คำถามที่ ${activeCardIdx + 1} จาก ${list.length} | แตะเพื่อพลิกดูคำตอบ</div>
+      
+      <div class="i-flashcard-box" onclick="flipInterviewCard()">
+        ${!cardFlipped ? `
+          <div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; opacity:0.8; margin-bottom:8px; font-weight:700; color:var(--i-gold);">❓ คำถามเชี่ยวชาญด้านวัสดุศาสตร์</div>
+          <div style="font-weight:700; font-size:1rem; line-height:1.6; word-break:break-word;">
+            ${card.q}
+          </div>
+          <div style="font-size:0.75rem; margin-top:20px; opacity:0.6; font-style:italic;">(แตะที่การ์ดใบนี้เพื่อพลิกแนวคำตอบเชิงลึก...)</div>
+        ` : `
+          <div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; opacity:0.8; margin-bottom:8px; font-weight:700; color:var(--i-emerald);">💡 ทฤษฎีวิศวกรรม/คำตอบแนะนำ</div>
+          <div style="font-size:0.85rem; line-height:1.5; color:#e2e8f0; text-align:left; max-height:180px; overflow-y:auto; padding-right:4px;">
+            ${card.a}
+          </div>
+          <div style="font-size:0.75rem; margin-top:15px; opacity:0.6; font-style:italic;">(แตะอีกครั้งเพื่อกลับไปที่หน้าคำถาม)</div>
+        `}
+      </div>
+      
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px;">
+        <button class="i-btn sm" ${activeCardIdx === 0 ? 'disabled' : ''} onclick="navInterviewCard(-1)">⬅️ ข้อก่อนหน้า</button>
+        <button class="i-btn i-btn-primary sm" ${activeCardIdx === list.length - 1 ? 'disabled' : ''} onclick="navInterviewCard(1)">ข้อถัดไป ➡️</button>
+      </div>
+    </div>
+  `);
+}
+
+function flipInterviewCard() {
+  cardFlipped = !cardFlipped;
+  openInterviewSimulatorView();
+}
+
+function navInterviewCard(dir) {
+  activeCardIdx += dir;
+  cardFlipped = false;
+  openInterviewSimulatorView();
+}
+
+function openAddCompanyModal() {
+  openModal('🏢 เพิ่มความสนใจหน่วยงาน/กองความปลอดภัยพลังงาน', `
+    <div style="text-align:left; font-family:Sarabun, sans-serif;">
+      <div class="i-fg">
+        <label>ชื่อฝ่าย/กองงาน (กรมธุรกิจพลังงาน หรือค่ายน้ำมัน):</label>
+        <input type="text" id="k-name" placeholder="เช่น: กองความปลอดภัยธุรกิจน้ำมัน, กองความปลอดภัยก๊าซ LPG">
+      </div>
+      <div class="i-fg">
+        <label>ขอบเขตวิศวกรรมความปลอดภัย:</label>
+        <select id="k-field">
+          <option value="Fuel Safety">Fuel Safety (ตรวจสอบถัง/คลังน้ำมัน)</option>
+          <option value="LPG Safety">LPG Safety (ตรวจสอบแก๊สแรงดันสูง)</option>
+          <option value="NDT & Inspection">NDT & Inspection (ทดสอบแบบไม่ทำลายและโครงสร้างเชื่อม)</option>
+          <option value="Pipeline Integrity">Pipeline Integrity (วิเคราะห์สนิมท่อใต้ดิน)</option>
+        </select>
+      </div>
+      <div class="i-fg">
+        <label>เบี้ยเลี้ยงสนับสนุนรายวัน (บาท):</label>
+        <input type="number" id="k-salary" value="0">
+      </div>
+      <div class="i-fg">
+        <label>ที่ตั้งของหน่วยงาน:</label>
+        <input type="text" id="k-address" placeholder="เช่น: อาคาร B ศูนย์เอนเนอร์ยี่คอมเพล็กซ์ วิภาวดีรังสิต">
+      </div>
+      <div class="i-fg">
+        <label>ช่องทางการยื่นส่งประวัติหรือเมลติดต่อ:</label>
+        <input type="text" id="k-contact" placeholder="เช่น: doeb-hr@doeb.go.th / โทร 02-140-6000">
+      </div>
+      <div style="display:flex; gap:10px; margin-top:20px;">
+        <button class="i-btn i-btn-primary" style="flex:1; justify-content:center;" onclick="saveNewCompany()">💾 บันทึกหน่วยงาน</button>
+        <button class="i-btn" style="flex:1; justify-content:center;" onclick="closeModal()">ยกเลิก</button>
+      </div>
+    </div>
+  `);
+}
+
+function saveNewCompany() {
+  const name = document.getElementById('k-name').value;
+  const field = document.getElementById('k-field').value;
+  const salary = parseFloat(document.getElementById('k-salary').value) || 0;
+  const address = document.getElementById('k-address').value;
+  const contact = document.getElementById('k-contact').value;
+  
+  if (!name.trim()) {
+    alert("กรุณากรอกชื่อหน่วยงาน/ฝ่าย");
+    return;
+  }
+  
+  const newComp = {
+    id: 'c_' + Date.now(),
+    name, field, status: 'interested', salary, address, contact
+  };
+  
+  state.ilmCompanies.push(newComp);
+  ILMHub.saveState();
+  closeModal();
+  renderKanbanHTML();
+  showToast("✓ เพิ่มแผนกสมัครลงสู่บอร์ดสำเร็จ");
+}
+
+function openDocumentHubModal() {
+  openModal('📁 คลังไฟล์ส่วนบุคคลเพื่อยื่นสมัครกรมธุรกิจพลังงาน', `
+    <div style="text-align:left; font-family:Sarabun, sans-serif;">
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px;">ตรวจสอบและจัดเตรียมคลังไฟล์ PDF ของคุณเพื่อใช้ประสานงานยื่นหนังสือขอฝึกงาน</p>
+      
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <div style="border:1px solid var(--i-border); padding:12px; border-radius:10px; background:var(--bg); display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-weight:700; font-size:0.9rem;">📝 Resume_Materials_Energy_Focus.pdf</div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">ขนาด: 1.1 MB | เน้นทักษะการตรวจสอบโลหะและการกัดกร่อน</div>
+          </div>
+          <button class="i-btn" style="padding:4px 10px; font-size:0.75rem;" onclick="showToast('✓ คัดลอก Resume Link')">คัดลอกไฟล์ลิงก์</button>
+        </div>
+        
+        <div style="border:1px solid var(--i-border); padding:12px; border-radius:10px; background:var(--bg); display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-weight:700; font-size:0.9rem;">📊 Transcript_KU_Year3_Nitipat.pdf</div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">ขนาด: 850 KB | แสดงผลการเรียนผ่านเกณฑ์วิชาบังคับก่อน</div>
+          </div>
+          <button class="i-btn" style="padding:4px 10px; font-size:0.75rem;" onclick="showToast('✓ คัดลอก Transcript Link')">คัดลอกไฟล์ลิงก์</button>
+        </div>
+      </div>
+      
+      <button class="i-btn i-btn-primary" style="margin-top:20px; width:100%; justify-content:center;" onclick="closeModal()">ตกลง</button>
+    </div>
+  `);
+}
+
+function openEmailGeneratorModal() {
+  const activeComp = state.ilmCompanies.find(c => c.status === 'accepted') || state.ilmCompanies[0] || { name: 'กรมธุรกิจพลังงาน' };
+  
+  openModal('✉️ ตัวร่างจดหมายประสานงานติดต่อ HR/พี่เลี้ยงค่ายพลังงาน', `
+    <div style="text-align:left; font-family:Sarabun, sans-serif;">
+      <div class="i-fg">
+        <label>เลือกแม่แบบข้อความ:</label>
+        <select id="email-t-select" onchange="updateEmailTextarea(this.value, '${activeComp.name}')">
+          <option value="th_request">ขอความอนุเคราะห์เข้าฝึกงาน (ภาษาไทย - แนะนำ)</option>
+          <option value="en_request">Internship Application Letter (ภาษาอังกฤษ)</option>
+          <option value="th_followup">ติดตามผลการพิจารณาสมัครงานราชการ</option>
+        </select>
+      </div>
+      
+      <div class="i-fg">
+        <label>เนื้อหาร่างจดหมายอีเมลติดต่อ HR:</label>
+        <textarea id="email-text-box" style="height:250px; font-family:Courier, Sarabun, monospace; font-size:0.85rem; line-height:1.5;">${ILMHub.getEmailTemplate('th_request', activeComp.name)}</textarea>
+      </div>
+      
+      <div style="display:flex; gap:10px; margin-top:20px;">
+        <button class="i-btn i-btn-primary" style="flex:2; justify-content:center;" onclick="copyEmailToClipboard()">📋 คัดลอกเนื้อหาไปยังคลิปบอร์ด</button>
+        <button class="i-btn" style="flex:1; justify-content:center;" onclick="closeModal()">ปิดหน้าต่าง</button>
+      </div>
+    </div>
+  `);
+}
+
+function updateEmailTextarea(type, companyName) {
+  const box = document.getElementById('email-text-box');
+  if (box) {
+    box.value = ILMHub.getEmailTemplate(type, companyName);
+  }
+}
+
+function copyEmailToClipboard() {
+  const box = document.getElementById('email-text-box');
+  if (box) {
+    navigator.clipboard.writeText(box.value);
+    showToast('📋 คัดลอกข้อความร่างจดหมายเรียบร้อยแล้ว! นำไปแปะส่งประสานงานได้เลย');
+    closeModal();
+  }
+}
+
+function triggerSOSOverlay() {
+  openModal('🚨 ยืนยันสัญญาณโทรฉุกเฉิน / พิกัดคลังแก๊ส', `
+    <div style="text-align:center; font-family:Sarabun, sans-serif; padding:15px;">
+      <div style="font-size:3rem; margin-bottom:15px; animation:pulse 1s infinite;">🚨</div>
+      <h3 style="color:var(--i-rose); font-weight:700;">ส่งสัญญาณความช่วยเหลือผู้ใช้ฝึกงาน</h3>
+      <p style="font-size:0.9rem; line-height:1.6; color:var(--text-muted); margin-bottom:20px;">
+        ระบบจะระบุข้อมูลพิกัดปัจจุบันคลังพลังงานของคุณ และประสานแจ้งสายตรงไปยังหน่วยกิจการนิสิตคณะวิศวกรรมศาสตร์ มก. ตึก 3 ชั้น 1 ทันที
+      </p>
+      
+      <div style="background:var(--bg); border:1px solid var(--i-border); padding:12px; border-radius:10px; font-size:0.85rem; text-align:left; margin-bottom:20px;">
+        📍 <strong>พิกัดปฏิบัติงานปัจจุบัน</strong>: 13.8234, 100.5623 (กรมธุรกิจพลังงาน ถนนวิภาวดีรังสิต)<br>
+        🏥 <strong>โรงพยาบาลฉุกเฉินใกล้สุด</strong>: โรงพยาบาลวิภาวดี (โทร 02-561-1111)
+      </div>
+      
+      <div style="display:flex; gap:10px;">
+        <a href="tel:027970969" class="i-btn i-btn-primary i-btn-rose" style="flex:2; justify-content:center; text-decoration:none;">🚨 ยืนยันกดโทรสายด่วนคณะ 02-797-0969</a>
+        <button class="i-btn" style="flex:1; justify-content:center;" onclick="closeModal()">ยกเลิก</button>
+      </div>
+    </div>
+  `);
+}
+
+function openClaimAssistantModal() {
+  openModal('📄 คู่มือช่วยเคลมประกันสวัสดิภาพอุบัติเหตุ (Siam Smile)', `
+    <div style="text-align:left; font-family:Sarabun, sans-serif;">
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px;">เอกสารจริงที่คุณต้องขอและยื่นนำส่งหน่วยงาน มก. เพื่อขอเคลมประกันสวัสดิภาพนิสิตกระทรวงอุบัติภัย:</p>
+      
+      <div style="display:flex; flex-direction:column; gap:10px; font-size:0.9rem;">
+        <label style="display:flex; align-items:center; gap:10px; padding:10px; background:var(--bg); border-radius:8px;"><input type="checkbox" checked disabled> ใบเสร็จรับเงินฉบับจริง (ตัวจริงจากสถานพยาบาลเท่านั้น)</label>
+        <label style="display:flex; align-items:center; gap:10px; padding:10px; background:var(--bg); border-radius:8px;"><input type="checkbox" checked disabled> ใบรับรองแพทย์ตัวจริง ระบุสาเหตุของอุบัติเหตุในพื้นที่ชัดเจน</label>
+        <label style="display:flex; align-items:center; gap:10px; padding:10px; background:var(--bg); border-radius:8px;"><input type="checkbox" checked disabled> สำเนาบัตรนิสิต มก. และสำเนาบัตรประชาชนพร้อมเซ็นกำกับ</label>
+        <label style="display:flex; align-items:center; gap:10px; padding:10px; background:var(--bg); border-radius:8px;"><input type="checkbox" checked disabled> สำเนาหน้าแรกสมุดบัญชีธนาคารสำหรับโอนเงินเบิกช่วยเหลือกลับคืน</label>
+      </div>
+      
+      <button class="i-btn i-btn-primary" style="margin-top:20px; width:100%; justify-content:center;" onclick="closeModal()">ตกลง (รับทราบ)</button>
+    </div>
+  `);
 }
 
 function compileReportMarkdownModal() {
   const md = ILMHub.compileReportDraft();
   
-  openModal('📝 ร่างรายงานฝึกงานฉบับสมบูรณ์ (Markdown Draft)', `
+  openModal('📝 ร่างรายงานฝึกงานโครงงาน บทที่ 1-4 (Markdown Draft)', `
     <div style="text-align:left; font-family:Sarabun, sans-serif;">
-      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">ตัวช่วยสังเคราะห์ร่างบทที่ 1-4 อ้างอิงประวัติตารางลงเวลางานของคุณสำหรับดาวน์โหลดแก้ไขใน Microsoft Word</p>
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">ตัวประมวลผลดึงประวัติล็อกรายวันของคุณและคำศัพท์วิชาการมาจัดร่างรายงาน สามารถคัดลอกนำไปแก้ไขต่อในโปรแกรม Word ได้รวดเร็ว</p>
       
       <div class="i-fg">
         <textarea style="height:250px; font-family:Courier, monospace; font-size:0.8rem; line-height:1.5;" id="ilm-report-md-box">${md}</textarea>
@@ -1631,67 +1910,69 @@ function copyReportMDToClipboard() {
   const box = document.getElementById('ilm-report-md-box');
   if (box) {
     navigator.clipboard.writeText(box.value);
-    showToast("✓ คัดลอกร่างเนื้อหาบทความโครงรายงาน (.md) เรียบร้อย! สามารถนำไปแปะแก้ไขรูปเล่มต่อได้เลย");
+    showToast("✓ คัดลอกร่างเนื้อหาบทความโครงรายงานเรียบร้อยแล้ว!");
     closeModal();
   }
 }
 
 function openLinkedInPostModal() {
-  const activeComp = state.ilmCompanies.find(c => c.status === 'accepted') || state.ilmCompanies[0] || { name: 'SCG Chemicals' };
+  const activeComp = state.ilmCompanies.find(c => c.status === 'accepted') || state.ilmCompanies[0] || { name: 'กรมธุรกิจพลังงาน' };
   
-  const text = `🎓 Excited to share that I have successfully completed my Engineering Summer Internship at ${activeComp.name}! 
+  const text = `🎓 Excited to share that I have completed my Materials Engineering Summer Internship at the ${activeComp.name}!
 
-Over the past 2 months (240+ hours), I had the incredible opportunity to apply Materials Engineering principles—from physical metallurgy to polymer characterization—to real industrial manufacturing. 
+Over the past 2 months (240+ hours), I had the opportunity to study public energy business safety regulations, materials degradation mechanisms, and piping/welding integrity inspection methods under professional mentors. 
 
-Special thanks to my industrial mentors and Kasetsart University professors for their guidance and mentorship. Ready for the next academic step! 🚀
+Grateful for this technical government experience and ready for the next engineering steps! 🚀
 
-#MaterialsEngineering #KasetsartUniversity #InternshipSuccess #Engineering`;
+#MaterialsEngineering #KasetsartUniversity #EnergySafety #PublicInfrastructure #InternshipSuccess`;
 
-  openModal('🤝 ร่างจดหมายแชร์ความสำเร็จลง LinkedIn', `
+  openModal('🤝 ข้อความแชร์ความสำเร็จลง LinkedIn ความเห็นวิชาชีพ', `
     <div style="text-align:left; font-family:Sarabun, sans-serif;">
       <div class="i-fg">
-        <textarea style="height:200px; font-family:inherit; font-size:0.9rem;" id="ilm-linkedin-box">${text}</textarea>
+        <textarea style="height:180px; font-family:inherit; font-size:0.9rem;" id="ilm-linkedin-box">${text}</textarea>
       </div>
-      <button class="i-btn i-btn-primary" style="width:100%; justify-content:center;" onclick="navigator.clipboard.writeText(document.getElementById('ilm-linkedin-box').value); showToast('📋 คัดลอกเนื้อหาพร้อมโพสต์!'); closeModal();">📋 คัดลอกข้อความแชร์</button>
+      <button class="i-btn i-btn-primary" style="width:100%; justify-content:center;" onclick="navigator.clipboard.writeText(document.getElementById('ilm-linkedin-box').value); showToast('📋 คัดลอกข้อความแชร์เรียบร้อย!'); closeModal();">📋 คัดลอกข้อความพร้อมใช้</button>
     </div>
   `);
 }
 
 function openEnvelopePrinterModal() {
   const student = STUDENT;
+  const schedule = state.ilmProfile.schedule || {};
   
-  openModal('🖨️ จัดวางฉลากสีน้ำตาลปิดผนึกนำส่งเล่มรายงาน', `
+  openModal('🖨️ ฉลากจ่าหน้าซองจดหมายสีน้ำตาลนำส่งคณะ มก.', `
     <div style="font-family:Sarabun, sans-serif; padding:10px;">
-      <!-- Standard envelope label layout preview -->
-      <div id="envelope-label-layout" style="border:1.5px solid #b45309; padding:25px; border-radius:8px; background:#fff8f2; text-align:left; color:#111;">
-        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #b45309; padding-bottom:8px; margin-bottom:15px;">
-          <span style="font-weight:700; font-size:1rem; color:#b45309;">📦 เอกสารปิดผนึกด่วนที่สุด (วิชาฝึกงาน 01213399)</span>
-          <span style="font-size:0.75rem; border:1px solid #b45309; padding:2px 6px; border-radius:4px;">A4 Sticker</span>
+      <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:10px;">เช็คลิสต์สิ่งพิมพ์จ่าหน้าบนซองกระดาษสติ๊กเกอร์ขนาด A4 เพื่อผนึกซองน้ำตาลนำส่งใบลงเวลาและเล่มรายงานฝึกงานวิศวกรรม:</p>
+      
+      <div id="envelope-label-layout" style="border:1.5px solid #b45309; padding:20px; border-radius:8px; background:#fff8f2; text-align:left; color:#111;">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #b45309; padding-bottom:6px; margin-bottom:12px;">
+          <span style="font-weight:700; font-size:0.9rem; color:#b45309;">📦 เอกสารส่งตัวจบวิชาฝึกงาน (วิชา 01213399)</span>
+          <span style="font-size:0.7rem; border:1px solid #b45309; padding:2px 6px; border-radius:4px;">Sticker Form</span>
         </div>
         
-        <div style="margin-bottom:20px;">
-          <div style="font-size:0.75rem; color:#6b7280; font-weight:600;">ผู้ส่ง (STUDENT SENDER):</div>
-          <div style="font-weight:700; font-size:0.95rem;">นาย${student.nameTh} (${student.name})</div>
-          <div style="font-size:0.85rem;">รหัสนิสิต: ${student.id} | ชั้นปีที่ 3</div>
-          <div style="font-size:0.85rem;">สาขาวิชา: วิศวกรรมวัสดุ คณะวิศวกรรมศาสตร์ มก.</div>
+        <div style="margin-bottom:15px; font-size:0.85rem;">
+          <div style="font-size:0.7rem; color:#6b7280; font-weight:600;">ผู้ส่ง (STUDENT SENDER):</div>
+          <div style="font-weight:700;">นาย${student.nameTh} (${student.name})</div>
+          <div>รหัสนิสิต: ${student.id} | ชั้นปีที่ 3</div>
+          <div>ภาควิชาวิศวกรรมวัสดุ คณะวิศวกรรมศาสตร์ มก.</div>
         </div>
         
-        <div style="text-align:right; margin-top:20px; border-top:1px dashed #ccc; padding-top:15px;">
-          <div style="font-size:0.75rem; color:#6b7280; font-weight:600; text-align:left;">ผู้รับปลายทาง (DEPARTMENT RECEIVER):</div>
-          <div style="font-weight:700; font-size:1rem; color:#1e3a8a; text-align:left; margin-top:4px;">
+        <div style="text-align:right; border-top:1px dashed #ccc; padding-top:10px; font-size:0.85rem;">
+          <div style="font-size:0.7rem; color:#6b7280; font-weight:600; text-align:left;">ผู้รับปลายทาง (DEPARTMENT RECEIVER):</div>
+          <div style="font-weight:700; color:#1e3a8a; text-align:left; margin-top:2px;">
             ฝ่ายประสานงานการฝึกงานภาควิชาวิศวกรรมวัสดุ
           </div>
-          <div style="font-size:0.85rem; text-align:left; line-height:1.4; color:#374151;">
+          <div style="text-align:left; line-height:1.4; color:#374151; font-size:0.8rem; margin-top:2px;">
             คณะวิศวกรรมศาสตร์ มหาวิทยาลัยเกษตรศาสตร์ (บางเขน)<br>
-            ตึกภาควิชาฯ อาคาร 3 ชั้น 1 ช่องประสานงานรับคำร้องฝึกงานนิสิต<br>
-            แขวงลาดยาว เขตจตุจักร กรุงเทพมหาวิทยาลัย 10900
+            ตึกภาควิชาวัสดุศาสตร์ อาคาร 3 ชั้น 1 ช่องช่องติดต่อยื่นคำร้อง<br>
+            แขวงลาดยาว เขตจตุจักร กรุงเทพฯ 10900
           </div>
         </div>
       </div>
       
       <div style="display:flex; gap:10px; margin-top:20px;">
         <button class="i-btn i-btn-primary" style="flex:1; justify-content:center;" onclick="printEnvelopeLabel()">🖨️ กดพิมพ์สติกเกอร์ฉลาก</button>
-        <button class="i-btn" style="flex:1; justify-content:center;" onclick="closeModal()">ยกเลิก</button>
+        <button class="i-btn" style="flex:1; justify-content:center;" onclick="closeModal()">ปิดหน้าต่าง</button>
       </div>
     </div>
   `);
