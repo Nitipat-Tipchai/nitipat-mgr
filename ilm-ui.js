@@ -1778,31 +1778,495 @@ function saveNewCompany() {
 }
 
 function openDocumentHubModal() {
-  openModal('📁 คลังไฟล์ส่วนบุคคลเพื่อยื่นสมัครกรมธุรกิจพลังงาน', `
-    <div style="text-align:left; font-family:Sarabun, sans-serif;">
-      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px;">ตรวจสอบและจัดเตรียมคลังไฟล์ PDF ของคุณเพื่อใช้ประสานงานยื่นหนังสือขอฝึกงาน</p>
-      
-      <div style="display:flex; flex-direction:column; gap:10px;">
-        <div style="border:1px solid var(--i-border); padding:12px; border-radius:10px; background:var(--bg); display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <div style="font-weight:700; font-size:0.9rem;">📝 Resume_Materials_Energy_Focus.pdf</div>
-            <div style="font-size:0.75rem; color:var(--text-muted);">ขนาด: 1.1 MB | เน้นทักษะการตรวจสอบโลหะและการกัดกร่อน</div>
-          </div>
-          <button class="i-btn" style="padding:4px 10px; font-size:0.75rem;" onclick="showToast('✓ คัดลอก Resume Link')">คัดลอกไฟล์ลิงก์</button>
+  state.ilmSelectedFileId = null;
+  renderILMExplorer();
+}
+
+function renderILMExplorer() {
+  openModal('📁 คลังจัดการเอกสารการสมัครฝึกงาน (Internship Drive)', renderILMExplorerHTML());
+}
+
+function getILMFolderBreadcrumbs() {
+  const crumbs = [];
+  let currId = state.ilmCurrentFolderId;
+  while (currId && currId !== 'root') {
+    const f = state.ilmFiles.find(item => item.id === currId);
+    if (!f) break;
+    crumbs.unshift(f);
+    currId = f.parentId;
+  }
+  crumbs.unshift({ id: 'root', name: 'Home' });
+  return crumbs;
+}
+
+function navigateILMFolder(id) {
+  state.ilmCurrentFolderId = id;
+  state.ilmSelectedFileId = null;
+  renderILMExplorer();
+}
+
+function handleILMDriveCardClick(event, id, type) {
+  if (event.target.closest('[onclick^="handleILMSelectionToggle"]')) return;
+  if (type === 'folder') {
+    navigateILMFolder(id);
+  } else {
+    openILMFilePreview(id);
+  }
+}
+
+function handleILMSelectionToggle(event, id) {
+  event.stopPropagation();
+  state.ilmSelectedFileId = (state.ilmSelectedFileId === id ? null : id);
+  renderILMExplorer();
+}
+
+function renderILMExplorerHTML() {
+  const crumbs = getILMFolderBreadcrumbs();
+  const folderItems = state.ilmFiles.filter(f => f.parentId === state.ilmCurrentFolderId);
+  const hasSelection = state.ilmSelectedFileId !== null;
+  
+  return `
+    <div style="font-family:Sarabun, sans-serif; text-align:left;">
+      <!-- Sync Status Banner -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; font-size:0.75rem; color:var(--text-muted);">
+        <span>ระบบคลังสองประสาน (Google Drive + Local Storage Sync)</span>
+        <span id="ilm-drive-sync-status" style="font-weight:700; color:var(--i-emerald);">
+          ${(typeof google !== 'undefined' && google.script) ? '☁️ Google Drive ซิงค์อัตโนมัติ' : '💾 โหมดสำรอง Local Storage'}
+        </span>
+      </div>
+
+      <!-- Action Toolbar -->
+      <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(30, 58, 138, 0.04); border:1px solid var(--i-border); border-radius:12px; padding:10px 14px; margin-bottom:15px; flex-wrap:wrap; gap:8px;">
+        <!-- Breadcrumbs -->
+        <div style="display:flex; align-items:center; gap:4px; font-weight:700; font-size:0.85rem;">
+          ${crumbs.map((c, idx) => `
+            ${idx > 0 ? '<span style="opacity:0.5; margin:0 2px;">/</span>' : ''}
+            <span style="color:${idx === crumbs.length - 1 ? 'var(--text-muted)' : 'var(--i-primary-light)'}; cursor:${idx === crumbs.length - 1 ? 'default' : 'pointer'};" 
+                  onclick="${idx === crumbs.length - 1 ? '' : `navigateILMFolder('${c.id}')`}">
+              ${c.name}
+            </span>
+          `).join('')}
         </div>
         
-        <div style="border:1px solid var(--i-border); padding:12px; border-radius:10px; background:var(--bg); display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <div style="font-weight:700; font-size:0.9rem;">📊 Transcript_KU_Year3_Nitipat.pdf</div>
-            <div style="font-size:0.75rem; color:var(--text-muted);">ขนาด: 850 KB | แสดงผลการเรียนผ่านเกณฑ์วิชาบังคับก่อน</div>
+        <!-- Action Buttons -->
+        <div style="display:flex; align-items:center; gap:12px; font-size:1.15rem;">
+          ${hasSelection ? `
+            <button onclick="openILMFileShareModal()" title="แชร์ลิงก์ส่วนตัว" style="border:none; background:transparent; cursor:pointer; padding:2px;">🔗</button>
+            <button onclick="renameILMItem()" title="เปลี่ยนชื่อ" style="border:none; background:transparent; cursor:pointer; padding:2px;">✏️</button>
+            <button onclick="deleteILMItem()" title="ลบ" style="border:none; background:transparent; cursor:pointer; padding:2px; color:var(--i-rose);">🗑️</button>
+            <div style="width:1px; height:18px; background:var(--i-border);"></div>
+          ` : ''}
+          <button onclick="createILMFolder()" title="สร้างโฟลเดอร์ใหม่" style="border:none; background:transparent; cursor:pointer; padding:2px;">📁+</button>
+          <button onclick="document.getElementById('ilm-upload-input').click()" title="อัปโหลดไฟล์" style="border:none; background:transparent; cursor:pointer; padding:2px;">↑</button>
+          <input type="file" id="ilm-upload-input" style="display:none" onchange="handleILMUpload(this)">
+        </div>
+      </div>
+
+      <!-- Main Explorer Files Grid -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(95px, 1fr)); gap:10px; min-height:220px; max-height:280px; overflow-y:auto; border:1px solid var(--i-border); border-radius:12px; padding:12px; background:var(--bg);" id="ilm-drive-grid">
+        ${folderItems.length === 0 ? `
+          <div style="grid-column:1/-1; display:flex; flex-direction:column; align-items:center; justify-content:center; height:180px; color:var(--text-muted); font-size:0.8rem; text-align:center;">
+            <div style="font-size:2.5rem; margin-bottom:10px;">☁️</div>
+            <div>โฟลเดอร์นี้ว่างเปล่า</div>
+            <div style="font-size:0.7rem; opacity:0.8; margin-top:4px;">กดปุ่ม ↑ อัปโหลดไฟล์ หรือ 📁+ เพื่อสร้างโฟลเดอร์ย่อย</div>
           </div>
-          <button class="i-btn" style="padding:4px 10px; font-size:0.75rem;" onclick="showToast('✓ คัดลอก Transcript Link')">คัดลอกไฟล์ลิงก์</button>
+        ` : folderItems.map(item => `
+          <div class="ilm-drive-card ${state.ilmSelectedFileId === item.id ? 'selected' : ''}" 
+               style="position:relative; background:var(--i-card-bg); border:1px solid ${state.ilmSelectedFileId === item.id ? 'var(--i-primary-light)' : 'var(--i-border)'}; border-radius:12px; padding:14px 8px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; cursor:pointer; transition:all 0.2s ease;"
+               onclick="handleILMDriveCardClick(event, '${item.id}', '${item.type}')">
+            
+            <!-- Selection Checkbox Dot -->
+            <div onclick="handleILMSelectionToggle(event, '${item.id}')" 
+                 style="position:absolute; top:6px; right:6px; width:16px; height:16px; border-radius:50%; border:1.5px solid ${state.ilmSelectedFileId === item.id ? 'var(--i-primary-light)' : '#cbd5e1'}; background:${state.ilmSelectedFileId === item.id ? 'var(--i-primary-light)' : 'transparent'}; display:flex; align-items:center; justify-content:center; font-size:9px; color:white; font-weight:bold;">
+              ${state.ilmSelectedFileId === item.id ? '✓' : ''}
+            </div>
+
+            <div style="font-size:2.2rem; margin-bottom:8px;">
+              ${item.type === 'folder' ? '📁' : (item.name.toLowerCase().endsWith('.pdf') ? '📄' : (item.name.toLowerCase().endsWith('.png') || item.name.toLowerCase().endsWith('.jpg') ? '🖼️' : '📝'))}
+            </div>
+
+            <div style="font-size:0.72rem; font-weight:700; width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); padding:0 4px;" title="${item.name}">
+              ${item.name}
+            </div>
+            
+            <div style="font-size:0.62rem; color:var(--text-muted); margin-top:2px;">
+              ${item.type === 'folder' ? 'โฟลเดอร์' : item.size}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      
+      <div style="display:flex; justify-content:flex-end; margin-top:15px; gap:8px;">
+        ${state.ilmCurrentFolderId !== 'root' ? `<button class="i-btn sm" onclick="navigateILMFolder('root')">🏠 กลับห้องหลัก</button>` : ''}
+        <button class="i-btn i-btn-primary sm" onclick="closeModal()">ตกลง (เสร็จสิ้น)</button>
+      </div>
+    </div>
+  `;
+}
+
+function handleILMUpload(input) {
+  if (input.files.length === 0) return;
+  const file = input.files[0];
+  const reader = new FileReader();
+  
+  reader.onload = function(e) {
+    const dataUrl = e.target.result;
+    const sizeStr = (file.size < 1024 * 1024) ? (file.size / 1024).toFixed(1) + ' KB' : (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+    
+    let storeData = dataUrl;
+    if (file.size > 1.5 * 1024 * 1024) {
+      storeData = 'large_file_placeholder_base64';
+      showToast("⚠️ ไฟล์มีขนาดใหญ่เกินระบบความจำเครื่องจำลอง จึงจัดเก็บเป็นรูปแบบ Metadata แทน");
+    }
+    
+    const fileId = 'file_' + Date.now();
+    const slugName = file.name.split('.')[0].toLowerCase().replace(/[^a-z0-9]/g, '-');
+    
+    const newFileObj = {
+      id: fileId,
+      name: file.name,
+      type: 'file',
+      parentId: state.ilmCurrentFolderId,
+      size: sizeStr,
+      mimeType: file.type,
+      data: storeData,
+      slug: slugName,
+      password: '',
+      createdAt: Date.now()
+    };
+    
+    state.ilmFiles.push(newFileObj);
+    ILMHub.saveState();
+    
+    if (typeof google !== 'undefined' && google.script) {
+      showToast("☁️ กำลังซิงค์อัปโหลดขึ้นโฟลเดอร์ Google Drive...");
+      ILMHub.uploadFileToDrive(dataUrl.split(',')[1], file.type, file.name, state.ilmCurrentFolderId).then(res => {
+        if (res && res.success) {
+          showToast("✓ อัปโหลดและเชื่อมโยงบน Google Drive จริงเรียบร้อย!");
+        }
+      }).catch(err => console.warn(err));
+    }
+    
+    showToast("✓ อัปโหลดไฟล์เรียบร้อย");
+    renderILMExplorer();
+  };
+  reader.readAsDataURL(file);
+}
+
+function createILMFolder() {
+  const fName = prompt("กรุณาระบุชื่อโฟลเดอร์ใหม่:");
+  if (!fName || !fName.trim()) return;
+  
+  const folderId = 'folder_' + Date.now();
+  const newFolderObj = {
+    id: folderId,
+    name: fName.trim(),
+    type: 'folder',
+    parentId: state.ilmCurrentFolderId,
+    size: '--',
+    mimeType: '',
+    data: '',
+    slug: '',
+    password: '',
+    createdAt: Date.now()
+  };
+  
+  state.ilmFiles.push(newFolderObj);
+  ILMHub.saveState();
+  
+  if (typeof google !== 'undefined' && google.script) {
+    showToast("☁️ กำลังสร้างโฟลเดอร์ใน Google Drive...");
+    ILMHub.createDriveFolder(fName.trim()).then(res => {
+      if (res && res.success) {
+        showToast("✓ สร้างและซิงค์โฟลเดอร์บน Google Drive เรียบร้อย!");
+      }
+    }).catch(err => console.warn(err));
+  }
+  
+  showToast("✓ สร้างโฟลเดอร์เรียบร้อย");
+  renderILMExplorer();
+}
+
+function renameILMItem() {
+  const id = state.ilmSelectedFileId;
+  if (!id) return;
+  
+  const item = state.ilmFiles.find(f => f.id === id);
+  if (!item) return;
+  
+  const newName = prompt(`เปลี่ยนชื่อ "${item.name}" เป็น:`, item.name);
+  if (!newName || !newName.trim()) return;
+  
+  item.name = newName.trim();
+  ILMHub.saveState();
+  
+  showToast("✓ เปลี่ยนชื่อเรียบร้อย");
+  state.ilmSelectedFileId = null;
+  renderILMExplorer();
+}
+
+function deleteILMItem() {
+  const id = state.ilmSelectedFileId;
+  if (!id) return;
+  
+  const item = state.ilmFiles.find(f => f.id === id);
+  if (!item) return;
+  
+  if (confirm(`คุณต้องการลบ "${item.name}" ใช่หรือไม่? (หากลบโฟลเดอร์ ไฟล์ทั้งหมดข้างในจะถูกลบออกด้วย)`)) {
+    function recursiveDelete(itemId) {
+      state.ilmFiles = state.ilmFiles.filter(f => f.id !== itemId);
+      const children = state.ilmFiles.filter(f => f.parentId === itemId);
+      children.forEach(child => recursiveDelete(child.id));
+    }
+    
+    recursiveDelete(id);
+    ILMHub.saveState();
+    
+    showToast("🗑️ ลบข้อมูลเรียบร้อย");
+    state.ilmSelectedFileId = null;
+    renderILMExplorer();
+  }
+}
+
+function openILMFileShareModal() {
+  const id = state.ilmSelectedFileId;
+  if (!id) return;
+  
+  const item = state.ilmFiles.find(f => f.id === id);
+  if (!item) return;
+  
+  if (!item.slug) {
+    item.slug = item.name.split('.')[0].toLowerCase().replace(/[^a-z0-9]/g, '-');
+  }
+  
+  const initialSlug = item.slug;
+  const initialPass = item.password || '';
+  const hasPassword = initialPass !== '';
+  
+  openModal('🔗 ตั้งค่าและเปิดแชร์ไฟล์สาธารณะ (Semantic Share Link)', `
+    <div style="text-align:left; font-family:Sarabun, sans-serif;">
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px;">คุณสามารถปรับแต่งพาทลิงก์ให้สวยงาม และเลือกตั้งรหัสผ่านสำหรับคนภายนอก (HR หรือพี่เลี้ยง) ได้ตามต้องการ</p>
+      
+      <div class="i-fg">
+        <label>1. ตั้งชื่อลิงก์แชร์ส่วนตัวของคุณ (Custom Slug):</label>
+        <div style="display:flex; align-items:center; gap:5px; background:var(--bg); padding:2px 8px; border-radius:10px; border:1px solid var(--i-border);">
+          <span style="font-size:0.8rem; color:var(--text-muted); font-family:monospace;">?share=nitipat/</span>
+          <input type="text" id="share-slug-input" value="${initialSlug}" placeholder="เช่น: resume" style="border:none; padding:8px 0; background:transparent; font-family:monospace; width:100%; outline:none; color:var(--text);" oninput="updateSharePreviewURL()">
         </div>
       </div>
       
-      <button class="i-btn i-btn-primary" style="margin-top:20px; width:100%; justify-content:center;" onclick="closeModal()">ตกลง</button>
+      <div class="i-fg" style="margin-top:15px;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:700;">
+          <input type="checkbox" id="share-pass-chk" ${hasPassword ? 'checked' : ''} onchange="toggleSharePasswordInput(this.checked)" style="width:16px; height:16px; cursor:pointer;">
+          🔐 เปิดใช้รหัสผ่านรักษาความปลอดภัย (Password Protection)
+        </label>
+      </div>
+      
+      <div class="i-fg" id="share-pass-input-wrap" style="display:${hasPassword ? 'block' : 'none'}; margin-left:24px;">
+        <label>ระบุรหัสผ่านเข้าถึง:</label>
+        <input type="text" id="share-password" value="${initialPass}" placeholder="เช่น: doeb2027" style="font-family:monospace; font-size:0.9rem;">
+      </div>
+      
+      <div style="margin-top:20px; background:rgba(30, 58, 138, 0.04); border:1px solid var(--i-primary-light); padding:12px; border-radius:12px;">
+        <div style="font-size:0.75rem; color:var(--i-primary); font-weight:700; margin-bottom:4px;">ลิงก์แชร์สาธารณะของคุณ (Shareable URL):</div>
+        <div id="share-url-preview" style="font-family:monospace; font-size:0.75rem; color:var(--text); word-break:break-all; font-weight:bold;">
+          ${window.location.origin}${window.location.pathname}?share=nitipat/${initialSlug}
+        </div>
+      </div>
+      
+      <div style="display:flex; gap:10px; margin-top:20px;">
+        <button class="i-btn i-btn-primary" style="flex:2; justify-content:center;" onclick="saveILMFileShareSettings('${item.id}')">💾 บันทึกและคัดลอกลิงก์</button>
+        <button class="i-btn" style="flex:1; justify-content:center;" onclick="openDocumentHubModal()">ย้อนกลับ</button>
+      </div>
     </div>
   `);
+}
+
+function updateSharePreviewURL() {
+  let slug = document.getElementById('share-slug-input').value.trim().toLowerCase().replace(/[^a-z0-9\-]/g, '');
+  const preview = document.getElementById('share-url-preview');
+  if (preview) {
+    preview.innerText = `${window.location.origin}${window.location.pathname}?share=nitipat/${slug || 'resume'}`;
+  }
+}
+
+function toggleSharePasswordInput(checked) {
+  const wrap = document.getElementById('share-pass-input-wrap');
+  if (wrap) wrap.style.display = checked ? 'block' : 'none';
+}
+
+function saveILMFileShareSettings(fileId) {
+  const item = state.ilmFiles.find(f => f.id === fileId);
+  if (!item) return;
+  
+  let slug = document.getElementById('share-slug-input').value.trim().toLowerCase().replace(/[^a-z0-9\-]/g, '');
+  if (!slug) slug = 'resume';
+  
+  const dup = state.ilmFiles.find(f => f.id !== fileId && f.slug === slug);
+  if (dup) {
+    alert("ขออภัยครับ ชื่อลิงก์แชร์นี้ถูกใช้งานแล้ว กรุณาป้อนชื่ออื่น");
+    return;
+  }
+  
+  const passChk = document.getElementById('share-pass-chk').checked;
+  const password = passChk ? document.getElementById('share-password').value.trim() : '';
+  
+  if (passChk && !password) {
+    alert("กรุณาระบุรหัสผ่านที่ต้องการป้องกัน");
+    return;
+  }
+  
+  item.slug = slug;
+  item.password = password;
+  ILMHub.saveState();
+  
+  const finalURL = `${window.location.origin}${window.location.pathname}?share=nitipat/${slug}`;
+  navigator.clipboard.writeText(finalURL);
+  
+  showToast("🎉 บันทึกและคัดลอกลิงก์แชร์สำเร็จแล้ว! ส่งให้ผู้อื่นรับชมได้เลยครับ");
+  openDocumentHubModal();
+}
+
+function openILMFilePreview(fileId) {
+  const item = state.ilmFiles.find(f => f.id === fileId);
+  if (!item) return;
+  
+  let previewContent = '';
+  const isPdf = item.name.toLowerCase().endsWith('.pdf') || item.mimeType === 'application/pdf';
+  const isImage = item.name.toLowerCase().endsWith('.png') || item.name.toLowerCase().endsWith('.jpg') || item.mimeType.startsWith('image/');
+  
+  if (isImage) {
+    if (item.data && item.data.startsWith('data:image')) {
+      previewContent = `<div style="text-align:center;"><img src="${item.data}" style="max-width:100%; max-height:400px; border-radius:8px; box-shadow:0 4px 10px rgba(0,0,0,0.1);"></div>`;
+    } else {
+      previewContent = `
+        <div style="border:1.5px dashed var(--i-border); border-radius:12px; padding:30px 15px; text-align:center; background:var(--bg);">
+          <div style="font-size:3.5rem; margin-bottom:15px;">📜</div>
+          <h4 style="font-weight:700; color:var(--i-emerald); font-size:1.1rem; margin:0 0 10px 0;">ใบรับรองการอบรมกฎความปลอดภัยคลังเชื้อเพลิง</h4>
+          <p style="font-size:0.85rem; color:var(--text-muted); line-height:1.5; margin-bottom:20px;">ใบรับรองการผ่านการอบรมกฎระเบียบเซฟตี้พลังงาน 100% จากสถานีบริการและคลัง LPG ในเขต Energy Complex มก.</p>
+          <div style="font-size:0.75rem; background:rgba(0,0,0,0.04); padding:10px; border-radius:8px; font-family:monospace;">
+            Verification Code: SEC-2569-KU-DOEB<br>
+            ตรวจสอบแล้ว: Mr. Nitipat Tipchai
+          </div>
+        </div>
+      `;
+    }
+  } else if (isPdf) {
+    if (item.data && item.data !== 'mock_pdf_resume_data' && item.data !== 'mock_pdf_transcript_data' && item.data !== 'large_file_placeholder_base64') {
+      previewContent = `
+        <div style="text-align:center;">
+          <embed src="${item.data}" type="application/pdf" style="width:100%; height:400px; border-radius:8px; border:1px solid var(--i-border);">
+        </div>
+      `;
+    } else if (item.id === 'f_resume' || item.data === 'mock_pdf_resume_data') {
+      previewContent = `
+        <div style="background:#fff; color:#333; padding:20px; border-radius:8px; border:1px solid #ccc; font-family:Sarabun, sans-serif; font-size:0.8rem; line-height:1.4; max-height:400px; overflow-y:auto; box-shadow:inset 0 0 10px rgba(0,0,0,0.05); text-align:left;">
+          <div style="text-align:center; border-bottom:2px solid #1e3a8a; padding-bottom:10px; margin-bottom:15px;">
+            <h3 style="margin:0 0 4px 0; color:#1e3a8a; font-weight:700; font-size:1.2rem;">NITIPAT TIPCHAI</h3>
+            <p style="margin:0; font-size:0.75rem; color:#666;">Materials Engineering Student | Kasetsart University</p>
+            <p style="margin:4px 0 0 0; font-size:0.7rem; color:#888;">Tel: [เบอร์โทรของคุณ] | Email: doeb-hr@doeb.go.th</p>
+          </div>
+          <div style="margin-bottom:12px;">
+            <h4 style="margin:0 0 5px 0; color:#1e3a8a; font-weight:700; font-size:0.9rem; border-bottom:1px solid #ddd;">EDUCATION</h4>
+            <strong>Kasetsart University</strong> — B.Eng. in Materials Engineering (Current GPAX: ${getCumGPA()})
+          </div>
+          <div style="margin-bottom:12px;">
+            <h4 style="margin:0 0 5px 0; color:#1e3a8a; font-weight:700; font-size:0.9rem; border-bottom:1px solid #ddd;">KEY COURSES</h4>
+            Thermodynamics of Materials, Mechanical Behavior of Materials, Corrosion of Materials
+          </div>
+          <div style="margin-bottom:12px;">
+            <h4 style="margin:0 0 5px 0; color:#1e3a8a; font-weight:700; font-size:0.9rem; border-bottom:1px solid #ddd;">PROJECTS & COMPETENCIES</h4>
+            * Cathodic Protection studies for Underground Pipelines<br>
+            * Ultrasonic NDT simulation tests for steel pressure welds
+          </div>
+        </div>
+      `;
+    } else if (item.id === 'f_transcript' || item.data === 'mock_pdf_transcript_data') {
+      previewContent = `
+        <div style="background:#fff; color:#333; padding:20px; border-radius:8px; border:1px solid #ccc; font-family:Sarabun, sans-serif; font-size:0.75rem; line-height:1.4; max-height:400px; overflow-y:auto; box-shadow:inset 0 0 10px rgba(0,0,0,0.05); text-align:left;">
+          <div style="text-align:center; border-bottom:2px solid #b45309; padding-bottom:8px; margin-bottom:12px;">
+            <h4 style="margin:0 0 2px 0; color:#b45309; font-weight:700; font-size:1.1rem;">KASETSART UNIVERSITY TRANSCRIPT</h4>
+            <p style="margin:0; font-size:0.7rem; color:#666;">Verified Academic Record - Mr. Nitipat Tipchai</p>
+          </div>
+          <table style="width:100%; border-collapse:collapse; font-size:0.65rem;">
+            <thead>
+              <tr style="border-bottom:1.5px solid #333; font-weight:700;">
+                <td style="padding:4px 0;">COURSE</td>
+                <td style="padding:4px 0;">TITLE</td>
+                <td style="padding:4px 0; text-align:center;">GRADE</td>
+                <td style="padding:4px 0; text-align:center;">CREDITS</td>
+              </tr>
+            </thead>
+            <tbody>
+              ${Object.keys(STUDENT.existingGrades).slice(0, 8).map(code => {
+                const g = STUDENT.existingGrades[code];
+                return `
+                  <tr style="border-bottom:1px solid #eee;">
+                    <td style="padding:4px 0; font-family:monospace;">${code}</td>
+                    <td style="padding:4px 0;">Materials Course ${code}</td>
+                    <td style="padding:4px 0; text-align:center; font-weight:bold;">${g.grade}</td>
+                    <td style="padding:4px 0; text-align:center;">${g.credits}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+          <div style="border-top:1.5px solid #333; padding-top:6px; margin-top:10px; display:flex; justify-content:space-between; font-weight:700; font-size:0.7rem;">
+            <span>TOTAL PASSED CREDITS: ${getTotalPassedCredits()} CR</span>
+            <span>GPAX: ${getCumGPA()}</span>
+          </div>
+        </div>
+      `;
+    } else {
+      previewContent = `
+        <div style="border:1.5px dashed var(--i-border); border-radius:12px; padding:30px 15px; text-align:center; background:var(--bg);">
+          <div style="font-size:3.5rem; margin-bottom:15px;">📂</div>
+          <h4 style="font-weight:700; color:var(--i-primary-light); font-size:1.1rem; margin:0 0 10px 0;">${item.name}</h4>
+          <p style="font-size:0.85rem; color:var(--text-muted); line-height:1.5; margin-bottom:20px;">ขนาดของไฟล์: ${item.size} | ประเภท: ${item.mimeType || 'เอกสารทั่วไป'}</p>
+          <p style="font-size:0.75rem; color:var(--i-gold); font-weight:600;">(เนื่องจากขนาดของไฟล์เกินขีดจำกัดความจำถาวรท้องถิ่น ระบบจะทำการตรวจสอบแบบลายน้ำเชิงลึกผ่าน metadata ส่วนกลาง)</p>
+        </div>
+      `;
+    }
+  } else {
+    previewContent = `
+      <div style="border:1px solid var(--i-border); border-radius:12px; padding:20px; text-align:center; background:var(--bg);">
+        <div style="font-size:3rem; margin-bottom:10px;">📝</div>
+        <h4 style="font-weight:700; font-size:1rem; margin:0 0 5px 0;">${item.name}</h4>
+        <p style="font-size:0.8rem; color:var(--text-muted);">${item.size} | ${item.mimeType || 'เอกสารทั่วไป'}</p>
+      </div>
+    `;
+  }
+  
+  openModal('📄 ตรวจสอบและแสดงผลตัวอย่างเอกสาร', `
+    <div style="text-align:center; font-family:Sarabun, sans-serif;">
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px; text-align:left;">ผู้รับชมภายนอกจะสามารถดูตัวอย่างเอกสารนี้ได้ผ่านลิงก์แชร์ส่วนตัวของคุณ</p>
+      
+      ${previewContent}
+      
+      <div style="display:flex; gap:10px; margin-top:20px;">
+        <button class="i-btn i-btn-primary" style="flex:2; justify-content:center;" onclick="downloadILMFileObj('${item.id}')">⬇️ ดาวน์โหลดเอกสารฉบับจริง</button>
+        <button class="i-btn" style="flex:1; justify-content:center;" onclick="openDocumentHubModal()">ย้อนกลับ</button>
+      </div>
+    </div>
+  `);
+}
+
+function downloadILMFileObj(fileId) {
+  const item = state.ilmFiles.find(f => f.id === fileId);
+  if (!item) return;
+  
+  const a = document.createElement('a');
+  if (item.data && item.data.startsWith('data:')) {
+    a.href = item.data;
+  } else {
+    const blob = new Blob(["Simulated Document Data for Mr. Nitipat TIPCHAI - Materials Engineering, KU"], { type: item.mimeType || 'text/plain' });
+    a.href = URL.createObjectURL(blob);
+  }
+  a.download = item.name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  showToast("⬇️ กำลังดาวน์โหลดไฟล์ลงเครื่องของคุณ...");
 }
 
 function openEmailGeneratorModal() {
