@@ -923,6 +923,7 @@ function renderTopNav(gpa, pro, curSem) {
       { id: 'calendar', icon: '🗓', label: 'ปฏิทินการศึกษา' },
       { id: 'money-pod', icon: '🐽', label: 'MoneyPod' },
       { id: 'ilm', icon: '💼', label: 'ฝึกงาน (ILM)' },
+      { id: 'trial-reg', icon: '🎫', label: 'ทดลองลงทะเบียน' },
 
       { id: 'settings', icon: '⚙️', label: 'ตั้งค่า' }
     ].map(n => `<button class="fm-item ${state.view === n.id ? 'active' : ''}" data-nav="${n.id}">
@@ -1236,6 +1237,7 @@ function renderPage(gpa, pro, curSem) {
     case 'calendar': return renderCalendar();
     case 'settings': return renderSettings();
     case 'ilm': return renderILMPage();
+    case 'trial-reg': return renderTrialReg();
 
     case 'course-hub': return renderCourseHubPage();
     case 'alarm': return renderAlarmPage();
