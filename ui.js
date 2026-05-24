@@ -4356,6 +4356,11 @@ function attachAllEvents() {
     };
   });
 
+  if (state.view === 'trial-reg') {
+    if (typeof attachTrialRegEvents === 'function') {
+      attachTrialRegEvents();
+    }
+  }
 }
 
 function renderCourseHub(courseId) {
