@@ -185,7 +185,7 @@ var state = {
   hyperAlarmInterval: null,
   assignmentNagInterval: null,
   notificationTimeouts: [],
-  notificationsGranted: Notification.permission === 'granted',
+  notificationsGranted: (typeof Notification !== 'undefined') && Notification.permission === 'granted',
   notionConnected: false,
   notionSyncing: false,
   lastNotionSync: localStorage.getItem('last_notion_sync') || null,
