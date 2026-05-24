@@ -1,4 +1,4 @@
-﻿
+
 /**
  * 🔐 LOGIN GATE CONTROLLER
  */
@@ -224,10 +224,12 @@ async function startAppCore() {
 
     messaging = getMessaging(app);
     onMessage(messaging, (payload) => {
-      new Notification(payload.notification.title, {
-        body: payload.notification.body,
-        icon: payload.notification.image || "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
-      });
+      if (typeof Notification !== 'undefined') {
+        new Notification(payload.notification.title, {
+          body: payload.notification.body,
+          icon: payload.notification.image || "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+        });
+      }
     });
 
     await loadAll();
