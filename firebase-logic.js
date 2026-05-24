@@ -183,7 +183,7 @@ async function loadAll() {
   }
 
   try {
-    const [sSnap, cSnap, aSnap, eSnap, secSnap, mastSnap, structSnap, reflSnap, profSnap, ilmCompSnap, ilmProfSnap, ilmLogsSnap] = await Promise.all([
+    const [sSnap, cSnap, aSnap, eSnap, secSnap, mastSnap, structSnap, reflSnap, profSnap, ilmCompSnap, ilmProfSnap, ilmLogsSnap, ilmFilesSnap] = await Promise.all([
       getDocs(collection(db, "semesters")),
       getDocs(collection(db, "courses")),
       getDocs(collection(db, "assignments")),
@@ -195,7 +195,8 @@ async function loadAll() {
       getDoc(doc(db, "app_settings", "profile")),
       getDocs(collection(db, "internship_companies")),
       getDoc(doc(db, "app_settings", "internship_profile")),
-      getDocs(collection(db, "daily_logs"))
+      getDocs(collection(db, "daily_logs")),
+      getDoc(doc(db, "ilm_data", "files"))
     ]);
 
     if (secSnap.exists()) {
@@ -251,10 +252,14 @@ async function loadAll() {
       state.ilmProfile = ilmProfSnap.data();
     }
     state.ilmLogs = ilmLogsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (ilmFilesSnap.exists()) {
+      state.ilmFiles = ilmFilesSnap.data().list || [];
+    }
     
     localStorage.setItem('ilm_companies', JSON.stringify(state.ilmCompanies));
     localStorage.setItem('ilm_profile', JSON.stringify(state.ilmProfile));
     localStorage.setItem('ilm_logs', JSON.stringify(state.ilmLogs));
+    localStorage.setItem('ilm_files', JSON.stringify(state.ilmFiles));
 
     // Focus Sync Listener
     onSnapshot(doc(db, 'app_state', 'focus_session'), (snap) => {
