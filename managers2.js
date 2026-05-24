@@ -133,17 +133,16 @@ function findCourseById(id) {
 
 // Anti-Distraction Listeners
 document.addEventListener('fullscreenchange', () => {
+  if (typeof state === 'undefined') return;
   if (!document.fullscreenElement && state.isImmersiveFocus && state.pomodoroActive) {
     handleFocusDistraction("ออกจากโหมดเต็มหน้าจอ");
   }
 });
 
 document.addEventListener('visibilitychange', () => {
+  if (typeof state === 'undefined') return;
   if (document.hidden && state.isImmersiveFocus && state.pomodoroActive) {
     handleFocusDistraction("มีการสลับหน้าจอ/แอป");
-    // Auto pause or just deduct points? User said "หยุดเวลาชั่วคราว"
-    // To keep it simple, we just deduct and keep running, or we can pause.
-    // Let's pause as requested.
     clearInterval(state.pomodoroTimer);
     state.pomodoroActive = false;
     Radio.onPomodoroPause();
@@ -1146,50 +1145,41 @@ function renderPublicSharePortal(slug) {
   }
   
   app.innerHTML = `
-    <div style="font-family:'Kanit', 'Sarabun', sans-serif; min-height:100vh; background:#0f172a; color:#f8fafc; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:30px 20px; box-sizing:border-box;">
+    <div style="font-family:'Kanit', 'Sarabun', sans-serif; min-height:100vh; background:#0f172a; color:#f8fafc; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:24px 16px; box-sizing:border-box;">
       
-      <!-- Top Verification Seals Header -->
-      <div style="max-width:600px; width:100%; text-align:center; margin-bottom:20px; background:rgba(16, 185, 129, 0.06); border:1px solid rgba(16, 185, 129, 0.2); border-radius:16px; padding:12px 15px; box-sizing:border-box; backdrop-filter:blur(10px); display:flex; align-items:center; gap:12px; justify-content:center;">
-        <span style="font-size:1.8rem;">🛡️</span>
-        <div style="text-align:left;">
-          <div style="font-weight:700; font-size:0.85rem; color:#10b981; text-transform:uppercase; letter-spacing:0.5px;">✓ Verified Professional Academic Share</div>
-          <div style="font-size:0.75rem; color:#94a3b8; font-weight:500;">ระบบสารสนเทศทรานสคริปต์ดิจิทัล คณะวิศวกรรมศาสตร์ มหาวิทยาลัยเกษตรศาสตร์</div>
+      <!-- Top identity bar -->
+      <div style="max-width:640px; width:100%; display:flex; align-items:center; gap:14px; margin-bottom:20px; background:rgba(30,41,59,0.6); border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:12px 16px; box-sizing:border-box; backdrop-filter:blur(12px);">
+        <div style="width:44px; height:44px; border-radius:50%; background:linear-gradient(135deg,#3b82f6,#1d4ed8); display:flex; align-items:center; justify-content:center; font-size:1.3rem; flex-shrink:0;">👤</div>
+        <div style="flex:1; text-align:left;">
+          <div style="font-size:1rem; font-weight:800; color:#f8fafc;">นายนิติพัฒน์ ทิพย์ชัย</div>
+          <div style="font-size:0.75rem; color:#94a3b8; margin-top:1px;">รหัสนิสิต 20067105527480 · วิศวกรรมวัสดุ ชั้นปีที่ 3</div>
+        </div>
+        <div style="text-align:right; flex-shrink:0;">
+          <div style="background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); color:#10b981; font-size:0.65rem; font-weight:700; padding:3px 8px; border-radius:6px; letter-spacing:0.5px;">✓ VERIFIED</div>
         </div>
       </div>
 
       <!-- Main Viewer Card -->
-      <div class="glass-card" style="max-width:600px; width:100%; padding:30px; border-radius:24px; border:1px solid rgba(255,255,255,0.1); background:rgba(30,41,59,0.65); backdrop-filter:blur(20px); box-shadow:0 20px 45px rgba(0,0,0,0.3); box-sizing:border-box; text-align:center;">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; text-align:left; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:15px; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
+      <div style="max-width:640px; width:100%; padding:24px; border-radius:20px; border:1px solid rgba(255,255,255,0.1); background:rgba(30,41,59,0.65); backdrop-filter:blur(20px); box-shadow:0 20px 45px rgba(0,0,0,0.3); box-sizing:border-box;">
+        
+        <!-- File name header -->
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:18px; text-align:left;">
+          <span style="font-size:1.8rem;">${item.name.toLowerCase().endsWith('.pdf') ? '📄' : (item.mimeType && item.mimeType.startsWith('image/') ? '🖼️' : '📝')}</span>
           <div>
-            <div style="font-size:0.75rem; font-weight:600; color:#3b82f6; text-transform:uppercase; letter-spacing:0.5px;">เจ้าของบัญชี (Student Profile)</div>
-            <h3 style="margin:2px 0 0 0; font-size:1.15rem; font-weight:800; color:#f8fafc;">นายนิติพัฒน์ ทิพย์ชัย</h3>
-            <div style="font-size:0.75rem; color:#94a3b8; margin-top:2px;">นิสิตวิศวกรรมวัสดุ ชั้นปีที่ 3 | รหัสนิสิต: 20067105527480</div>
-          </div>
-          <div style="text-align:right;">
-            <span style="background:rgba(59, 130, 246, 0.15); color:#60a5fa; font-weight:700; font-size:0.7rem; padding:4px 10px; border-radius:8px; border:1px solid rgba(59, 130, 246, 0.25);">
-              เป้าหมาย: กรมธุรกิจพลังงาน
-            </span>
+            <div style="font-size:1rem; font-weight:800; color:#f8fafc; word-break:break-word;">${item.name}</div>
+            <div style="font-size:0.72rem; color:#64748b; margin-top:2px;">${item.size}</div>
           </div>
         </div>
-        
-        <p style="font-size:0.8rem; color:#cbd5e1; text-align:left; line-height:1.5; margin:0 0 20px 0;">
-          **คำอธิบาย**: เอกสารชิ้นนี้ใช้สำหรับประกอบการสมัครประสานงานวิชาฝึกงานวิศวกรรมวัสดุ (01213399) ณ หน่วยงาน กองความปลอดภัยธุรกิจน้ำมัน/ก๊าซ กรมธุรกิจพลังงาน กระทรวงพลังงาน
-        </p>
 
         <!-- Document Preview -->
-        <div style="margin-bottom:25px;">
+        <div style="margin-bottom:20px;">
           ${previewHTML}
         </div>
         
-        <!-- Actions -->
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-          <button onclick="downloadPublicSharedFileDirect('${item.id}', '${item.name}', '${item.mimeType}')" style="background:linear-gradient(135deg, #10b981, #047857); color:white; border:none; padding:14px; border-radius:12px; font-weight:700; font-size:0.85rem; cursor:pointer; box-shadow:0 6px 15px rgba(16,185,129,0.25); transition:all 0.2s ease; display:flex; align-items:center; justify-content:center; gap:8px;">
-            <span>⬇️</span> ดาวน์โหลดไฟล์ตัวจริง
-          </button>
-          <a href="${window.location.origin}${window.location.pathname}" style="background:rgba(255,255,255,0.06); color:white; border:1px solid rgba(255,255,255,0.15); text-decoration:none; padding:14px; border-radius:12px; font-weight:700; font-size:0.85rem; display:flex; align-items:center; justify-content:center; box-sizing:border-box; transition:all 0.2s ease;">
-            💼 เข้าเว็บแอปพลิเคชันหลัก
-          </a>
-        </div>
+        <!-- Download Button only -->
+        <button onclick="downloadPublicSharedFileDirect('${item.id}', '${item.name}', '${item.mimeType}')" style="width:100%; background:linear-gradient(135deg, #10b981, #047857); color:white; border:none; padding:14px; border-radius:12px; font-weight:700; font-size:0.9rem; cursor:pointer; box-shadow:0 6px 15px rgba(16,185,129,0.3); transition:all 0.2s ease; display:flex; align-items:center; justify-content:center; gap:8px;">
+          ⬇️ ดาวน์โหลดไฟล์ตัวจริง
+        </button>
       </div>
     </div>
   `;
