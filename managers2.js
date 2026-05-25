@@ -622,6 +622,18 @@ function render() {
   const pro = getProStatus(gpa);
   const curSem = getCurrentSemester();
 
+  // Save active element focus and selection
+  const activeEl = document.activeElement;
+  const focusedId = activeEl && activeEl.id ? activeEl.id : null;
+  let selectionStart = null;
+  let selectionEnd = null;
+  if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+    try {
+      selectionStart = activeEl.selectionStart;
+      selectionEnd = activeEl.selectionEnd;
+    } catch(e) {}
+  }
+
   // Save scroll positions of all scrollable containers in the app
   const scrollPositions = {};
   const scrollableElements = app.querySelectorAll('*');
@@ -657,6 +669,20 @@ function render() {
   window.scrollTo(windowScrollLeft, windowScrollTop);
 
   attachAllEvents();
+
+  // Restore active element focus and selection
+  if (focusedId) {
+    const newEl = document.getElementById(focusedId);
+    if (newEl) {
+      newEl.focus();
+      if (selectionStart !== null && (newEl.tagName === 'INPUT' || newEl.tagName === 'TEXTAREA')) {
+        try {
+          newEl.setSelectionRange(selectionStart, selectionEnd);
+        } catch(e) {}
+      }
+    }
+  }
+
   if (state.pomodoroActive) updatePomodoroDisplay();
   if (state.view === 'dashboard') renderGPAXChart();
 }
