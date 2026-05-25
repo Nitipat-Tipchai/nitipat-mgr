@@ -253,7 +253,7 @@ async function startAppCore() {
     
     // Notion Initial Sync
     setTimeout(() => NotionHub.sync(), 2000);
-    if ('serviceWorker' in navigator && !navigator.serviceWorker.controller) {
+    if ('serviceWorker' in navigator) {
       initWebPush();
     }
     render();
