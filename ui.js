@@ -353,7 +353,7 @@ function renderCourses() {
     <div class="search-bar-modern" style="margin-bottom: 25px; display:flex; gap:10px;">
       <div style="position:relative; flex:1;">
         <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); opacity:0.5;">🔍</span>
-        <input type="text" class="nb-input" id="courseLocalSearch" placeholder="Search a course" style="padding-left:40px; border-radius:10px; background:#fff;" value="${state.courseSearch || ''}" oninput="state.courseSearch = this.value; render();">
+        <input type="text" class="nb-input" id="courseLocalSearch" placeholder="Search a course" style="padding-left:40px; border-radius:10px; background:#fff;" value="${state.courseSearch || ''}" oninput="state.courseSearch = this.value;">
       </div>
       <select class="glass-select" onchange="state.courseStatusFilter = this.value; render();">
         <option value="all" ${state.courseStatusFilter === 'all' ? 'selected' : ''}>— All Status —</option>
