@@ -4414,7 +4414,7 @@ async function setAttendanceStatus(courseId, status, skipGPS = false) {
     } catch (e) { console.warn("Firebase att sync failed", e); }
   };
 
-  if (c?.targetCoords && !skipGPS && status !== 'ขาดเรียน') {
+  if (c?.targetCoords && !skipGPS && !status.includes('Online') && !status.includes('ขาดเรียน')) {
     try {
       showToast('📍 กำลังตรวจสอบตำแหน่ง GPS...');
       const pos = await new Promise((res, rej) =>
@@ -4424,7 +4424,7 @@ async function setAttendanceStatus(courseId, status, skipGPS = false) {
       const dist = getDistance(pos.coords.latitude, pos.coords.longitude, tLat, tLon);
       distMeters = Math.round(dist * 1000);
 
-      if (dist > 0.2) { // 200 เมตร
+      if (dist > 0.5) { // 500 เมตร
         openModal('📍 อยู่นอกพื้นที่ห้องเรียน', `
               <div style="text-align:center; padding:10px;">
                 <p>คุณอยู่ห่างจากห้องเรียน <strong>${distMeters} เมตร</strong></p>
