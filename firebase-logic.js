@@ -338,7 +338,7 @@ async function autoArchiveCourses() {
     if (today > endD) {
       const courses = state.courses[s.id] || [];
       courses.forEach(c => {
-        if (!c.isArchived && c.grade && c.grade !== '-' && c.grade !== 'I' && c.grade !== 'N' && c.grade !== 'P' && c.grade !== 'F') {
+        if (!c.isArchived) {
           c.isArchived = true;
           fsUpd('courses', c.id, { isArchived: true });
           changed = true;
