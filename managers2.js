@@ -1031,7 +1031,8 @@ function renderTopNav(gpa, pro, curSem) {
         </div>
       </div>
     </div>
-  </div>`
+  </div>`;
+}
 
 function renderFloatingNav() {
   const items = [
