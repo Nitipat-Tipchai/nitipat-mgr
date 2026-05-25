@@ -4952,6 +4952,7 @@ async function requestNotificationPermission() {
         }
 
         showToast("✅ เปิดการแจ้งเตือน FCM สำเร็จ!");
+        state.notificationsGranted = true;
         new Notification("NITIPAT MANAGER", {
           body: "ระบบลงทะเบียนแจ้งเตือนแบบ Native สำเร็จแล้ว!",
           icon: "https://img1.pic.in.th/images/Gemini_Generated_Image_k0lkzwk0lkzwk0lk.png"
@@ -5032,12 +5033,35 @@ function scheduleAllNotifications() {
   if (!state.notificationsGranted) return;
   clearAllNotificationTimeouts();
 
-  function delayUntil(hour, min = 0) {
+  const todayStr = new Date().toDateString();
+  let notifiedMap = { date: '', events: [] };
+  try { notifiedMap = JSON.parse(localStorage.getItem('nitipat_notified') || '{"date":"","events":[]}'); } catch(e){}
+  if (notifiedMap.date !== todayStr) {
+    notifiedMap.date = todayStr;
+    notifiedMap.events = [];
+  }
+
+  function scheduleOrPush(id, title, body, hour, min = 0) {
+    const eventId = `${id}_${hour}_${min}`;
+    if (notifiedMap.events.includes(eventId)) return;
+
     const now = new Date();
     const t = new Date(now);
     t.setHours(hour, min, 0, 0);
-    if (t < now) return -1; // Already past for today
-    return t.getTime() - now.getTime();
+    
+    if (now >= t) {
+      pushNotif(title, body, 0);
+      notifiedMap.events.push(eventId);
+      localStorage.setItem('nitipat_notified', JSON.stringify(notifiedMap));
+    } else {
+      const delay = t.getTime() - now.getTime();
+      const tid = setTimeout(() => {
+        pushNotif(title, body, 0);
+        notifiedMap.events.push(eventId);
+        localStorage.setItem('nitipat_notified', JSON.stringify(notifiedMap));
+      }, delay);
+      state.notificationTimeouts.push(tid);
+    }
   }
 
   const assignments = Object.values(state.assignments).flat().filter(a => !a.submitted);
@@ -5046,21 +5070,12 @@ function scheduleAllNotifications() {
   assignments.forEach(a => {
     const days = getDaysUntil(a.dueDate);
     if (days === 7) {
-      [8, 19].forEach(hr => {
-        const d = delayUntil(hr);
-        if (d >= 0) pushNotif(`⏳ อีก 7 วันส่ง: ${a.title}`, `เช้า/เย็นอย่าลืมวางแผนทำนะ!`, d);
-      });
+      [8, 19].forEach(hr => scheduleOrPush(a.id, `⏳ อีก 7 วันส่ง: ${a.title}`, `เช้า/เย็นอย่าลืมวางแผนทำนะ!`, hr));
     } else if (days === 3) {
-      [8, 12, 16, 20].forEach(hr => {
-        const d = delayUntil(hr);
-        if (d >= 0) pushNotif(`⚠️ อีก 3 วันส่ง!! ${a.title}`, `ต้องเริ่มลงมือทำจริงจังแล้วนะ`, d);
-      });
+      [8, 12, 16, 20].forEach(hr => scheduleOrPush(a.id, `⚠️ อีก 3 วันส่ง!! ${a.title}`, `ต้องเริ่มลงมือทำจริงจังแล้วนะ`, hr));
     } else if (days === 1) {
       const msgs = ['เริ่มเช้าวันใหม่กับงาน!', 'โอกาสสุดท้ายของเช้านี้', 'ช่วงบ่ายต้องคืบหน้า', 'เย็นนี้ต้องใกล้เสร็จ', 'ค่ำคืนแห่งการปั่นงาน', '2 ชั่วโมงสุดท้ายก่อนเที่ยงคืน?', 'ยังไม่นอนใช่ไหม? ปั่นต่อ!'];
-      [7, 10, 13, 16, 19, 21, 23].forEach((hr, i) => {
-        const d = delayUntil(hr);
-        if (d >= 0) pushNotif(`🚨 พรุ่งนี้ต้องส่งแล้ว!!: ${a.title}`, msgs[i], d);
-      });
+      [7, 10, 13, 16, 19, 21, 23].forEach((hr, i) => scheduleOrPush(a.id, `🚨 พรุ่งนี้ต้องส่งแล้ว!!: ${a.title}`, msgs[i], hr));
     }
   });
 
@@ -5068,14 +5083,10 @@ function scheduleAllNotifications() {
     const days = getDaysUntil(e.date);
     const tips = ["ทบทวน Mind Map", "ทำโจทย์ย้อนหลัง 3 ปี", "สรุปประเด็นสำคัญใน 1 หน้า"];
     if (days === 5) {
-      [9, 14, 19].forEach((hr, i) => {
-        const d = delayUntil(hr);
-        if (d >= 0) pushNotif(`📖 อีก 5 วันสอบ: ${e.title}`, `Study Tip: ${tips[i]}`, d);
-      });
+      [9, 14, 19].forEach((hr, i) => scheduleOrPush(e.id, `📖 อีก 5 วันสอบ: ${e.title}`, `Study Tip: ${tips[i]}`, hr));
     } else if (days === 1) {
       for (let hr = 8; hr <= 22; hr += 2) {
-        const d = delayUntil(hr);
-        if (d >= 0) pushNotif(`🔥 พรุ่งนี้สอบ!!: ${e.title}`, `Priority สูงสุด! ทบทวนโค้งสุดท้าย`, d);
+        scheduleOrPush(e.id, `🔥 พรุ่งนี้สอบ!!: ${e.title}`, `Priority สูงสุด! ทบทวนโค้งสุดท้าย`, hr);
       }
     }
   });
