@@ -456,7 +456,7 @@ function renderSchedule() {
         const isActive = s.day === currentDay && currentHour >= s.startHour && currentHour < s.endHour;
         const boxStyle = isActive ? `border-color: var(--c-lime); background: rgba(132,204,22,0.2); box-shadow: 0 0 10px rgba(132,204,22,0.4);` : `border-color: ${c.color}; background: ${c.color}22;`;
 
-        return `<div class="tt-entry" data-course-id="${c.id}" onclick="renderCourseHub('${c.id}')" style="grid-column: ${s.day + 2}; grid-row: ${rowStart} / ${rowEnd}; ${boxStyle} cursor:pointer; position:relative;" title="ผู้สอน: ${c.instructor || '-'}\nห้อง: ${c.room || 'ไม่ระบุ'}">
+        return `<div class="tt-entry" data-course-id="${c.id}" onclick="renderCourseHub('${c.id}')" style="grid-column: ${s.day + 2}; grid-row: ${rowStart} / ${rowEnd}; ${boxStyle} cursor:pointer; position:relative;" title="ผู้สอน: ${c.instructor || '-'}nห้อง: ${c.room || 'ไม่ระบุ'}">
                 <div class="tt-code" style="color: ${isActive ? 'var(--c-lime)' : c.color}">${c.code}</div>
                 <div class="tt-name">${c.nameTh}</div>
                 <div style="font-size: 9px; opacity: 0.8; margin-top: 4px;">📍 ${c.room || 'Online'}</div>
@@ -586,7 +586,7 @@ window.exportIDCard = async () => {
 };
 
 window.deleteSemesterCalendar = async (semName) => {
-  if (!confirm(`ยืนยันที่จะลบปฏิทิน Google Calendar ของเทอม ${semName} ใช่หรือไม่?\n\n(การกระทำนี้จะลบ event ทั้งหมดที่เกี่ยวข้องกับเทอมนี้ออกจาก Google Calendar เท่านั้น แต่ข้อมูลในแอปยังคงอยู่)`)) return;
+  if (!confirm(`ยืนยันที่จะลบปฏิทิน Google Calendar ของเทอม ${semName} ใช่หรือไม่?nn(การกระทำนี้จะลบ event ทั้งหมดที่เกี่ยวข้องกับเทอมนี้ออกจาก Google Calendar เท่านั้น แต่ข้อมูลในแอปยังคงอยู่)`)) return;
 
   if (typeof google !== 'undefined' && google.script) {
     showToast(`⏳ กำลังลบปฏิทิน...`);
@@ -693,7 +693,7 @@ window.testAlarmSound = async () => {
 };
 
 window.resetFcmTokens = async () => {
-  if (!confirm('⚠️ ยืนยันที่จะล้างข้อมูลอุปกรณ์ทั้งหมดใช่หรือไม่?\n\n(ทุกเครื่องจะต้องกด "เปิดใช้งาน" ใหม่เพื่อรับแจ้งเตือนอีกครั้ง)')) return;
+  if (!confirm('⚠️ ยืนยันที่จะล้างข้อมูลอุปกรณ์ทั้งหมดใช่หรือไม่?nn(ทุกเครื่องจะต้องกด "เปิดใช้งาน" ใหม่เพื่อรับแจ้งเตือนอีกครั้ง)')) return;
 
   showToast('⏳ กำลังล้างข้อมูลอุปกรณ์...');
   try {
@@ -1993,19 +1993,19 @@ function renderMoneyPod() {
           );
 
           const text = result.data.text;
-          console.log("OCR Extracted Text:\n", text);
+          console.log("OCR Extracted Text:n", text);
 
           let amount = 0;
           let desc = 'ใบเสร็จสแกนผ่าน AI';
           let cat = '🍔 อาหาร & เครื่องดื่ม';
           let tags = '#ocr #receipt';
 
-          const lines = text.split('\n');
+          const lines = text.split('n');
           let parsedAmounts = [];
           
           lines.forEach(line => {
             const lowerLine = line.toLowerCase();
-            const cleanLine = lowerLine.replace(/\s+/g, '');
+            const cleanLine = lowerLine.replace(/s+/g, '');
             
             // Check for total keywords with OCR misspelling tolerances
             const isTotal = ['total', 'net', 'sum', 'ยอด', 'สุทธิ', 'รวม', 'ราคา', 'amount', 'baht', 'บาท', 'ฑธ', 'ขั้น', 'สุทธ'].some(kw => cleanLine.includes(kw));
@@ -2013,7 +2013,7 @@ function renderMoneyPod() {
             const isChange = ['ทอน', 'change'].some(kw => cleanLine.includes(kw));
 
             // 1. Decimal numbers with strict word boundaries to avoid tax ID collisions (e.g. 71.50, 5.50)
-            const decimalRegex = /\b([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})\b/g;
+            const decimalRegex = /b([0-9]{1,3}(?:,[0-9]{3})*.[0-9]{2})b/g;
             const matches = line.match(decimalRegex);
             
             if (matches) {
@@ -2030,7 +2030,7 @@ function renderMoneyPod() {
               });
             } else {
               // 2. Fallback to standalone integers with strict word boundaries to avoid long ID collisions (e.g. 71)
-              const intRegex = /\b([0-9]{1,4})\b/g;
+              const intRegex = /b([0-9]{1,4})b/g;
               const intMatches = line.match(intRegex);
               if (intMatches) {
                 intMatches.forEach(m => {
@@ -2221,7 +2221,7 @@ function renderMoneyPod() {
       const inst = state.moneyInstallments.find(i => i.id === instId);
       if (!inst) return;
       
-      if (confirm(`ชำระงวดประจำเดือนสำหรับ "${inst.name}" จำนวน ฿${inst.monthlyPayment.toFixed(2)} ใช่หรือไม่?\n(ยอดจะชำระจาก บัญชีธนาคาร 🏦)`)) {
+      if (confirm(`ชำระงวดประจำเดือนสำหรับ "${inst.name}" จำนวน ฿${inst.monthlyPayment.toFixed(2)} ใช่หรือไม่?n(ยอดจะชำระจาก บัญชีธนาคาร 🏦)`)) {
         const bank = state.moneyWallets.find(w => w.id === 'bank');
         if (!bank || bank.balance < inst.monthlyPayment) {
           showToast('⚠️ ยอดเงินในบัญชีธนาคารไม่เพียงพอ', 'err');
@@ -2295,7 +2295,7 @@ function renderMoneyPod() {
       const goal = state.moneyGoals.find(g => g.id === goalId);
       if (!goal) return;
       
-      const amtStr = prompt(`ฝากเงินเข้าเป้าหมาย "${goal.name}" (เป้าหมาย ฿${goal.target} | ออมแล้ว ฿${goal.saved})\nจำนวนเงินออม (บาท):`);
+      const amtStr = prompt(`ฝากเงินเข้าเป้าหมาย "${goal.name}" (เป้าหมาย ฿${goal.target} | ออมแล้ว ฿${goal.saved})nจำนวนเงินออม (บาท):`);
       const amount = parseFloat(amtStr);
       if (isNaN(amount) || amount <= 0) {
         if (amtStr !== null) showToast('⚠️ กรุณากรอกจำนวนเงินให้ถูกต้อง', 'err');
@@ -2339,8 +2339,8 @@ function renderMoneyPod() {
         return;
       }
       
-      let csv = "\uFEFF"; // UTF-8 BOM
-      csv += "วันที่,ประเภท,จำนวนเงิน(บาท),หมวดหมู่,จากกระเป๋า,ไปยังกระเป๋า,โน้ต,แท็ก\n";
+      let csv = "uFEFF"; // UTF-8 BOM
+      csv += "วันที่,ประเภท,จำนวนเงิน(บาท),หมวดหมู่,จากกระเป๋า,ไปยังกระเป๋า,โน้ต,แท็กn";
       
       state.moneyTransactions.forEach(t => {
         const fromW = t.fromWalletId ? (state.moneyWallets.find(w => w.id === t.fromWalletId)?.name || t.fromWalletId) : "";
@@ -2357,7 +2357,7 @@ function renderMoneyPod() {
           `"${(t.notes || '').replace(/"/g, '""')}"`,
           `"${(t.tags || '').replace(/"/g, '""')}"`
         ].join(",");
-        csv += row + "\n";
+        csv += row + "n";
       });
       
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -2603,7 +2603,7 @@ function renderMoneyPod() {
     };
 
     window.mpDeleteInstallment = function(instId) {
-      if (confirm('⚠️ คุณแน่ใจที่จะยกเลิกและลบสัญญาผ่อนชำระนี้ใช่หรือไม่?\n(ยอดคงเหลือในบัญชีจะไม่ได้รับผลกระทบ)')) {
+      if (confirm('⚠️ คุณแน่ใจที่จะยกเลิกและลบสัญญาผ่อนชำระนี้ใช่หรือไม่?n(ยอดคงเหลือในบัญชีจะไม่ได้รับผลกระทบ)')) {
         state.moneyInstallments = state.moneyInstallments.filter(i => i.id !== instId);
         saveMoneyPod();
         render();
@@ -2842,7 +2842,7 @@ function renderMoneyPod() {
                       <div style="display:flex; align-items:center; gap:5px; margin-top:2px;">
                         <span class="tx-sub">${t.date}</span>
                         ${t.tags ? t.tags.split(' ').map(tag => `<span class="pill-badge" style="background:#e2e8f0; color:#475569;">${tag}</span>`).join('') : ''}
-                        ${t.photo ? `<span onclick="openModal('📄 รูปแนบหลักฐาน', '<img src=\\\x22${t.photo}\\\x22 style=\\\x22width:100%; border-radius:12px;\\\x22>')\" style="font-size:10px; cursor:pointer; color:var(--primary); text-decoration:underline; font-weight:750;">🖼️ สลิป</span>` : ''}
+                        ${t.photo ? `<span onclick="openModal('📄 รูปแนบหลักฐาน', '<img src=x22${t.photo}x22 style=x22width:100%; border-radius:12px;x22>')" style="font-size:10px; cursor:pointer; color:var(--primary); text-decoration:underline; font-weight:750;">🖼️ สลิป</span>` : ''}
                       </div>
                     </div>
                   </div>
@@ -4430,12 +4430,12 @@ async function setAttendanceStatus(courseId, status, skipGPS = false) {
 
     const isInside = dist <= 0.5;
 
-    document.getElementById('gpsStatusText').innerHTML = \`
-      คุณอยู่ห่างจากห้องเรียน <strong>\${distMeters} เมตร</strong><br>
-      <span style="color:\${isInside ? '#10b981' : '#ef4444'}; font-size:14px;">
-        \${isInside ? '✅ อยู่ในรัศมีที่กำหนด (500ม.)' : '❌ นอกรัศมีที่กำหนด (500ม.)'}
+    document.getElementById('gpsStatusText').innerHTML = `
+      คุณอยู่ห่างจากห้องเรียน <strong>${distMeters} เมตร</strong><br>
+      <span style="color:${isInside ? '#10b981' : '#ef4444'}; font-size:14px;">
+        ${isInside ? '✅ อยู่ในรัศมีที่กำหนด (500ม.)' : '❌ นอกรัศมีที่กำหนด (500ม.)'}
       </span>
-    \`;
+    `;
 
     setTimeout(() => {
       const mapEl = document.getElementById('checkinMap');
@@ -4463,44 +4463,44 @@ async function setAttendanceStatus(courseId, status, skipGPS = false) {
     actionDiv.style.gap = '10px';
 
     if (isInside) {
-      actionDiv.innerHTML = \`
+      actionDiv.innerHTML = `
         <button class="btn-pastel-primary full" id="confirmCheckinBtn" style="border-radius:10px;">✅ ยืนยันการเช็คชื่อเข้าเรียน</button>
-      \`;
+      `;
       document.getElementById('confirmCheckinBtn').onclick = async () => {
         closeModal();
         await recordAttendance(status);
       };
     } else {
-      actionDiv.innerHTML = \`
+      actionDiv.innerHTML = `
         <p style="font-weight:700; margin:0; text-align:left;">กรุณาระบุเหตุผลเพื่อความโปร่งใส:</p>
         <textarea id="outOfGeofenceReason" class="glass-input full" placeholder="ทำไมถึงเช็คชื่อนอกบริเวณนี้? (เช่น ติดธุระ, เปลี่ยนห้องเรียน)" style="height:60px; border-radius:10px; font-size:12px; padding:10px; resize:none;"></textarea>
         <button class="btn-pastel-primary full" id="confirmCheckinBtn" style="border-radius:10px;">💾 ส่งเหตุผลและเช็คชื่อ</button>
-      \`;
+      `;
       document.getElementById('confirmCheckinBtn').onclick = async () => {
         const reason = document.getElementById('outOfGeofenceReason').value.trim();
         if (!reason) return showToast('⚠️ กรุณาระบุเหตุผล', 'err');
         closeModal();
-        await recordAttendance(\`\${status} (นอกพื้นที่: \${reason})\`);
+        await recordAttendance(`${status} (นอกพื้นที่: ${reason})`);
       };
     }
 
   } catch (err) {
-    document.getElementById('gpsStatusText').innerHTML = \`<span style="color:#ef4444;">⚠️ ไม่สามารถเข้าถึง GPS ได้ (\${err.message})</span>\`;
+    document.getElementById('gpsStatusText').innerHTML = `<span style="color:#ef4444;">⚠️ ไม่สามารถเข้าถึง GPS ได้ (${err.message})</span>`;
     document.getElementById('checkinMap').style.display = 'none';
     const actionDiv = document.getElementById('checkinActions');
     actionDiv.style.display = 'flex';
     actionDiv.style.flexDirection = 'column';
     actionDiv.style.gap = '10px';
-    actionDiv.innerHTML = \`
+    actionDiv.innerHTML = `
       <p style="font-weight:700; margin:0; text-align:left;">ระบุเหตุผลเพื่อเช็คชื่อแบบแมนนวล:</p>
       <textarea id="outOfGeofenceReason" class="glass-input full" placeholder="เหตุผลที่ระบบดึงพิกัดไม่ได้ (เช่น ไม่มีสัญญาณ, ไม่ได้เปิดพิกัด)" style="height:60px; border-radius:10px; font-size:12px; padding:10px; resize:none;"></textarea>
       <button class="btn-pastel-primary full" id="confirmCheckinBtn" style="border-radius:10px;">💾 เช็คชื่อแมนนวลพร้อมเหตุผล</button>
-    \`;
+    `;
     document.getElementById('confirmCheckinBtn').onclick = async () => {
       const reason = document.getElementById('outOfGeofenceReason').value.trim();
       if (!reason) return showToast('⚠️ กรุณาระบุเหตุผล', 'err');
       closeModal();
-      await recordAttendance(\`\${status} (ระบุแมนนวล: \${reason})\`);
+      await recordAttendance(`${status} (ระบุแมนนวล: ${reason})`);
     };
   }
 }
@@ -5014,7 +5014,7 @@ async function requestNotificationPermission() {
       // Since browser notification permission is granted, local notifications WILL work perfectly!
       state.notificationsGranted = true;
       
-      showToast("📢 เปิดใช้งาน 'ระบบแจ้งเตือนจำลองในหน้าต่างแอป' ให้คุณแล้ว!\n(เนื่องจากเครือข่าย/VPN บล็อกระบบ Push ของบราวเซอร์)", "success");
+      showToast("📢 เปิดใช้งาน 'ระบบแจ้งเตือนจำลองในหน้าต่างแอป' ให้คุณแล้ว!n(เนื่องจากเครือข่าย/VPN บล็อกระบบ Push ของบราวเซอร์)", "success");
       
       new Notification("NITIPAT MANAGER", {
         body: "เปิดใช้งานระบบการแจ้งเตือนจำลอง (Local Notifications) เรียบร้อยแล้ว!",
@@ -6049,7 +6049,7 @@ const NotionHub = {
   },
 
   async forceResetSync() {
-    if (!confirm("⚠️ คำเตือน: ระบบจะล้างรหัสประวัติการซิงก์วิชาและการบ้านเดิมทั้งหมดในฐานข้อมูล Firestore เพื่อบังคับให้วิชาเรียนและการบ้านทั้งหมดในแอปถูกส่งขึ้นไปสร้างใหม่ในฐานข้อมูล Notion ชุดใหม่โดยสมบูรณ์\n\nการกระทำนี้จะช่วยแก้ปัญหากรณีฐานข้อมูลบน Notion โดนสร้างใหม่แล้วแอปยังจำค่า ID เก่า\n\nคุณต้องการบังคับซิงก์ใหม่ทั้งหมดตอนนี้หรือไม่?")) {
+    if (!confirm("⚠️ คำเตือน: ระบบจะล้างรหัสประวัติการซิงก์วิชาและการบ้านเดิมทั้งหมดในฐานข้อมูล Firestore เพื่อบังคับให้วิชาเรียนและการบ้านทั้งหมดในแอปถูกส่งขึ้นไปสร้างใหม่ในฐานข้อมูล Notion ชุดใหม่โดยสมบูรณ์nnการกระทำนี้จะช่วยแก้ปัญหากรณีฐานข้อมูลบน Notion โดนสร้างใหม่แล้วแอปยังจำค่า ID เก่าnnคุณต้องการบังคับซิงก์ใหม่ทั้งหมดตอนนี้หรือไม่?")) {
       return;
     }
     
