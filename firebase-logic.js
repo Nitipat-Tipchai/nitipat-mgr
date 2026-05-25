@@ -163,7 +163,7 @@ function saveMoneyPod() {
 }
 
 async function loadAll() {
-  state.isInitializing = true;
+  state.isInitializing = false; // Allow immediate render using local data
   loadFromLocalStorage();
 
   const today = new Date().toDateString();
@@ -173,12 +173,10 @@ async function loadAll() {
     localStorage.setItem('focusScore', 100);
     localStorage.setItem('last_score_reset', today);
   }
-  render();
+  render(); // Instantly show UI to user
 
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     console.warn("Local offline mode: Bypassing Firebase Sync");
-    state.isInitializing = false;
-    if (!state.modal) render();
     return;
   }
 
