@@ -912,26 +912,126 @@ function renderTopNav(gpa, pro, curSem) {
     </div>
   </nav>
   <div class="fullscreen-menu glass-heavy" id="fullMenu">
-    <div class="fm-header"><button class="icon-btn" id="closeMenuBtn">✕</button></div>
-    <div class="fm-grid">
-      ${[
-      { id: 'dashboard', icon: '◈', label: 'Dashboard' }, { id: 'semesters', icon: '📅', label: 'เทอมการศึกษา' },
-      { id: 'courses', icon: '📚', label: 'รายวิชา' }, { id: 'schedule', icon: '▦', label: 'ตารางเรียน' },
-      { id: 'assignments', icon: '📋', label: 'การบ้าน' }, { id: 'exams', icon: '📝', label: 'ตารางสอบ' },
-      { id: 'grades', icon: '🎓', label: 'เกรด & GPA' }, { id: 'roadmap', icon: '🗺', label: 'Roadmap 4 ปี' },
-      { id: 'focus', icon: '🍅', label: 'Focus Mode' }, { id: 'club', icon: '🏛', label: 'งานชุมนุม' },
-      { id: 'calendar', icon: '🗓', label: 'ปฏิทินการศึกษา' },
-      { id: 'money-pod', icon: '🐽', label: 'MoneyPod' },
-      { id: 'ilm', icon: '💼', label: 'ฝึกงาน (ILM)' },
-      { id: 'trial-reg', icon: '🎫', label: 'ทดลองลงทะเบียน' },
+    <div class="fm-container">
+      <div class="fm-header">
+        <div class="fm-title-group">
+          <div class="brand-orb sm">⚗</div>
+          <div class="fm-brand-title">NITIPAT HUB</div>
+        </div>
+        <button class="icon-btn" id="closeMenuBtn">✕</button>
+      </div>
+      
+      <div class="fm-sections-wrapper">
+        <!-- 🎓 Academic Core Cluster -->
+        <div class="fm-card-cluster cluster-academic">
+          <div class="cluster-header">
+            <span class="cluster-icon">🎓</span>
+            <span class="cluster-title">Academic Core</span>
+          </div>
+          <div class="cluster-grid">
+            <button class="fm-item-v2 ${state.view === 'dashboard' ? 'active' : ''}" data-nav="dashboard">
+              <span class="fm-ic-v2">◈</span>
+              <span class="fm-lbl-v2">Dashboard</span>
+            </button>
+            <button class="fm-item-v2 ${state.view === 'schedule' ? 'active' : ''}" data-nav="schedule">
+              <span class="fm-ic-v2">📅</span>
+              <span class="fm-lbl-v2">ตารางเรียนหลัก</span>
+            </button>
+            <button class="fm-item-v2 ${state.view === 'courses' ? 'active' : ''}" data-nav="courses">
+              <span class="fm-ic-v2">📚</span>
+              <span class="fm-lbl-v2">รายวิชาเรียน</span>
+            </button>
+            <button class="fm-item-v2 ${state.view === 'roadmap' ? 'active' : ''}" data-nav="roadmap">
+              <span class="fm-ic-v2">🗺</span>
+              <span class="fm-lbl-v2">Roadmap 4 ปี</span>
+            </button>
+            <button class="fm-item-v2 ${state.view === 'grades' ? 'active' : ''}" data-nav="grades">
+              <span class="fm-ic-v2">🎓</span>
+              <span class="fm-lbl-v2">เกรด & GPAX</span>
+            </button>
+            <button class="fm-item-v2 ${state.view === 'semesters' ? 'active' : ''}" data-nav="semesters">
+              <span class="fm-ic-v2">🏫</span>
+              <span class="fm-lbl-v2">เทอมการศึกษา</span>
+            </button>
+            <button class="fm-item-v2 ${state.view === 'trial-reg' ? 'active' : ''}" data-nav="trial-reg" style="grid-column: span 2;">
+              <span class="fm-ic-v2">🎫</span>
+              <span class="fm-lbl-v2">จำลองการลงทะเบียน (Simulator)</span>
+            </button>
+          </div>
+        </div>
 
-      { id: 'settings', icon: '⚙️', label: 'ตั้งค่า' }
-    ].map(n => `<button class="fm-item ${state.view === n.id ? 'active' : ''}" data-nav="${n.id}">
-        <span class="fm-ic">${n.icon}</span><span class="fm-lbl">${n.label}</span>
-      </button>`).join('')}
+        <!-- 📝 Tasks & Performance Cluster -->
+        <div class="fm-card-cluster cluster-tasks">
+          <div class="cluster-header">
+            <span class="cluster-icon">📝</span>
+            <span class="cluster-title">Tasks & Focus</span>
+          </div>
+          <div class="cluster-grid">
+            <button class="fm-item-v2 ${state.view === 'assignments' ? 'active' : ''}" data-nav="assignments">
+              <span class="fm-ic-v2">📋</span>
+              <span class="fm-lbl-v2">การบ้าน / งาน</span>
+            </button>
+            <button class="fm-item-v2 ${state.view === 'exams' ? 'active' : ''}" data-nav="exams">
+              <span class="fm-ic-v2">📝</span>
+              <span class="fm-lbl-v2">ตารางสอบ</span>
+            </button>
+            <button class="fm-item-v2 ${state.view === 'calendar' ? 'active' : ''}" data-nav="calendar">
+              <span class="fm-ic-v2">🗓</span>
+              <span class="fm-lbl-v2">ปฏิทินงานรวม</span>
+            </button>
+            <button class="fm-item-v2 ${state.view === 'club' ? 'active' : ''}" data-nav="club">
+              <span class="fm-ic-v2">🏛</span>
+              <span class="fm-lbl-v2">งานชุมนุม</span>
+            </button>
+            <button class="fm-item-v2 ${state.view === 'focus' ? 'active' : ''}" data-nav="focus">
+              <span class="fm-ic-v2">🍅</span>
+              <span class="fm-lbl-v2">โหมดสมาธิ (Focus)</span>
+            </button>
+            <button class="fm-item-v2 ${state.view === 'alarm' ? 'active' : ''}" data-nav="alarm">
+              <span class="fm-ic-v2">🔔</span>
+              <span class="fm-lbl-v2">ระบบนาฬิกาปลุก</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 💸 Student Life & Vault Cluster -->
+        <div class="fm-card-cluster cluster-life">
+          <div class="cluster-header">
+            <span class="cluster-icon">💸</span>
+            <span class="cluster-title">Student Life & Vault</span>
+          </div>
+          <div class="cluster-grid">
+            <button class="fm-item-v2 ${state.view === 'money-pod' ? 'active' : ''}" data-nav="money-pod">
+              <span class="fm-ic-v2">🐽</span>
+              <span class="fm-lbl-v2">MoneyPod การเงิน</span>
+            </button>
+            <button class="fm-item-v2 ${state.view === 'ilm' ? 'active' : ''}" data-nav="ilm">
+              <span class="fm-ic-v2">💼</span>
+              <span class="fm-lbl-v2">ฝึกงาน & สิทธิ์ (ILM)</span>
+            </button>
+            <button class="fm-item-v2" onclick="showIDCardModal(); document.getElementById('fullMenu')?.classList.remove('show');">
+              <span class="fm-ic-v2">🪪</span>
+              <span class="fm-lbl-v2">บัตรนิสิต Digital ID</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ⚙️ App Hub & Preferences Cluster -->
+        <div class="fm-card-cluster cluster-settings">
+          <div class="cluster-header">
+            <span class="cluster-icon">⚙️</span>
+            <span class="cluster-title">Preferences</span>
+          </div>
+          <div class="cluster-grid">
+            <button class="fm-item-v2 ${state.view === 'settings' ? 'active' : ''}" data-nav="settings" style="grid-column: span 3;">
+              <span class="fm-ic-v2">⚙️</span>
+              <span class="fm-lbl-v2">ตั้งค่าระบบ & โปรไฟล์</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
-  </div>`;
-}
+  </div>`
 
 function renderFloatingNav() {
   const items = [
