@@ -1,48 +1,4 @@
 // ══════════════════════════════════════════════════
-// WEB AUDIO SYNTHESIZED SOUND CHIMES
-// ══════════════════════════════════════════════════
-function playSuccessSound() {
-  try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
-    
-    // Note 1 (Chime base)
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-    osc1.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.1); // A5
-    
-    gain1.gain.setValueAtTime(0.12, ctx.currentTime);
-    gain1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
-    
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    
-    // Note 2 (Sparkle high-pitch)
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(1174.66, ctx.currentTime + 0.08); // D6
-    
-    gain2.gain.setValueAtTime(0.06, ctx.currentTime + 0.08);
-    gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.45);
-    
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    
-    osc1.start();
-    osc1.stop(ctx.currentTime + 0.4);
-    osc2.start(ctx.currentTime + 0.08);
-    osc2.stop(ctx.currentTime + 0.5);
-  } catch (e) {
-    console.warn("Web Audio API blocked or not supported:", e);
-  }
-}
-window.playSuccessSound = playSuccessSound;
-
-// ══════════════════════════════════════════════════
 // DASHBOARD
 // ══════════════════════════════════════════════════
 function renderDashboardInternshipPhaseWidget() {
@@ -480,38 +436,36 @@ function renderSchedule() {
       </div>
     </div>
 
-    <div class="tt-scroll-wrap">
-      <div class="tt-container glass-card" id="timetable">
-        <div class="tt-grid">
-          <div class="tt-corner"></div>
-          ${(() => {
-        const now = new Date();
-        const currentDay = now.getDay() === 0 ? 6 : now.getDay() - 1;
-        const currentHour = now.getHours() + (now.getMinutes() / 60);
+    <div class="tt-container glass-card" id="timetable">
+      <div class="tt-grid">
+        <div class="tt-corner"></div>
+        ${(() => {
+      const now = new Date();
+      const currentDay = now.getDay() === 0 ? 6 : now.getDay() - 1;
+      const currentHour = now.getHours() + (now.getMinutes() / 60);
 
-        let html = daysShort.map((d, i) => `<div class="tt-header ${i === currentDay ? 'current-day' : ''}">${d}</div>`).join('');
+      let html = daysShort.map((d, i) => `<div class="tt-header ${i === currentDay ? 'current-day' : ''}">${d}</div>`).join('');
 
-        html += Array.from({ length: 13 }, (_, i) => 8 + i).map(h => `
-              <div class="tt-time-label" style="grid-row: ${((h - 8) * 2) + 2}">${h}:00</div>
-            `).join('');
+      html += Array.from({ length: 13 }, (_, i) => 8 + i).map(h => `
+            <div class="tt-time-label" style="grid-row: ${((h - 8) * 2) + 2}">${h}:00</div>
+          `).join('');
 
-        html += courses.flatMap(c => (c.schedules || c.schedule || []).map(s => {
-          const rowStart = Math.floor((s.startHour - 8) * 2) + 2;
-          const rowEnd = Math.ceil((s.endHour - 8) * 2) + 2;
-          const isActive = s.day === currentDay && currentHour >= s.startHour && currentHour < s.endHour;
-          const boxStyle = isActive ? `border-color: var(--c-lime); background: rgba(132,204,22,0.2); box-shadow: 0 0 10px rgba(132,204,22,0.4);` : `border-color: ${c.color}; background: ${c.color}22;`;
+      html += courses.flatMap(c => (c.schedules || c.schedule || []).map(s => {
+        const rowStart = Math.floor((s.startHour - 8) * 2) + 2;
+        const rowEnd = Math.ceil((s.endHour - 8) * 2) + 2;
+        const isActive = s.day === currentDay && currentHour >= s.startHour && currentHour < s.endHour;
+        const boxStyle = isActive ? `border-color: var(--c-lime); background: rgba(132,204,22,0.2); box-shadow: 0 0 10px rgba(132,204,22,0.4);` : `border-color: ${c.color}; background: ${c.color}22;`;
 
-          return `<div class="tt-entry" data-course-id="${c.id}" onclick="renderCourseHub('${c.id}')" style="grid-column: ${s.day + 2}; grid-row: ${rowStart} / ${rowEnd}; ${boxStyle} cursor:pointer; position:relative;" title="ผู้สอน: ${c.instructor || '-'}\nห้อง: ${c.room || 'ไม่ระบุ'}">
-                  <div class="tt-code" style="color: ${isActive ? 'var(--c-lime)' : c.color}">${c.code}</div>
-                  <div class="tt-name">${c.nameTh}</div>
-                  <div style="font-size: 9px; opacity: 0.8; margin-top: 4px;">📍 ${c.room || 'Online'}</div>
-                  ${isActive ? `<div style="position:absolute; top:4px; right:4px; width:8px; height:8px; background:var(--c-lime); border-radius:50%; animation: pulse 1.5s infinite;"></div>` : ''}
-                </div>`;
-        })).join('');
+        return `<div class="tt-entry" data-course-id="${c.id}" onclick="renderCourseHub('${c.id}')" style="grid-column: ${s.day + 2}; grid-row: ${rowStart} / ${rowEnd}; ${boxStyle} cursor:pointer; position:relative;" title="ผู้สอน: ${c.instructor || '-'}\nห้อง: ${c.room || 'ไม่ระบุ'}">
+                <div class="tt-code" style="color: ${isActive ? 'var(--c-lime)' : c.color}">${c.code}</div>
+                <div class="tt-name">${c.nameTh}</div>
+                <div style="font-size: 9px; opacity: 0.8; margin-top: 4px;">📍 ${c.room || 'Online'}</div>
+                ${isActive ? `<div style="position:absolute; top:4px; right:4px; width:8px; height:8px; background:var(--c-lime); border-radius:50%; animation: pulse 1.5s infinite;"></div>` : ''}
+              </div>`;
+      })).join('');
 
-        return html;
-      })()}
-        </div>
+      return html;
+    })()}
       </div>
     </div>
   </div>`;
@@ -956,13 +910,8 @@ window.handleDrop = async (e, newStatus) => {
   if (assignment && assignment.status !== newStatus) {
     assignment.status = newStatus;
     // Auto-update 'submitted' flag if moved to 'ส่งแล้ว'
-    if (newStatus === 'ส่งแล้ว') {
-      assignment.submitted = true;
-      playSuccessSound();
-    }
-    else if (newStatus === 'ยังไม่เริ่ม') {
-      assignment.submitted = false;
-    }
+    if (newStatus === 'ส่งแล้ว') assignment.submitted = true;
+    else if (newStatus === 'ยังไม่เริ่ม') assignment.submitted = false;
 
     showToast(`📦 ย้ายงานไปที่ [${newStatus}]`);
     localStorage.setItem('assignments', JSON.stringify(state.assignments));
@@ -2256,7 +2205,6 @@ function renderMoneyPod() {
       state.mpUploadedPhoto = null;
       saveMoneyPod();
       render();
-      playSuccessSound();
       showToast('✅ บันทึกรายการลงกระเป๋าเงินสำเร็จ!');
     };
 
@@ -4148,12 +4096,7 @@ function attachAllEvents() {
   document.querySelectorAll('[data-toggle-assign]').forEach(b => b.onclick = async () => {
     const id = b.dataset.toggleAssign;
     const a = Object.values(state.assignments).flat().find(x => x.id === id);
-    if (a) { 
-      const newSubmitted = !a.submitted;
-      if (newSubmitted) playSuccessSound();
-      await fsUpd('assignments', id, { submitted: newSubmitted, status: newSubmitted ? 'ส่งแล้ว' : 'ยังไม่เริ่ม' }); 
-      await loadAll(); 
-    }
+    if (a) { await fsUpd('assignments', id, { submitted: !a.submitted, status: !a.submitted ? 'ส่งแล้ว' : 'ยังไม่เริ่ม' }); await loadAll(); }
   });
   document.querySelectorAll('[data-del-assign]').forEach(b => b.onclick = async () => {
     const id = b.dataset.delAssign;
