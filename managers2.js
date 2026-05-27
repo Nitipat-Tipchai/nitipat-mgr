@@ -719,7 +719,7 @@ function renderStatusBanner() {
   } else if (nextClass) {
     const diffMins = Math.round((nextClass.slot.startHour - currentTimeVal) * 60);
     const diffHours = Math.floor(diffMins / 60);
-    const displayTime = diffHours > 0 ? `${diffHours} ชม. ${diffMins % 60} นาที` : `${displayTime} นาที`;
+    const displayTime = diffHours > 0 ? `${diffHours} ชม. ${diffMins % 60} นาที` : `${diffMins} นาที`;
     return `
       <div class="status-banner next">
         <span class="sb-icon">⏳</span>
