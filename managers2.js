@@ -645,46 +645,55 @@ function render() {
   const windowScrollTop = window.scrollY;
   const windowScrollLeft = window.scrollX;
 
-  app.innerHTML = `
-    <div class="app-container">
-      ${renderStatusBanner()}
-      ${renderTopNav(gpa, pro, curSem)}
-      <div class="page-content" id="pageContent">
-        ${renderPage(gpa, pro, curSem)}
+  const updateDOM = () => {
+    app.innerHTML = `
+      <div class="app-container">
+        ${renderStatusBanner()}
+        ${renderTopNav(gpa, pro, curSem)}
+        <div class="page-content" id="pageContent">
+          ${renderPage(gpa, pro, curSem)}
+        </div>
+        ${renderFloatingNav()}
       </div>
-      ${renderFloatingNav()}
-    </div>
-    ${renderFAB()}
-    ${state.modal ? renderModal() : ''}
-  `;
+      ${renderFAB()}
+      ${state.modal ? renderModal() : ''}
+    `;
 
-  // Restore scroll positions of all scrollable containers
-  const newScrollableElements = app.querySelectorAll('*');
-  newScrollableElements.forEach((el, idx) => {
-    if (scrollPositions[idx]) {
-      el.scrollTop = scrollPositions[idx].top;
-      el.scrollLeft = scrollPositions[idx].left;
-    }
-  });
-  window.scrollTo(windowScrollLeft, windowScrollTop);
+    // Restore scroll positions of all scrollable containers
+    const newScrollableElements = app.querySelectorAll('*');
+    newScrollableElements.forEach((el, idx) => {
+      if (scrollPositions[idx]) {
+        el.scrollTop = scrollPositions[idx].top;
+        el.scrollLeft = scrollPositions[idx].left;
+      }
+    });
+    window.scrollTo(windowScrollLeft, windowScrollTop);
 
-  attachAllEvents();
+    attachAllEvents();
 
-  // Restore active element focus and selection
-  if (focusedId) {
-    const newEl = document.getElementById(focusedId);
-    if (newEl) {
-      newEl.focus();
-      if (selectionStart !== null && (newEl.tagName === 'INPUT' || newEl.tagName === 'TEXTAREA')) {
-        try {
-          newEl.setSelectionRange(selectionStart, selectionEnd);
-        } catch(e) {}
+    // Restore active element focus and selection
+    if (focusedId) {
+      const newEl = document.getElementById(focusedId);
+      if (newEl) {
+        newEl.focus();
+        if (selectionStart !== null && (newEl.tagName === 'INPUT' || newEl.tagName === 'TEXTAREA')) {
+          try {
+            newEl.setSelectionRange(selectionStart, selectionEnd);
+          } catch(e) {}
+        }
       }
     }
-  }
 
-  if (state.pomodoroActive) updatePomodoroDisplay();
-  if (state.view === 'dashboard') renderGPAXChart();
+    if (state.pomodoroActive) updatePomodoroDisplay();
+    if (state.view === 'dashboard') renderGPAXChart();
+  };
+
+  // Use native View Transitions API for buttery smooth UI changes without flashing!
+  if (document.startViewTransition) {
+    document.startViewTransition(() => updateDOM());
+  } else {
+    updateDOM();
+  }
 }
 
 
