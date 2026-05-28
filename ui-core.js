@@ -198,17 +198,7 @@ async function initApp() {
       }
     }, 300000);
 
-    setInterval(() => {
-      if (state.modal) return;
-      if (document.activeElement && (
-        document.activeElement.tagName === 'INPUT' || 
-        document.activeElement.tagName === 'TEXTAREA' || 
-        document.activeElement.hasAttribute('contenteditable')
-      )) {
-        return; // Skip background re-rendering while the student is actively typing to prevent input focus loss and cursor jumping!
-      }
-      render();
-    }, 30000);
+    // Removed 30-second auto-render to prevent annoying background refreshes
   } catch (e) {
     console.error("Initialization failed:", e);
     render();
@@ -229,4 +219,4 @@ document.addEventListener('visibilitychange', () => {
     localStorage.setItem('focusTree', JSON.stringify(state.tree));
     showToast('🪨 ต้นไม้ตายแล้ว! อย่าออกจากหน้าจอระหว่างโฟกัส', 'err');
   }
-});
+});
