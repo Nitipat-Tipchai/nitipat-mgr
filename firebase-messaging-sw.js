@@ -37,7 +37,7 @@ self.addEventListener('notificationclick', function (event) {
 // ══════════════════════════════════════════════════
 // PWA OFFLINE-FIRST ASSETS CACHING
 // ══════════════════════════════════════════════════
-const CACHE_NAME = 'nitipat-manager-v3';
+const CACHE_NAME = 'nitipat-manager-v4';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -48,7 +48,26 @@ const ASSETS_TO_CACHE = [
   './managers.js',
   './managers2.js',
   './state.js',
-  './ui.js',
+  './ilm-logic.js',
+  './ilm-ui.js',
+  './ui-dashboard.js',
+  './ui-schedule.js',
+  './ui-assignments.js',
+  './ui-exams.js',
+  './ui-grades.js',
+  './ui-roadmap.js',
+  './ui-calendar.js',
+  './ui-focus.js',
+  './ui-club.js',
+  './ui-moneypod.js',
+  './ui-settings.js',
+  './ui-styles.js',
+  './ui-forms.js',
+  './ui-utils.js',
+  './ui-drive.js',
+  './ui-notion.js',
+  './ui-core.js',
+  './trial-reg.js',
   'https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&family=Kanit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
