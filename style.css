@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&display=swap');
     *,
     *::before,
     *::after {
@@ -2084,7 +2085,6 @@
     }
 
     /* ‚ïê‚ïê FOLDER DESIGN ‚ïê‚ïê */
-    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&display=swap');
 
     .course-grid {
       display: grid;
@@ -5224,7 +5224,7 @@
         grid-template-columns: 1fr;
       }
     }
-/* ÕÕ SMART DRIVE UI OVERHAUL ÕÕ */
+/*    SMART DRIVE UI OVERHAUL    */
 .drive-breadcrumbs {
   padding: 8px 12px;
   background: var(--glass);
@@ -5715,3 +5715,4 @@
 .chart-svg circle:hover {
   r: 6;
 }
+
