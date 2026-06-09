@@ -813,6 +813,7 @@ const PDFManager = {
       gpax: getCumGPA(),
       credits: getTotalPassedCredits(),
       courses: state.courses,
+      semesters: state.semesters,
       timestamp: new Date().toISOString()
     };
 
