@@ -369,15 +369,14 @@ function renderAcademicReport() {
 
       .fab-container {
         position: fixed;
-        bottom: 30px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(255, 255, 255, 0.8);
+        top: 25px;
+        right: 30px;
+        background: rgba(255, 255, 255, 0.9);
         backdrop-filter: blur(15px);
         -webkit-backdrop-filter: blur(15px);
         padding: 10px 20px;
         border-radius: 999px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.1), 0 0 0 1px rgba(0,0,0,0.05);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.05);
         display: flex;
         gap: 15px;
         z-index: 10000;
@@ -413,13 +412,21 @@ function renderAcademicReport() {
 
       /* PRINT CSS: hides UI, formats A4 page */
       @media print {
-        body > *:not(.report-viewer-overlay) { display: none !important; }
-        .fab-container { display: none !important; }
-        .report-viewer-overlay {
-          position: absolute; top: 0; left: 0; background: none; padding: 0; overflow: visible; display: block;
+        body * {
+          visibility: hidden;
         }
-        .a4-document {
-          box-shadow: none; padding: 0; border: none; max-width: 100%; min-height: auto;
+        #a4-preview-element, #a4-preview-element * {
+          visibility: visible;
+        }
+        #a4-preview-element {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          margin: 0;
+          padding: 0;
+          box-shadow: none;
+          border: none;
         }
         @page { size: A4 portrait; margin: 10mm 15mm; }
       }
