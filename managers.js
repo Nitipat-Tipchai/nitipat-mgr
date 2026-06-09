@@ -1,4 +1,4 @@
-﻿
+
 const FOCUS_PRESETS = [
   { name: 'Pomodoro', work: 25, break: 5, icon: '🍅' },
   { name: 'Deep Work', work: 50, break: 10, icon: '⚡' },
@@ -310,10 +310,15 @@ function getDistance(lat1, lon1, lat2, lon2) {
 
 const GPSManager = {
   hasCheckedInToday(courseId) {
-    const history = state.attendanceHistory[courseId] || [];
-    if (history.length === 0) return false;
-    const today = new Date().toDateString();
-    return history.some(record => new Date(record.timestamp).toDateString() === today);
+    const history = state.attendanceHistory[courseId];
+    if (!history) return false;
+    if (Array.isArray(history)) {
+      if (history.length === 0) return false;
+      const today = new Date().toDateString();
+      return history.some(record => new Date(record.timestamp).toDateString() === today);
+    }
+    const dateKey = new Date().toLocaleDateString('en-CA');
+    return !!history[dateKey];
   },
 
   async checkInSuggestion() {
@@ -376,9 +381,13 @@ const GPSManager = {
   },
 
   confirmCheckIn(courseId, mode) {
-    const now = new Date().toISOString();
-    if (!state.attendanceHistory[courseId]) state.attendanceHistory[courseId] = [];
-    state.attendanceHistory[courseId].push({ timestamp: now, mode: mode });
+    const now = new Date();
+    const dateKey = now.toLocaleDateString('en-CA');
+    if (!state.attendanceHistory[courseId]) state.attendanceHistory[courseId] = {};
+    if (Array.isArray(state.attendanceHistory[courseId])) {
+      state.attendanceHistory[courseId] = {};
+    }
+    state.attendanceHistory[courseId][dateKey] = { timestamp: now.toISOString(), mode: mode, status: mode };
     localStorage.setItem('attendance_history', JSON.stringify(state.attendanceHistory));
     showToast(`เช็คชื่อ ${mode} สำเร็จ!`, "ok");
     closeModal();
