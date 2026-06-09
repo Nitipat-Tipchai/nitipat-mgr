@@ -689,10 +689,38 @@ function getTotalPassedCredits() {
 function getProStatus(gpa) {
   const g = parseFloat(gpa);
   if (isNaN(g) || gpa === '-') return null;
-  if (g < 1.5) return 'expelled';
-  if (g < 1.75) return 'pro-high';
-  if (g < 2.0) return 'pro-low';
+  if (g < 1.75) return 'pro-low';
+  if (g < 2.00) return 'pro-high';
   return 'safe';
+}
+
+function getConsecutiveLowProCount() {
+  if (!state.semesters || state.semesters.length === 0) return 0;
+  let count = 0;
+  let allSoFar = [];
+  
+  // assuming state.semesters is ordered chronologically
+  for (let s of state.semesters) {
+    const courses = state.courses[s.id] || [];
+    let added = false;
+    courses.forEach(c => {
+      if (c.grade) {
+        allSoFar.push(c);
+        added = true;
+      }
+    });
+    if (added) {
+      const gpaSoFar = parseFloat(calcGPAFromList(allSoFar));
+      if (!isNaN(gpaSoFar)) {
+        if (gpaSoFar < 1.75) {
+          count++;
+        } else {
+          count = 0; // reset
+        }
+      }
+    }
+  }
+  return count;
 }
 
 function getDaysUntil(d) { return Math.ceil((new Date(d) - new Date()) / (864e5)); }
