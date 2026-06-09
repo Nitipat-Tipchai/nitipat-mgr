@@ -173,7 +173,7 @@ function renderDashboard(gpaVal, proVal, curSemVal) {
           <div style="font-size:11px; opacity:0.7;">Check-in Nearby</div>
         </div>
       </div>
-      <div class="glass-card interactive" onclick="PDFManager.generateTranscriptReport()" style="display:flex; align-items:center; gap:12px; padding:15px; background:rgba(79, 70, 229, 0.05); border-left:4px solid #4f46e5;">
+      <div class="glass-card interactive" onclick="state.view = 'academic-report'; render();" style="display:flex; align-items:center; gap:12px; padding:15px; background:rgba(79, 70, 229, 0.05); border-left:4px solid #4f46e5;">
         <div style="font-size:24px;">📄</div>
         <div>
           <div style="font-weight:700; font-size:13px; color:#4f46e5;">Academic Report</div>
@@ -415,4 +415,4 @@ function renderCourses() {
   }).join('') || `<div class="empty-hero"><div class="empty-icon">${isArchiveView ? '🗄' : '📚'}</div><h3>Empty</h3></div>`}
   </div>`;
 }
-
+
