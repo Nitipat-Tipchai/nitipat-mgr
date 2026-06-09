@@ -689,7 +689,7 @@ function render() {
   };
 
   // Use native View Transitions API for buttery smooth UI changes without flashing!
-  if (document.startViewTransition) {
+  if (document.startViewTransition && !state.modal) {
     const transition = document.startViewTransition(() => updateDOM());
     transition.ready.catch(() => {});
     transition.finished.catch(() => {});
