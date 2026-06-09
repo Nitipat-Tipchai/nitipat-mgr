@@ -167,12 +167,19 @@ async function initApp() {
     
     const urlParams = new URLSearchParams(window.location.search);
     const isShareLink = urlParams.has('share');
+    const isVerifyLink = urlParams.has('verify');
 
     if (isShareLink) {
       state.isLocked = false;
       document.getElementById('login-gate')?.classList.add('inactive');
       if (typeof startAppPublic === 'function') {
         await startAppPublic();
+      }
+    } else if (isVerifyLink) {
+      state.isLocked = false;
+      document.getElementById('login-gate')?.classList.add('inactive');
+      if (typeof startAppVerify === 'function') {
+        await startAppVerify(urlParams.get('verify'));
       }
     } else if (unlocked === 'true' && !isTimeout) {
       state.isLocked = false;
