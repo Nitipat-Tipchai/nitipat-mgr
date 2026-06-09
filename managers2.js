@@ -1261,6 +1261,7 @@ function downloadPublicSharedFileDirect(fileId, name, mimeType) {
 // ══════════════════════════════════════════════════
 function renderPage(gpa, pro, curSem) {
   switch (state.view) {
+    case 'academic-report': return renderAcademicReport();
     case 'dashboard': return renderDashboard(gpa, pro, curSem);
     case 'semesters': return renderSemesters();
     case 'courses': return renderCourses();
