@@ -294,13 +294,18 @@ window.generateAndPrintFrontendPDF = async function() {
       timestamp: new Date().toISOString()
     };
     
-    let docId = "LOCAL-" + Date.now();
+    let docId = "DOC-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).substring(2, 6).toUpperCase();
     try {
-      if (typeof db !== 'undefined' && typeof collection !== 'undefined' && typeof addDoc !== 'undefined') {
-        const docRef = await addDoc(collection(db, "verifications"), docData);
-        docId = docRef.id;
+      if (typeof db !== 'undefined' && typeof doc !== 'undefined' && typeof setDoc !== 'undefined') {
+        await setDoc(doc(db, "verifications", docId), docData);
+      } else {
+        console.warn("Firestore not loaded globally");
+        docId = "LOCAL-" + Date.now();
       }
-    } catch(e) { console.warn("Firestore error:", e); }
+    } catch(e) { 
+      console.warn("Firestore error:", e); 
+      docId = "LOCAL-" + Date.now();
+    }
     
     const verifyUrl = "https://nitipat-mgr.vercel.app/?verify=" + docId;
     
