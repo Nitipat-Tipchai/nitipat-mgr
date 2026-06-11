@@ -306,6 +306,7 @@ async function startAppCore() {
     }
 
     const app = initializeApp(firebaseConfig);
+    window.app = app;
     db = initializeFirestore(app, {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
       experimentalForceLongPolling: true
@@ -323,7 +324,6 @@ async function startAppCore() {
 
     await loadAll();
     startHyperNotifications();
-    scheduleAllNotifications();
     
     // Notion Initial Sync
 
@@ -358,6 +358,7 @@ window.startAppPublic = async function() {
     if (!firebaseConfig.apiKey) return;
 
     const app = initializeApp(firebaseConfig);
+    window.app = app;
     db = initializeFirestore(app, {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
       experimentalForceLongPolling: true
@@ -404,6 +405,7 @@ window.startAppVerify = async function(docId) {
     if (!firebaseConfig.apiKey) return;
 
     const app = initializeApp(firebaseConfig);
+    window.app = app;
     db = initializeFirestore(app, {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
       experimentalForceLongPolling: true
