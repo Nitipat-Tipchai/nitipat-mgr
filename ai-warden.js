@@ -112,7 +112,22 @@ class WardenAI {
       `;
       dashboardTitle.parentElement.insertBefore(quoteBox, dashboardTitle.nextSibling);
 
-      const msg = await this.generateGuiltTrip(contextData);
+      // Cache mechanism to prevent 429 Too Many Requests
+      const lastFetch = localStorage.getItem('warden_last_fetch');
+      const cachedMsg = localStorage.getItem('warden_cached_msg');
+      const now = new Date().getTime();
+      let msg = '';
+
+      if (cachedMsg && lastFetch && (now - parseInt(lastFetch)) < 30 * 60 * 1000) {
+        msg = cachedMsg; // Use cached message if less than 30 minutes old
+      } else {
+        msg = await this.generateGuiltTrip(contextData);
+        if (!msg.includes('เกิดข้อผิดพลาด') && !msg.includes('ตั้งค่า Gemini API')) {
+          localStorage.setItem('warden_cached_msg', msg);
+          localStorage.setItem('warden_last_fetch', now.toString());
+        }
+      }
+
       const msgElem = document.getElementById('warden-msg');
       if (msgElem) {
         msgElem.innerHTML = msg.replace(/\n/g, '<br>');
