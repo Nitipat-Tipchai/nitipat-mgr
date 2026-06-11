@@ -29,7 +29,6 @@ window.openAddCourseForm = openAddCourseForm;
 window.openAddAssignmentForm = openAddAssignmentForm;
 window.openAddExamForm = openAddExamForm;
 window.triggerConfetti = triggerConfetti;
-window.initAttendanceMap = initAttendanceMap;
 window.state = typeof state !== 'undefined' ? state : {};
 window.Radio = typeof Radio !== 'undefined' ? Radio : null;
 window.addCourseLink = addCourseLink;
