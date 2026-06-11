@@ -37,7 +37,7 @@ self.addEventListener('notificationclick', function (event) {
 // ══════════════════════════════════════════════════
 // PWA OFFLINE-FIRST ASSETS CACHING
 // ══════════════════════════════════════════════════
-const CACHE_NAME = 'nitipat-manager-v4';
+const CACHE_NAME = 'nitipat-manager-v5';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
