@@ -1,132 +1,313 @@
+/**
+ * 🔐 LOGIN GATE CONTROLLER
+ */
+const LoginGate = {
+  el: null,
+  statusEl: null,
+  pinContainer: null,
+  correctPinHash: null,
+  inputPin: "",
 
-\n/**
-\n * 🔐 LOGIN GATE CONTROLLER
-\n */
-\nconst LoginGate = {
-\n  el: null,
-\n  statusEl: null,
-\n  pinContainer: null,
-\n  correctPinHash: null,
-\n  inputPin: "",
-\n
-\n  async init() {
-\n    this.el = document.getElementById('login-gate');
-\n    
-\n    // Check for admin parameter to hide the login pad from unauthorized visitors
-\n    const urlParams = new URLSearchParams(window.location.search);
-\n    if (urlParams.get('admin') !== 'true') {
-\n      document.title = "404 Not Found";
-\n      this.el.style.background = "#09090b";
-\n      this.el.innerHTML = `
-\n        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; color:#f8fafc; font-family:monospace; text-align:center;">
-\n          <h1 style="font-size:4rem; margin:0 0 10px 0; color:#e2e8f0;">404</h1>
-\n          <p style="color:#94a3b8; font-size:1.1rem;">The requested page could not be found.</p>
-\n        </div>
-\n      `;
-\n      return;
-\n    }
-\n
-\n    this.statusEl = document.getElementById('gate-status');
-\n    this.pinContainer = document.getElementById('pin-container');
-\n    
-\n    this.statusEl.textContent = "ESTABLISHING SECURE CONNECTION...";
-\n    
-\n    // Bind Keyboard event listener for PIN entries
-\n    if (!this._hasKeyboardListener) {
-\n      window.addEventListener('keydown', (e) => {
-\n        if (!state.isLocked) return;
-\n        if (e.key >= '0' && e.key <= '9') {
-\n          this.press(e.key);
-\n        } else if (e.key === 'Backspace') {
-\n          this.press('DEL');
-\n        } else if (e.key === 'Escape') {
-\n          this.clear();
-\n        }
-\n      });
-\n      this._hasKeyboardListener = true;
-\n    }
-\n
-\n    try {
-\n      await this.sync(false);
-\n      this.statusEl.textContent = "IDENTITY VERIFICATION REQUIRED";
-\n      this.renderPinPad();
-\n    } catch (e) {
-\n      console.error(e);
-\n      this.statusEl.textContent = "CONNECTION FAILURE. RETRYING...";
-\n      setTimeout(() => this.init(), 3000);
-\n    }
-\n  },
-\n
-\n  async sync(showToastMsg = true) {
-\n    if (showToastMsg) this.statusEl.textContent = "SYNCING SECURITY VAULT...";
-\n    const config = await this.getSecurityConfig();
-\n    this.correctPinSalt = config.pinSalt || 'NITIPAT_SALT_DEFAULT';
-\n    if (config.pin && config.pin.length > 20) {
-\n      this.correctPinHash = config.pin;
-\n    } else {
-\n      this.correctPinHash = await hashPIN(config.pin || "246810", this.correctPinSalt);
-\n    }
-\n    if (showToastMsg) this.statusEl.textContent = "VAULT SYNCED. TRY AGAIN.";
-\n  },
-\n
-\n  getSecurityConfig() {
-\n    if (typeof google === 'undefined' || !google.script || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-\n      console.warn("Using local security fallback");
-\n      return Promise.resolve({ pin: "246810" });
-\n    }
-\n    return new Promise((res, rej) => {
-\n      google.script.run.withSuccessHandler(res).withFailureHandler(rej).getAppConfig();
-\n    });
-\n  },
-\n
-\n  renderPinPad() {
-\n    if (this.pinContainer) this.pinContainer.classList.remove('hidden');
-\n    this.pinContainer.innerHTML = `
-\n      <div class="pin-display">
-\n        ${[1, 2, 3, 4, 5, 6].map(i => `<div class="pin-dot" id="dot-${i}"></div>`).join('')}
-\n      </div>
-\n      <div class="pin-pad">
-\n        ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button class="pin-btn" onclick="LoginGate.press('${n}')">${n}</button>`).join('')}
-\n        <button class="pin-btn" onclick="LoginGate.clear()" style="font-size:14px; opacity:0.6;">CLR</button>
-\n        <button class="pin-btn" onclick="LoginGate.press('0')">0</button>
-\n        <button class="pin-btn" onclick="LoginGate.press('DEL')" style="font-size:20px; opacity:0.6;">⌫</button>
-\n      </div>
-\n      <div class="gate-actions" style="margin-top:20px; display:flex; gap:10px; justify-content:center;">
-\n        <button class="btn-glass sm" onclick="LoginGate.sync()"><span style="margin-right:5px;">🔄</span>Sync PIN</button>
-\n        <button class="btn-glass sm" onclick="LoginGate.showIdCard()"><span style="margin-right:5px;">🪪</span>ดูบัตร</button>
-\n      </div>
-\n    `;
-\n  },
-\n
-\n  showIdCard() {
-\n    const photo = state.idCardPhoto || "https://img2.pic.in.th/pic/Student_Photo_Placeholder.png";
-\n    const studentId = "20067105527480";
-\n    
-\n    // Create overlay
-\n    const overlay = document.createElement('div');
-\n    overlay.className = 'card-overlay';
-\n    overlay.innerHTML = `
-\n      <div class="card-modal">
-\n        <button class="card-close" onclick="this.parentElement.parentElement.remove()">✕</button>
-\n        <div class="card-title">STUDENT IDENTIFICATION</div>
-\n        <div class="card-body">
-\n          <img src="${photo}" class="card-photo" onerror="this.src='https://img2.pic.in.th/pic/Student_Photo_Placeholder.png'">
-\n          <div class="card-info">
-\n            <div class="card-name">${STUDENT.nameTh}</div>
-\n            <div class="card-id">${studentId}</div>
-\n            <div class="card-major">${STUDENT.major}</div>
-\n          </div>
-\n          <div class="barcode-container">
-\n            <svg id="barcode"></svg>
-\n          </div>
-\n        </div>
-\n      </div>
-\n    `;
-\n    document.body.appendChild(overlay);
-\n    
-\n    // Generate Barcode
-\n    setTimeout(() => {
-\n/**\n * 🔐 LOGIN GATE CONTROLLER\n */\nconst LoginGate = {\n  el: null,\n  statusEl: null,\n  pinContainer: null,\n  correctPinHash: null,\n  inputPin: "",\n\n  async init() {\n    this.el = document.getElementById('login-gate');\n    \n    // Check for admin parameter to hide the login pad from unauthorized visitors\n    const urlParams = new URLSearchParams(window.location.search);\n    if (urlParams.get('admin') !== 'true') {\n      document.title = "404 Not Found";\n      this.el.style.background = "#09090b";\n      this.el.innerHTML = `\n        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; color:#f8fafc; font-family:monospace; text-align:center;">\n          <h1 style="font-size:4rem; margin:0 0 10px 0; color:#e2e8f0;">404</h1>\n          <p style="color:#94a3b8; font-size:1.1rem;">The requested page could not be found.</p>\n        </div>\n      `;\n      return;\n    }\n\n    this.statusEl = document.getElementById('gate-status');\n    this.pinContainer = document.getElementById('pin-container');\n    \n    this.statusEl.textContent = "ESTABLISHING SECURE CONNECTION...";\n    \n    // Bind Keyboard event listener for PIN entries\n    if (!this._hasKeyboardListener) {\n      window.addEventListener('keydown', (e) => {\n        if (!state.isLocked) return;\n        if (e.key >= '0' && e.key <= '9') {\n          this.press(e.key);\n        } else if (e.key === 'Backspace') {\n          this.press('DEL');\n        } else if (e.key === 'Escape') {\n          this.clear();\n        }\n      });\n      this._hasKeyboardListener = true;\n    }\n\n    try {\n      await this.sync(false);\n      this.statusEl.textContent = "IDENTITY VERIFICATION REQUIRED";\n      this.renderPinPad();\n    } catch (e) {\n      console.error(e);\n      this.statusEl.textContent = "CONNECTION FAILURE. RETRYING...";\n      setTimeout(() => this.init(), 3000);\n    }\n  },\n\n  async sync(showToastMsg = true) {\n    if (showToastMsg) this.statusEl.textContent = "SYNCING SECURITY VAULT...";\n    const config = await this.getSecurityConfig();\n    this.correctPinSalt = config.pinSalt || 'NITIPAT_SALT_DEFAULT';\n    if (config.pin && config.pin.length > 20) {\n      this.correctPinHash = config.pin;\n    } else {\n      this.correctPinHash = await hashPIN(config.pin || "246810", this.correctPinSalt);\n    }\n    if (showToastMsg) this.statusEl.textContent = "VAULT SYNCED. TRY AGAIN.";\n  },\n\n  getSecurityConfig() {\n    if (typeof google === 'undefined' || !google.script || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {\n      console.warn("Using local security fallback");\n      return Promise.resolve({ pin: "246810" });\n    }\n    return new Promise((res, rej) => {\n      google.script.run.withSuccessHandler(res).withFailureHandler(rej).getAppConfig();\n    });\n  },\n\n  renderPinPad() {\n    if (this.pinContainer) this.pinContainer.classList.remove('hidden');\n    this.pinContainer.innerHTML = `\n      <div class="pin-display">\n        ${[1, 2, 3, 4, 5, 6].map(i => `<div class="pin-dot" id="dot-${i}"></div>`).join('')}\n      </div>\n      <div class="pin-pad">\n        ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button class="pin-btn" onclick="LoginGate.press('${n}')">${n}</button>`).join('')}\n        <button class="pin-btn" onclick="LoginGate.clear()" style="font-size:14px; opacity:0.6;">CLR</button>\n        <button class="pin-btn" onclick="LoginGate.press('0')">0</button>\n        <button class="pin-btn" onclick="LoginGate.press('DEL')" style="font-size:20px; opacity:0.6;">⌫</button>\n      </div>\n      <div class="gate-actions" style="margin-top:20px; display:flex; gap:10px; justify-content:center;">\n        <button class="btn-glass sm" onclick="LoginGate.sync()"><span style="margin-right:5px;">🔄</span>Sync PIN</button>\n        <button class="btn-glass sm" onclick="LoginGate.showIdCard()"><span style="margin-right:5px;">🪪</span>ดูบัตร</button>\n      </div>\n    `;\n  },\n\n  showIdCard() {\n    const photo = state.idCardPhoto || "https://img2.pic.in.th/pic/Student_Photo_Placeholder.png";\n    const studentId = "20067105527480";\n    \n    // Create overlay\n    const overlay = document.createElement('div');\n    overlay.className = 'card-overlay';\n    overlay.innerHTML = `\n      <div class="card-modal">\n        <button class="card-close" onclick="this.parentElement.parentElement.remove()">✕</button>\n        <div class="card-title">STUDENT IDENTIFICATION</div>\n        <div class="card-body">\n          <img src="${photo}" class="card-photo" onerror="this.src='https://img2.pic.in.th/pic/Student_Photo_Placeholder.png'">\n          <div class="card-info">\n            <div class="card-name">${STUDENT.nameTh}</div>\n            <div class="card-id">${studentId}</div>\n            <div class="card-major">${STUDENT.major}</div>\n          </div>\n          <div class="barcode-container">\n            <svg id="barcode"></svg>\n          </div>\n        </div>\n      </div>\n    `;\n    document.body.appendChild(overlay);\n    \n    // Generate Barcode\n    setTimeout(() => {\n      JsBarcode("#barcode", studentId, {\n        format: "CODE128",\n        width: 2,\n        height: 60,\n        displayValue: true,\n        fontSize: 16,\n        font: "JetBrains Mono",\n        background: "transparent",\n        lineColor: "#000"\n      });\n    }, 100);\n  },\n\n  press(val) {\n    if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(10);\n    if (val === 'DEL') {\n      this.inputPin = this.inputPin.slice(0, -1);\n    } else if (this.inputPin.length < 6) {\n      this.inputPin += val;\n    }\n    this.updateDots();\n    if (this.inputPin.length === 6) this.verify();\n  },\n\n  updateDots() {\n    for (let i = 1; i <= 6; i++) {\n      const dot = document.getElementById(`dot-${i}`);\n      if (dot) {\n        if (i <= this.inputPin.length) dot.classList.add('active');\n        else dot.classList.remove('active');\n      }\n    }\n  },\n\n  clear() {\n    if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(10);\n    this.inputPin = "";\n    this.updateDots();\n  },\n\n  async verify() {\n    const activeHash = state.pin || this.correctPinHash;\n    const activeSalt = state.pinSalt || this.correctPinSalt || 'NITIPAT_SALT_DEFAULT';\n\n    const isValid = await verifyPIN(this.inputPin, activeHash, activeSalt);\n    if (isValid) {\n      this.statusEl.textContent = "ACCESS GRANTED. SYNCING DATA...";\n      sessionStorage.setItem('unlocked', 'true');\n      sessionStorage.setItem('unlocked_at', Date.now().toString());\n      state.isLocked = false;\n      this.el.classList.add('inactive');\n      await startAppCore();\n    } else {\n      // Problem 5: Auto-sync once on failure\n      this.statusEl.textContent = "VERIFYING WITH REMOTE VAULT...";\n      await this.sync(false);\n      const activeHashRetry = state.pin || this.correctPinHash;\n      const activeSaltRetry = state.pinSalt || this.correctPinSalt || 'NITIPAT_SALT_DEFAULT';\n      \n      const isValidRetry = await verifyPIN(this.inputPin, activeHashRetry, activeSaltRetry);\n      \n      if (isValidRetry) {\n        this.verify(); // Success after sync\n        return;\n      }\n\n      this.statusEl.textContent = "INCORRECT PIN. ACCESS DENIED.";\n      this.inputPin = "";\n      this.updateDots();\n      this.pinContainer.style.animation = 'none';\n      this.pinContainer.offsetHeight;\n      this.pinContainer.style.animation = 'shake 0.4s cubic-bezier(.36,.07,.19,.97) both';\n      if (window.navigator.vibrate) window.navigator.vibrate(200);\n    }\n  }\n};\n\nwindow.LoginGate = LoginGate;\n\n// Entry point unified into DOMContentLoaded\n\nasync function startAppCore() {\n  try {\n    let firebaseConfig;\n    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {\n      console.warn("Using aligned local Firebase config");\n      firebaseConfig = {\n        apiKey: "AIzaSyB7pGaPWn4n7NxrQ9l60V16u-qj05khqU8",\n        authDomain: "mat-e-db476.firebaseapp.com",\n        databaseURL: "https://mat-e-db476-default-rtdb.asia-southeast1.firebasedatabase.app",\n        projectId: "mat-e-db476",\n        storageBucket: "mat-e-db476.firebasestorage.app",\n        messagingSenderId: "986910230630",\n        appId: "1:986910230630:web:7b4b23ce828d18ab7bc5a7"\n      };\n    } else {\n      firebaseConfig = await new Promise((res, rej) => {\n        google.script.run.withSuccessHandler(res).withFailureHandler(rej).getFirebaseConfig();\n      });\n    }\n\n    if (!firebaseConfig.apiKey) {\n      console.error("Firebase API Key is missing.");\n      return;\n    }\n\n    const app = initializeApp(firebaseConfig);\n    db = initializeFirestore(app, {\n      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),\n      experimentalForceLongPolling: true\n    });\n\n    messaging = getMessaging(app);\n    onMessage(messaging, (payload) => {\n      if (typeof Notification !== 'undefined') {\n        new Notification(payload.notification.title, {\n          body: payload.notification.body,\n          icon: payload.notification.image || "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"\n        });\n      }\n    });\n\n    await loadAll();\n    startHyperNotifications();\n    scheduleAllNotifications();\n    \n    // Notion Initial Sync\n    setTimeout(() => NotionHub.sync(), 2000);\n    if ('serviceWorker' in navigator) {\n      initWebPush();\n    }\n    render();\n  } catch (err) {\n    console.error("App initialization failed:", err);\n  }\n}\n\nwindow.startAppPublic = async function() {\n  try {\n    let firebaseConfig;\n    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {\n      firebaseConfig = {\n        apiKey: "AIzaSyB7pGaPWn4n7NxrQ9l60V16u-qj05khqU8",\n        authDomain: "mat-e-db476.firebaseapp.com",\n        databaseURL: "https://mat-e-db476-default-rtdb.asia-southeast1.firebasedatabase.app",\n        projectId: "mat-e-db476",\n        storageBucket: "mat-e-db476.firebasestorage.app",\n        messagingSenderId: "986910230630",\n        appId: "1:986910230630:web:7b4b23ce828d18ab7bc5a7"\n      };\n\n
+  async init() {
+    this.el = document.getElementById('login-gate');
+    
+    // Check for admin parameter to hide the login pad from unauthorized visitors
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('admin') !== 'true') {
+      document.title = "404 Not Found";
+      this.el.style.background = "#09090b";
+      this.el.innerHTML = `
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; color:#f8fafc; font-family:monospace; text-align:center;">
+          <h1 style="font-size:4rem; margin:0 0 10px 0; color:#e2e8f0;">404</h1>
+          <p style="color:#94a3b8; font-size:1.1rem;">The requested page could not be found.</p>
+        </div>
+      `;
+      return;
+    }
+
+    this.statusEl = document.getElementById('gate-status');
+    this.pinContainer = document.getElementById('pin-container');
+    
+    this.statusEl.textContent = "ESTABLISHING SECURE CONNECTION...";
+    
+    // Bind Keyboard event listener for PIN entries
+    if (!this._hasKeyboardListener) {
+      window.addEventListener('keydown', (e) => {
+        if (!state.isLocked) return;
+        if (e.key >= '0' && e.key <= '9') {
+          this.press(e.key);
+        } else if (e.key === 'Backspace') {
+          this.press('DEL');
+        } else if (e.key === 'Escape') {
+          this.clear();
+        }
+      });
+      this._hasKeyboardListener = true;
+    }
+
+    try {
+      await this.sync(false);
+      this.statusEl.textContent = "IDENTITY VERIFICATION REQUIRED";
+      this.renderPinPad();
+    } catch (e) {
+      console.error(e);
+      this.statusEl.textContent = "CONNECTION FAILURE. RETRYING...";
+      setTimeout(() => this.init(), 3000);
+    }
+  },
+
+  async sync(showToastMsg = true) {
+    if (showToastMsg) this.statusEl.textContent = "SYNCING SECURITY VAULT...";
+    const config = await this.getSecurityConfig();
+    this.correctPinSalt = config.pinSalt || 'NITIPAT_SALT_DEFAULT';
+    if (config.pin && config.pin.length > 20) {
+      this.correctPinHash = config.pin;
+    } else {
+      this.correctPinHash = await hashPIN(config.pin || "246810", this.correctPinSalt);
+    }
+    if (showToastMsg) this.statusEl.textContent = "VAULT SYNCED. TRY AGAIN.";
+  },
+
+  getSecurityConfig() {
+    if (typeof google === 'undefined' || !google.script || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      console.warn("Using local security fallback");
+      return Promise.resolve({ pin: "246810" });
+    }
+    return new Promise((res, rej) => {
+      google.script.run.withSuccessHandler(res).withFailureHandler(rej).getAppConfig();
+    });
+  },
+
+  renderPinPad() {
+    if (this.pinContainer) this.pinContainer.classList.remove('hidden');
+    this.pinContainer.innerHTML = `
+      <div class="pin-display">
+        ${[1, 2, 3, 4, 5, 6].map(i => `<div class="pin-dot" id="dot-${i}"></div>`).join('')}
+      </div>
+      <div class="pin-pad">
+        ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button class="pin-btn" onclick="LoginGate.press('${n}')">${n}</button>`).join('')}
+        <button class="pin-btn" onclick="LoginGate.clear()" style="font-size:14px; opacity:0.6;">CLR</button>
+        <button class="pin-btn" onclick="LoginGate.press('0')">0</button>
+        <button class="pin-btn" onclick="LoginGate.press('DEL')" style="font-size:20px; opacity:0.6;">⌫</button>
+      </div>
+      <div class="gate-actions" style="margin-top:20px; display:flex; gap:10px; justify-content:center;">
+        <button class="btn-glass sm" onclick="LoginGate.sync()"><span style="margin-right:5px;">🔄</span>Sync PIN</button>
+        <button class="btn-glass sm" onclick="LoginGate.showIdCard()"><span style="margin-right:5px;">🪪</span>ดูบัตร</button>
+      </div>
+    `;
+  },
+
+  showIdCard() {
+    const photo = state.idCardPhoto || "https://img2.pic.in.th/pic/Student_Photo_Placeholder.png";
+    const studentId = "20067105527480";
+    
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'card-overlay';
+    overlay.innerHTML = `
+      <div class="card-modal">
+        <button class="card-close" onclick="this.parentElement.parentElement.remove()">✕</button>
+        <div class="card-title">STUDENT IDENTIFICATION</div>
+        <div class="card-body">
+          <img src="${photo}" class="card-photo" onerror="this.src='https://img2.pic.in.th/pic/Student_Photo_Placeholder.png'">
+          <div class="card-info">
+            <div class="card-name">${STUDENT.nameTh}</div>
+            <div class="card-id">${studentId}</div>
+            <div class="card-major">${STUDENT.major}</div>
+          </div>
+          <div class="barcode-container">
+            <svg id="barcode"></svg>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    
+    // Generate Barcode
+    setTimeout(() => {
+      JsBarcode("#barcode", studentId, {
+        format: "CODE128",
+        width: 2,
+        height: 60,
+        displayValue: true,
+        fontSize: 16,
+        font: "JetBrains Mono",
+        background: "transparent",
+        lineColor: "#000"
+      });
+    }, 100);
+  },
+
+  press(val) {
+    if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(10);
+    if (val === 'DEL') {
+      this.inputPin = this.inputPin.slice(0, -1);
+    } else if (this.inputPin.length < 6) {
+      this.inputPin += val;
+    }
+    this.updateDots();
+    if (this.inputPin.length === 6) this.verify();
+  },
+
+  updateDots() {
+    for (let i = 1; i <= 6; i++) {
+      const dot = document.getElementById(`dot-${i}`);
+      if (dot) {
+        if (i <= this.inputPin.length) dot.classList.add('active');
+        else dot.classList.remove('active');
+      }
+    }
+  },
+
+  clear() {
+    if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(10);
+    this.inputPin = "";
+    this.updateDots();
+  },
+
+  async verify() {
+    const activeHash = state.pin || this.correctPinHash;
+    const activeSalt = state.pinSalt || this.correctPinSalt || 'NITIPAT_SALT_DEFAULT';
+
+    const isValid = await verifyPIN(this.inputPin, activeHash, activeSalt);
+    if (isValid) {
+      this.statusEl.textContent = "ACCESS GRANTED. SYNCING DATA...";
+      sessionStorage.setItem('unlocked', 'true');
+      sessionStorage.setItem('unlocked_at', Date.now().toString());
+      state.isLocked = false;
+      this.el.classList.add('inactive');
+      await startAppCore();
+    } else {
+      // Problem 5: Auto-sync once on failure
+      this.statusEl.textContent = "VERIFYING WITH REMOTE VAULT...";
+      await this.sync(false);
+      const activeHashRetry = state.pin || this.correctPinHash;
+      const activeSaltRetry = state.pinSalt || this.correctPinSalt || 'NITIPAT_SALT_DEFAULT';
+      
+      const isValidRetry = await verifyPIN(this.inputPin, activeHashRetry, activeSaltRetry);
+      
+      if (isValidRetry) {
+        this.verify(); // Success after sync
+        return;
+      }
+
+      this.statusEl.textContent = "INCORRECT PIN. ACCESS DENIED.";
+      this.inputPin = "";
+      this.updateDots();
+      this.pinContainer.style.animation = 'none';
+      this.pinContainer.offsetHeight;
+      this.pinContainer.style.animation = 'shake 0.4s cubic-bezier(.36,.07,.19,.97) both';
+      if (window.navigator.vibrate) window.navigator.vibrate(200);
+    }
+  }
+};
+
+window.LoginGate = LoginGate;
+
+// Entry point unified into DOMContentLoaded
+
+async function startAppCore() {
+  try {
+    let firebaseConfig;
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      console.warn("Using aligned local Firebase config");
+      firebaseConfig = {
+        apiKey: "AIzaSyB7pGaPWn4n7NxrQ9l60V16u-qj05khqU8",
+        authDomain: "mat-e-db476.firebaseapp.com",
+        databaseURL: "https://mat-e-db476-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "mat-e-db476",
+        storageBucket: "mat-e-db476.firebasestorage.app",
+        messagingSenderId: "986910230630",
+        appId: "1:986910230630:web:7b4b23ce828d18ab7bc5a7"
+      };
+    } else {
+      firebaseConfig = await new Promise((res, rej) => {
+        google.script.run.withSuccessHandler(res).withFailureHandler(rej).getFirebaseConfig();
+      });
+    }
+
+    if (!firebaseConfig.apiKey) {
+      console.error("Firebase API Key is missing.");
+      return;
+    }
+
+    const app = initializeApp(firebaseConfig);
+    db = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      experimentalForceLongPolling: true
+    });
+
+    messaging = getMessaging(app);
+    onMessage(messaging, (payload) => {
+      if (typeof Notification !== 'undefined') {
+        new Notification(payload.notification.title, {
+          body: payload.notification.body,
+          icon: payload.notification.image || "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+        });
+      }
+    });
+
+    await loadAll();
+    startHyperNotifications();
+    scheduleAllNotifications();
+    
+    // Notion Initial Sync
+    setTimeout(() => NotionHub.sync(), 2000);
+    if ('serviceWorker' in navigator) {
+      initWebPush();
+    }
+    render();
+  } catch (err) {
+    console.error("App initialization failed:", err);
+  }
+}
+
+window.startAppPublic = async function() {
+  try {
+    let firebaseConfig;
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      firebaseConfig = {
+        apiKey: "AIzaSyB7pGaPWn4n7NxrQ9l60V16u-qj05khqU8",
+        authDomain: "mat-e-db476.firebaseapp.com",
+        databaseURL: "https://mat-e-db476-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "mat-e-db476",
+        storageBucket: "mat-e-db476.firebasestorage.app",
+        messagingSenderId: "986910230630",
+        appId: "1:986910230630:web:7b4b23ce828d18ab7bc5a7"
+      };
+    } else {
+      firebaseConfig = await new Promise((res, rej) => {
+        google.script.run.withSuccessHandler(res).withFailureHandler(rej).getFirebaseConfig();
+      });
+    }
+
+    if (!firebaseConfig.apiKey) return;
+
+    const app = initializeApp(firebaseConfig);
+    db = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      experimentalForceLongPolling: true
+    });
+
+    state.ilmFilesLoadedFromServer = false;
+    render(); // Update UI to show loading
+
+    try {
+      const ilmFilesSnap = await getDoc(doc(db, "ilm_data", "files"));
+      if (ilmFilesSnap.exists()) {
+        state.ilmFiles = ilmFilesSnap.data().list || [];
+      }
+    } catch(e) {
+      console.warn("Public fetch error", e);
+    }
+    
+    state.ilmFilesLoadedFromServer = true;
+    render(); // Re-render the portal with actual data
+  } catch (err) {
+    console.error("Public App initialization failed:", err);
+  }
+};
+
 window.startAppVerify = async function(docId) {
   try {
     let firebaseConfig;
