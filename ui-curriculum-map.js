@@ -116,7 +116,7 @@ const CURRICULUM_ARROWS = [
   { from: '01213395', to: '01213497', type: 'solid' },
   { from: '01213497', to: '01213499', type: 'solid' },
   { from: '01213212', to: '01213314', type: 'solid' },
-  { from: '01213213', to: '01213313', type: 'solid' },
+  { from: '01213217', to: '01213313', type: 'solid' },
   { from: '01205202', to: '01213316', type: 'solid' },
   { from: '01208381', to: '01213497', type: 'solid' },
   { from: '01213312', to: '01213311', type: 'dashed' },
