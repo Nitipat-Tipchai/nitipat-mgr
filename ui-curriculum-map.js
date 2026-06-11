@@ -60,7 +60,7 @@ const CURRICULUM_DATA = [
     id: "y3s1", year: 3, term: 1, label: "ปี 3 ต้น", credits: 14,
     courses: [
       { id: '01205202', code: '01205202', cr: 1, label: '', type: 'core' },
-      { id: '01208381', code: '01208381', cr: 1, label: '', type: 'core' },
+      { id: '01208381', code: '01208381', cr: 1, label: 'ปฏิบัติการวิศวกรรมเครื่องกล I', type: 'core' },
       { id: '01213311', code: '01213311', cr: 3, label: '', type: 'major' },
       { id: '01213312', code: '01213312', cr: 1, label: '', type: 'major' },
       { id: '01213313', code: '01213313', cr: 4, label: '', type: 'major' },
