@@ -205,6 +205,11 @@ async function initApp() {
       }
     }, 300000);
 
+    // AI Warden Hook
+    if (!state.isLocked && window.Warden) {
+      setTimeout(() => Warden.runDailyNag(), 1500);
+    }
+    
     // Removed 30-second auto-render to prevent annoying background refreshes
   } catch (e) {
     console.error("Initialization failed:", e);
@@ -226,4 +231,4 @@ document.addEventListener('visibilitychange', () => {
     localStorage.setItem('focusTree', JSON.stringify(state.tree));
     showToast('🪨 ต้นไม้ตายแล้ว! อย่าออกจากหน้าจอระหว่างโฟกัส', 'err');
   }
-});
+});
