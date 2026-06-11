@@ -263,16 +263,7 @@ window.testCalendarPermission = () => {
   }).testCalendar();
 };
 
-window.testAlarmSound = async () => {
-  showToast('🔊 กำลังทดสอบเสียงปลุก...');
-  if (!state.alarmAudioCtx) {
-    state.alarmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  }
-  if (state.alarmAudioCtx.state === 'suspended') await state.alarmAudioCtx.resume();
 
-  triggerAlarm({ id: 'test', label: '📢 ทดสอบระบบปลุก', repeat: [] });
-  setTimeout(() => dismissAlarm(), 5000);
-};
 
 window.resetFcmTokens = async () => {
   if (!confirm('⚠️ ยืนยันที่จะล้างข้อมูลอุปกรณ์ทั้งหมดใช่หรือไม่?nn(ทุกเครื่องจะต้องกด "เปิดใช้งาน" ใหม่เพื่อรับแจ้งเตือนอีกครั้ง)')) return;
@@ -335,4 +326,4 @@ window.syncAllToCalendar = async (semId) => {
     google.script.run.withSuccessHandler(res => handleRes(e, 'exam', res)).syncCalendarEvent(`NITIPAT MANAGER - ${sem.name}`, 'exam', e);
   });
 };
-
+
