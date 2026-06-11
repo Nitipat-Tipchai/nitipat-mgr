@@ -1,0 +1,30 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+window.initializeApp = initializeApp;
+window.initializeFirestore = initializeFirestore;
+window.persistentLocalCache = persistentLocalCache;
+window.persistentMultipleTabManager = persistentMultipleTabManager;
+window.collection = collection;
+window.doc = doc;
+window.setDoc = setDoc;
+window.getDoc = getDoc;
+window.getDocs = getDocs;
+window.updateDoc = updateDoc;
+window.deleteDoc = deleteDoc;
+window.onSnapshot = onSnapshot;
+window.query = query;
+window.orderBy = orderBy;
+window.serverTimestamp = serverTimestamp;
+window.where = where;
+
+window.getMessaging = getMessaging;
+window.getToken = getToken;
+window.onMessage = onMessage;
+
+window.getStorage = getStorage;
+window.ref = ref;
+window.uploadBytes = uploadBytes;
+window.getDownloadURL = getDownloadURL;
+window.deleteObject = deleteObject;
