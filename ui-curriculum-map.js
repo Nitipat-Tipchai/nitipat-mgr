@@ -423,6 +423,18 @@ function renderCurriculumMap() {
     
     .curr-box:hover { transform: translateY(-4px) !important; box-shadow: 0 8px 16px rgba(0,0,0,0.1) !important; border-right-color: var(--c-accent) !important; }
     .curr-box.highlight { box-shadow: 0 0 0 3px var(--c-accent) !important; background: rgba(99, 102, 241, 0.05) !important; }
+    
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5); z-index: 9999;
+      display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(5px);
+    }
+    .modal-content {
+      background: var(--bg); border-radius: 12px; padding: 20px;
+      width: 90%; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      border: 1px solid var(--glass-border);
+    }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   `;
