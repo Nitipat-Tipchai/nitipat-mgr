@@ -6,7 +6,7 @@
 class WardenAI {
   constructor() {
     this.apiKey = localStorage.getItem('gemini_api_key') || '';
-    this.apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+    this.apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
   }
 
   async generateGuiltTrip(contextData) {
@@ -113,7 +113,10 @@ class WardenAI {
       dashboardTitle.parentElement.insertBefore(quoteBox, dashboardTitle.nextSibling);
 
       const msg = await this.generateGuiltTrip(contextData);
-      document.getElementById('warden-msg').innerHTML = msg.replace(/\n/g, '<br>');
+      const msgElem = document.getElementById('warden-msg');
+      if (msgElem) {
+        msgElem.innerHTML = msg.replace(/\n/g, '<br>');
+      }
     }
   }
 }
