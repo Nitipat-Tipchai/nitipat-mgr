@@ -273,29 +273,29 @@ function drawCurriculumArrows() {
       
       // If on same line or next column, straight curve
       if (Math.abs(y1 - y2) < 20) {
-        pathD = \`M \${x1} \${y1} L \${x2} \${y2}\`;
+        pathD = `M ${x1} ${y1} L ${x2} ${y2}`;
       } else {
         // Curve
         const mx = x1 + (x2 - x1) / 2;
-        pathD = \`M \${x1} \${y1} C \${mx} \${y1}, \${mx} \${y2}, \${x2} \${y2}\`;
+        pathD = `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`;
       }
 
       // Draw path
       const dash = arrow.type === 'dashed' ? 'stroke-dasharray="4,4"' : '';
-      svgContent += \`
-        <path id="arrow-\${arrow.from}-\${arrow.to}" 
-              d="\${pathD}" 
+      svgContent += `
+        <path id="arrow-${arrow.from}-${arrow.to}" 
+              d="${pathD}" 
               fill="none" 
               stroke="#ef4444" 
               stroke-width="1.5" 
               marker-end="url(#arrowhead)" 
-              \${dash} 
+              ${dash} 
               opacity="0.4"
               class="curr-arrow"
-              data-from="\${arrow.from}"
-              data-to="\${arrow.to}"
+              data-from="${arrow.from}"
+              data-to="${arrow.to}"
         />
-      \`;
+      `;
     }
   });
 
@@ -313,7 +313,7 @@ window.highlightArrows = function(id, code) {
       
       // Highlight the connected nodes
       const targetCode = path.getAttribute('data-from') === code ? path.getAttribute('data-to') : path.getAttribute('data-from');
-      const targetNode = document.querySelector(\`[data-code="\${targetCode}"]\`);
+      const targetNode = document.querySelector(`[data-code="${targetCode}"]`);
       if (targetNode) targetNode.classList.add('highlight');
     } else {
       path.setAttribute('opacity', '0.1');
