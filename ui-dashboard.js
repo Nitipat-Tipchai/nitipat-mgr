@@ -279,8 +279,6 @@ function renderDashboard(gpaVal, proVal, curSemVal) {
     
     <!-- Pro alerts -->
     ${pro ? proAlerts[pro] || '' : ''}
-    
-    <script>setTimeout(() => { if(window.Warden) Warden.runDailyNag(); }, 500);</script>
 
     <div class="quote-card glass nb-card" style="margin-top:20px; font-style:italic; text-align:center; padding:20px;">"${getTodayQuote()}"</div>
   </div>`;
@@ -417,4 +415,4 @@ function renderCourses() {
   }).join('') || `<div class="empty-hero"><div class="empty-icon">${isArchiveView ? '🗄' : '📚'}</div><h3>Empty</h3></div>`}
   </div>`;
 }
-
+
