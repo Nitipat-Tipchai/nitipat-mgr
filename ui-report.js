@@ -96,7 +96,7 @@ function getReportDataModel() {
   };
 }
 
-function buildDocumentHTML(data, docId, verifyUrl, isPreview) {
+function buildDocumentHTML(data, docId, verifyUrl, isPreview, currMapBase64 = '') {
   const hash = docId ? "VERIFIED-" + docId.substring(0,8).toUpperCase() : "UNVERIFIED-DRAFT-PREVIEW";
   
   return `
@@ -212,6 +212,15 @@ function buildDocumentHTML(data, docId, verifyUrl, isPreview) {
         </div>
       </div>
 
+      ${currMapBase64 ? `
+        <div style="page-break-before: always; margin-top:40px;">
+          <h2 class="section-title"><span>🗺️</span> แผนผังหลักสูตร (Interactive Curriculum Map)</h2>
+          <div style="margin-top:20px; border:2px solid #e2e8f0; border-radius:12px; overflow:hidden; padding:20px; background:#f8fafc; text-align:center;">
+             <img src="${currMapBase64}" style="max-width:100%; height:auto;" alt="Curriculum Map" />
+          </div>
+        </div>
+      ` : ''}
+
     </div>
   `;
 }
@@ -285,6 +294,44 @@ function getDocumentCSS() {
 window.generateAndPrintFrontendPDF = async function() {
   showToast("Preparing Document in New Tab...", "wait");
   try {
+    let currMapBase64 = "";
+    if (typeof html2canvas !== 'undefined') {
+      try {
+        let container = document.getElementById('curriculumContainer');
+        let tempDiv = null;
+        if (!container && typeof renderCurriculumMap === 'function') {
+           tempDiv = document.createElement('div');
+           tempDiv.style.position = 'absolute';
+           tempDiv.style.top = '-9999px';
+           tempDiv.style.left = '-9999px';
+           tempDiv.innerHTML = renderCurriculumMap();
+           document.body.appendChild(tempDiv);
+           container = document.getElementById('curriculumContainer');
+           drawCurriculumArrows();
+           await new Promise(r => setTimeout(r, 300));
+        }
+        
+        if (container) {
+           const origTransform = container.style.transform;
+           container.style.transform = 'scale(1)';
+           await new Promise(r => setTimeout(r, 100));
+           drawCurriculumArrows();
+           
+           const canvas = await html2canvas(container, { scale: 2, backgroundColor: '#ffffff', logging: false });
+           currMapBase64 = canvas.toDataURL('image/png');
+           
+           container.style.transform = origTransform;
+           drawCurriculumArrows();
+        }
+        
+        if (tempDiv) {
+           document.body.removeChild(tempDiv);
+        }
+      } catch(e) {
+        console.warn("Failed to capture curriculum map", e);
+      }
+    }
+
     const dataModel = getReportDataModel();
     const docData = {
       studentId: STUDENT.id,
@@ -326,7 +373,7 @@ window.generateAndPrintFrontendPDF = async function() {
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
       </head>
       <body>
-        ${buildDocumentHTML(dataModel, docId, verifyUrl, false)}
+        ${buildDocumentHTML(dataModel, docId, verifyUrl, false, currMapBase64)}
         
         <script>
           window.onload = function() {
