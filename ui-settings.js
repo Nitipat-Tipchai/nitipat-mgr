@@ -127,6 +127,17 @@ function renderSettings() {
         </div>
       `).join('') || '<div class="setting-row"><span class="muted">ไม่มีข้อมูลเทอม</span></div>'}
 
+    <div class="glass-card settings-block" style="border: 1.5px solid rgba(139, 92, 246, 0.25); background: rgba(139, 92, 246, 0.04); box-shadow: 0 4px 15px rgba(139, 92, 246, 0.05); margin-bottom:15px;">
+      <div class="setting-title" style="color: #8b5cf6; font-weight:700;">🤖 AI Warden (Gemini)</div>
+      <div class="setting-row" style="flex-direction:column; align-items:flex-start; gap:8px;">
+        <span style="font-size:12px; color:var(--c-muted);">ใส่ API Key จาก Google AI Studio เพื่อใช้งานผู้คุมสุดโหด</span>
+        <div style="display:flex; gap:8px; width:100%;">
+          <input type="password" id="geminiApiKeyInput" class="glass-input sm" style="flex:1;" value="${localStorage.getItem('gemini_api_key') || ''}" placeholder="AIzaSy...">
+          <button class="btn-glass sm" onclick="localStorage.setItem('gemini_api_key', document.getElementById('geminiApiKeyInput').value); if(window.Warden) Warden.apiKey = document.getElementById('geminiApiKeyInput').value; showToast('✅ บันทึก API Key แล้ว')">💾 บันทึก</button>
+        </div>
+      </div>
+    </div>
+
     <div class="glass-card settings-block" style="border: 1.5px solid rgba(239, 68, 68, 0.25); background: rgba(239, 68, 68, 0.04); box-shadow: 0 4px 15px rgba(239,68,68,0.05);">
       <div class="setting-title" style="color: #ef4444; font-weight:700;">🚪 บัญชีผู้ใช้งาน</div>
       <div class="setting-row" style="margin-top: 5px;">
@@ -142,4 +153,4 @@ function renderSettings() {
     </div>
   </div>`;
 }
-
+
