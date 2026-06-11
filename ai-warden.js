@@ -5,7 +5,7 @@
 
 class WardenAI {
   constructor() {
-    this.apiKey = "AQ.Ab8RN6KunzgKL4WVfXXirM1KW3Qcs-Stlcw9Gz8zpZBEtBP00w";
+    this.apiKey = localStorage.getItem('gemini_api_key') || '';
     this.apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
   }
 
@@ -100,12 +100,12 @@ class WardenAI {
     };
 
     // Inject to Dashboard
-    const dashboardTitle = document.querySelector('.view-title');
+    const dashboardTitle = document.querySelector('.dash-hero');
     if (dashboardTitle && !document.getElementById('warden-quote')) {
       const quoteBox = document.createElement('div');
       quoteBox.id = 'warden-quote';
       quoteBox.className = 'glass-card nb-card';
-      quoteBox.style.cssText = 'margin-top: 15px; border: 2px solid var(--c-red); background: #fff1f2; color: var(--c-red); font-weight: bold; font-size: 14px; display: flex; align-items: center; gap: 15px;';
+      quoteBox.style.cssText = 'margin-top: 15px; border: 2px solid var(--c-rust); background: #fff1f2; color: var(--c-rust); font-weight: bold; font-size: 14px; display: flex; align-items: center; gap: 15px; padding: 15px; border-radius: 12px;';
       quoteBox.innerHTML = `
         <div style="font-size: 30px; animation: shake 0.5s infinite;">😡</div>
         <div id="warden-msg">ระบบกำลังประมวลผลความขี้เกียจของคุณ...</div>
@@ -118,4 +118,4 @@ class WardenAI {
   }
 }
 
-const Warden = new WardenAI();
+window.Warden = new WardenAI();
