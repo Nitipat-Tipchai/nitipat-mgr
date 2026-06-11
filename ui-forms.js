@@ -629,8 +629,6 @@ function startHyperNotifications() {
     }
   }, 60000); // Check every minute
 
-  if (state.hyperAlarmInterval) clearInterval(state.hyperAlarmInterval);
-  state.hyperAlarmInterval = setInterval(() => checkAlarms(), 30000);
 
   if (state.hyperSyncInterval) clearInterval(state.hyperSyncInterval);
   state.hyperSyncInterval = setInterval(() => syncDataToBackend(), 1800000);
@@ -1046,4 +1044,4 @@ function renderCourseHub(courseId) {
   if (c && c.driveId) {
     refreshDriveFiles(courseId, c.driveId);
   }
-}
+}
