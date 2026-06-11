@@ -29,22 +29,9 @@ window.openAddCourseForm = openAddCourseForm;
 window.openAddAssignmentForm = openAddAssignmentForm;
 window.openAddExamForm = openAddExamForm;
 window.triggerConfetti = triggerConfetti;
-window.refreshDriveFiles = refreshDriveFiles;
-window.handleFileUpload = handleFileUpload;
 window.initAttendanceMap = initAttendanceMap;
 window.state = typeof state !== 'undefined' ? state : {};
 window.Radio = typeof Radio !== 'undefined' ? Radio : null;
-
-// Mini-drive exports
-window.previewFile = previewFile;
-window.toggleItemSelection = toggleItemSelection;
-window.automateDriveFolder = automateDriveFolder;
-window.gotoFolder = gotoFolder;
-window.shareSelectedItems = shareSelectedItems;
-window.printSelectedItems = printSelectedItems;
-window.renameSelectedItem = renameSelectedItem;
-window.deleteSelectedItems = deleteSelectedItems;
-window.handleCreateFolder = handleCreateFolder;
 window.addCourseLink = addCourseLink;
 window.removeCourseLink = removeCourseLink;
 window.deleteCourse = deleteCourse;
@@ -231,4 +218,4 @@ document.addEventListener('visibilitychange', () => {
     localStorage.setItem('focusTree', JSON.stringify(state.tree));
     showToast('🪨 ต้นไม้ตายแล้ว! อย่าออกจากหน้าจอระหว่างโฟกัส', 'err');
   }
-});
+});
