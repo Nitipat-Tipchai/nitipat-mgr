@@ -335,6 +335,201 @@ window.startAppVerify = async function(docId) {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
       experimentalForceLongPolling: true
     });
+    if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(10);
+    if (val === 'DEL') {
+      this.inputPin = this.inputPin.slice(0, -1);
+    } else if (this.inputPin.length < 6) {
+      this.inputPin += val;
+    }
+    this.updateDots();
+    if (this.inputPin.length === 6) this.verify();
+  },
+
+  updateDots() {
+    for (let i = 1; i <= 6; i++) {
+      const dot = document.getElementById(`dot-${i}`);
+      if (dot) {
+        if (i <= this.inputPin.length) dot.classList.add('active');
+        else dot.classList.remove('active');
+      }
+    }
+  },
+
+  clear() {
+    if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(10);
+    this.inputPin = "";
+    this.updateDots();
+  },
+
+  async verify() {
+    const activeHash = state.pin || this.correctPinHash;
+    const activeSalt = state.pinSalt || this.correctPinSalt || 'NITIPAT_SALT_DEFAULT';
+
+    const isValid = await verifyPIN(this.inputPin, activeHash, activeSalt);
+    if (isValid) {
+      this.statusEl.textContent = "ACCESS GRANTED. SYNCING DATA...";
+      sessionStorage.setItem('unlocked', 'true');
+      sessionStorage.setItem('unlocked_at', Date.now().toString());
+      state.isLocked = false;
+      this.el.classList.add('inactive');
+      await startAppCore();
+    } else {
+      // Problem 5: Auto-sync once on failure
+      this.statusEl.textContent = "VERIFYING WITH REMOTE VAULT...";
+      await this.sync(false);
+      const activeHashRetry = state.pin || this.correctPinHash;
+      const activeSaltRetry = state.pinSalt || this.correctPinSalt || 'NITIPAT_SALT_DEFAULT';
+      
+      const isValidRetry = await verifyPIN(this.inputPin, activeHashRetry, activeSaltRetry);
+      
+      if (isValidRetry) {
+        this.verify(); // Success after sync
+        return;
+      }
+
+      this.statusEl.textContent = "INCORRECT PIN. ACCESS DENIED.";
+      this.inputPin = "";
+      this.updateDots();
+      this.pinContainer.style.animation = 'none';
+      this.pinContainer.offsetHeight;
+      this.pinContainer.style.animation = 'shake 0.4s cubic-bezier(.36,.07,.19,.97) both';
+      if (window.navigator.vibrate) window.navigator.vibrate(200);
+    }
+  }
+};
+
+window.LoginGate = LoginGate;
+
+// Entry point unified into DOMContentLoaded
+
+async function startAppCore() {
+  try {
+    let firebaseConfig;
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      console.warn("Using aligned local Firebase config");
+      firebaseConfig = {
+        apiKey: "AIzaSyB7pGaPWn4n7NxrQ9l60V16u-qj05khqU8",
+        authDomain: "mat-e-db476.firebaseapp.com",
+        databaseURL: "https://mat-e-db476-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "mat-e-db476",
+        storageBucket: "mat-e-db476.firebasestorage.app",
+        messagingSenderId: "986910230630",
+        appId: "1:986910230630:web:7b4b23ce828d18ab7bc5a7"
+      };
+    } else {
+      firebaseConfig = await new Promise((res, rej) => {
+        google.script.run.withSuccessHandler(res).withFailureHandler(rej).getFirebaseConfig();
+      });
+    }
+
+    if (!firebaseConfig.apiKey) {
+      console.error("Firebase API Key is missing.");
+      return;
+    }
+
+    const app = initializeApp(firebaseConfig);
+    db = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      experimentalForceLongPolling: true
+    });
+
+    messaging = getMessaging(app);
+    onMessage(messaging, (payload) => {
+      if (typeof Notification !== 'undefined') {
+        new Notification(payload.notification.title, {
+          body: payload.notification.body,
+          icon: payload.notification.image || "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+        });
+      }
+    });
+
+    await loadAll();
+    startHyperNotifications();
+    scheduleAllNotifications();
+    
+    // Notion Initial Sync
+    setTimeout(() => NotionHub.sync(), 2000);
+    if ('serviceWorker' in navigator) {
+      initWebPush();
+    }
+    render();
+  } catch (err) {
+    console.error("App initialization failed:", err);
+  }
+}
+
+window.startAppPublic = async function() {
+  try {
+    let firebaseConfig;
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      firebaseConfig = {
+        apiKey: "AIzaSyB7pGaPWn4n7NxrQ9l60V16u-qj05khqU8",
+        authDomain: "mat-e-db476.firebaseapp.com",
+        databaseURL: "https://mat-e-db476-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "mat-e-db476",
+        storageBucket: "mat-e-db476.firebasestorage.app",
+        messagingSenderId: "986910230630",
+        appId: "1:986910230630:web:7b4b23ce828d18ab7bc5a7"
+      };
+    } else {
+      firebaseConfig = await new Promise((res, rej) => {
+        google.script.run.withSuccessHandler(res).withFailureHandler(rej).getFirebaseConfig();
+      });
+    }
+
+    if (!firebaseConfig.apiKey) return;
+
+    const app = initializeApp(firebaseConfig);
+    db = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      experimentalForceLongPolling: true
+    });
+
+    state.ilmFilesLoadedFromServer = false;
+    render(); // Update UI to show loading
+
+    try {
+      const ilmFilesSnap = await getDoc(doc(db, "ilm_data", "files"));
+      if (ilmFilesSnap.exists()) {
+        state.ilmFiles = ilmFilesSnap.data().list || [];
+      }
+    } catch(e) {
+      console.warn("Public fetch error", e);
+    }
+    
+    state.ilmFilesLoadedFromServer = true;
+    render(); // Re-render the portal with actual data
+  } catch (err) {
+    console.error("Public App initialization failed:", err);
+  }
+};
+
+window.startAppVerify = async function(docId) {
+  try {
+    let firebaseConfig;
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      firebaseConfig = {
+        apiKey: "AIzaSyB7pGaPWn4n7NxrQ9l60V16u-qj05khqU8",
+        authDomain: "mat-e-db476.firebaseapp.com",
+        databaseURL: "https://mat-e-db476-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "mat-e-db476",
+        storageBucket: "mat-e-db476.firebasestorage.app",
+        messagingSenderId: "986910230630",
+        appId: "1:986910230630:web:7b4b23ce828d18ab7bc5a7"
+      };
+    } else {
+      firebaseConfig = await new Promise((res, rej) => {
+        google.script.run.withSuccessHandler(res).withFailureHandler(rej).getFirebaseConfig();
+      });
+    }
+
+    if (!firebaseConfig.apiKey) return;
+
+    const app = initializeApp(firebaseConfig);
+    db = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      experimentalForceLongPolling: true
+    });
 
     document.body.innerHTML = `
       <div style="height:100vh; display:flex; justify-content:center; align-items:center; background:#0f172a; color:#f8fafc; font-family:'Inter', sans-serif;">
@@ -355,13 +550,30 @@ window.startAppVerify = async function(docId) {
       console.warn(e);
     }
 
+    if (docData) {
+      const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+      const docTime = new Date(docData.timestamp).getTime();
+      if (Date.now() - docTime > thirtyDaysMs) {
+        document.body.innerHTML = `
+          <div style="height:100vh; display:flex; justify-content:center; align-items:center; background:#0f172a; color:#f8fafc; font-family:'Inter', sans-serif;">
+            <div style="text-align:center; background:#1e293b; padding:40px; border-radius:16px; border:1px solid #334155; max-width:400px; box-shadow:0 20px 40px rgba(0,0,0,0.5);">
+              <div style="font-size:60px; margin-bottom:20px;">⏱️</div>
+              <h2 style="color:#f59e0b; margin-top:0;">DOCUMENT EXPIRED</h2>
+              <p style="color:#94a3b8; line-height:1.6;">This verification link has expired because it is older than 30 days. Please request a newly generated document from the issuer.</p>
+            </div>
+          </div>
+        `;
+        return;
+      }
+    }
+
     if (!docData) {
       document.body.innerHTML = `
         <div style="height:100vh; display:flex; justify-content:center; align-items:center; background:#0f172a; color:#f8fafc; font-family:'Inter', sans-serif;">
           <div style="text-align:center; background:#1e293b; padding:40px; border-radius:16px; border:1px solid #334155; max-width:400px; box-shadow:0 20px 40px rgba(0,0,0,0.5);">
             <div style="font-size:60px; margin-bottom:20px;">❌</div>
             <h2 style="color:#ef4444; margin-top:0;">VERIFICATION FAILED</h2>
-            <p style="color:#94a3b8; line-height:1.6;">This document cannot be found in the secure vault or the link has expired.</p>
+            <p style="color:#94a3b8; line-height:1.6;">This document cannot be found in the secure vault.</p>
           </div>
         </div>
       `;
@@ -371,7 +583,7 @@ window.startAppVerify = async function(docId) {
     // Success Screen
     const hash = "VERIFIED-" + docId.substring(0,8).toUpperCase();
     const date = new Date(docData.timestamp).toLocaleString('th-TH');
-    
+
     document.body.innerHTML = `
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;600;800&display=swap');
@@ -407,9 +619,9 @@ window.startAppVerify = async function(docId) {
               <div class="value highlight">${docData.gpax}</div>
             </div>
             <div>
-          <div class="data-row">
-            <div class="label">Date of Issue</div>
-            <div class="value">${date}</div>
+              <div class="label">Date of Issue</div>
+              <div class="value">${date}</div>
+            </div>
           </div>
         </div>
         
