@@ -407,11 +407,6 @@ window.startAppVerify = async function(docId) {
               <div class="value highlight">${docData.gpax}</div>
             </div>
             <div>
-              <div class="label">Total Credits</div>
-              <div class="value">${docData.credits || '-'}</div>
-            </div>
-          </div>
-          
           <div class="data-row">
             <div class="label">Date of Issue</div>
             <div class="value">${date}</div>
@@ -422,10 +417,63 @@ window.startAppVerify = async function(docId) {
           <div style="color:#f8fafc; margin-bottom:4px; font-weight:bold;">BLOCKCHAIN SIGNATURE</div>
           ${hash}<br><span style="color:#3b82f6;">DOC ID: ${docId}</span>
         </div>
+
+        ${docData.currMapBase64 ? `
+          <div style="margin-top:40px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:15px; text-align:center;">
+             <div class="label" style="margin-bottom:10px;">Interactive Curriculum Map Included</div>
+             <img src="${docData.currMapBase64}" style="max-width:100%; border-radius:8px;" />
+          </div>
+        ` : ''}
       </div>
     `;
   } catch (err) {
     console.error(err);
     document.body.innerHTML = "<div style='color:white; padding:20px;'>Internal System Error.</div>";
+  }
+};
+
+window.startAppPublic = async function() {
+  try {
+    let firebaseConfig;
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      firebaseConfig = {
+        apiKey: "AIzaSyB7pGaPWn4n7NxrQ9l60V16u-qj05khqU8",
+        authDomain: "mat-e-db476.firebaseapp.com",
+        databaseURL: "https://mat-e-db476-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "mat-e-db476",
+        storageBucket: "mat-e-db476.firebasestorage.app",
+        messagingSenderId: "986910230630",
+        appId: "1:986910230630:web:7b4b23ce828d18ab7bc5a7"
+      };
+    } else {
+      firebaseConfig = await new Promise((res, rej) => {
+        google.script.run.withSuccessHandler(res).withFailureHandler(rej).getFirebaseConfig();
+      });
+    }
+
+    if (!firebaseConfig.apiKey) return;
+
+    const app = initializeApp(firebaseConfig);
+    db = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      experimentalForceLongPolling: true
+    });
+
+    state.ilmFilesLoadedFromServer = false;
+    render(); // Update UI to show loading
+
+    try {
+      const ilmFilesSnap = await getDoc(doc(db, "ilm_data", "files"));
+      if (ilmFilesSnap.exists()) {
+        state.ilmFiles = ilmFilesSnap.data().list || [];
+      }
+    } catch(e) {
+      console.warn("Public fetch error", e);
+    }
+    
+    state.ilmFilesLoadedFromServer = true;
+    render(); // Re-render the portal with actual data
+  } catch (err) {
+    console.error("Public App initialization failed:", err);
   }
 };
