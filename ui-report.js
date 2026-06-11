@@ -213,8 +213,8 @@ function buildDocumentHTML(data, docId, verifyUrl, isPreview, currMapBase64 = ''
       </div>
 
       ${currMapBase64 ? `
-        <div style="page-break-before: always; margin-top:40px;">
-          <h2 class="section-title"><span>🗺️</span> แผนผังหลักสูตร (Interactive Curriculum Map)</h2>
+        <div class="landscape-page" style="page-break-before: always; margin-top:40px;">
+          <h2 class="section-title" style="margin-top:20px;"><span>🗺️</span> แผนผังหลักสูตร (Interactive Curriculum Map)</h2>
           <div style="margin-top:20px; border:2px solid #e2e8f0; border-radius:12px; overflow:hidden; padding:20px; background:#f8fafc; text-align:center;">
              <img src="${currMapBase64}" style="max-width:100%; height:auto;" alt="Curriculum Map" />
           </div>
@@ -287,6 +287,8 @@ function getDocumentCSS() {
         body { background: #fff; display: block; }
         .a4-document { box-shadow: none; padding: 0; border: none; max-width: 100%; }
         @page { size: A4 portrait; margin: 10mm 15mm; }
+        @page landscape_page { size: A4 landscape; margin: 10mm; }
+        .landscape-page { page: landscape_page; }
       }
   `;
 }
@@ -338,13 +340,27 @@ window.generateAndPrintFrontendPDF = async function() {
       nameTh: STUDENT.nameTh,
       gpax: dataModel.gpa,
       credits: dataModel.credits,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      currMapBase64: currMapBase64
     };
     
     let docId = "DOC-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+    const CACHE_KEY = "nitipat_last_report_doc";
+    const cachedDoc = localStorage.getItem(CACHE_KEY);
+    if (cachedDoc) {
+      try {
+        const parsed = JSON.parse(cachedDoc);
+        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+        if (Date.now() - parsed.timestamp < thirtyDaysMs) {
+          docId = parsed.docId; // Reuse the docId
+        }
+      } catch(e) {}
+    }
+    
     try {
       if (typeof db !== 'undefined' && typeof doc !== 'undefined' && typeof setDoc !== 'undefined') {
         await setDoc(doc(db, "verifications", docId), docData);
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ docId: docId, timestamp: Date.now() }));
       } else {
         console.warn("Firestore not loaded globally");
         docId = "LOCAL-" + Date.now();
