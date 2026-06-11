@@ -13,7 +13,8 @@ const CURRICULUM_DATA = [
       { id: '01420111', code: '01420111', cr: 3, label: '', type: 'sci' },
       { id: '01420113', code: '01420113', cr: 1, label: '', type: 'sci' },
       { id: '01999111', code: '01999111', cr: 2, label: 'L', type: 'gened' },
-      { id: 'free_1', code: '', cr: 3, label: '', type: 'free' }
+      { id: 'free_1a', code: '', cr: 2, label: '', type: 'free' },
+      { id: 'free_1b', code: '', cr: 1, label: '', type: 'free' }
     ]
   },
   {
@@ -247,7 +248,7 @@ function renderCurriculumMap() {
                        onmouseenter="highlightArrows('${c.id}', '${c.code}')" 
                        onmouseleave="resetArrows()"
                        onclick="${onClickStr}"
-                       style="display:flex; flex-direction:column; background:var(--glass-bg); border:2px solid var(--glass-border); border-radius:10px; padding:10px; cursor:pointer; box-shadow:0 4px 6px rgba(0,0,0,0.05); transition:all 0.2s; position:relative;">
+                       style="display:flex; flex-direction:column; background:var(--glass-bg); border:2px solid var(--glass-border); border-radius:10px; padding:10px; cursor:pointer; box-shadow:0 4px 6px rgba(0,0,0,0.05); transition:all 0.2s; position:relative; z-index:10;">
                     
                     ${isPlaceholder ? '<div style="position:absolute; top:-8px; right:-8px; background:var(--c-accent); color:white; width:20px; height:20px; border-radius:10px; font-size:10px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 4px rgba(0,0,0,0.2);">✏️</div>' : ''}
                     
@@ -306,6 +307,8 @@ function renderCurriculumMap() {
   </div>
 
   <style>
+    .curr-box { position: relative; z-index: 10; }
+    .curr-box::before { content: ""; position: absolute; inset: 0; background: var(--bg-color); z-index: -1; border-radius: 8px; }
     .curr-box.passed { background: rgba(34, 197, 94, 0.1) !important; border-color: var(--c-mint) !important; color: var(--c-mint); }
     .curr-box.in-progress { background: rgba(234, 179, 8, 0.1) !important; border-color: var(--c-sun) !important; color: var(--c-sun); }
     .curr-box.empty-placeholder { border-style: dashed !important; border-color: #94a3b8 !important; opacity: 0.8; }
@@ -368,19 +371,42 @@ function drawCurriculumArrows() {
       const r2 = toEl.getBoundingClientRect();
 
       // We must divide by currentZoom to get unscaled coordinates inside the SVG
-      const x1 = (r1.right - rectContainer.left) / scale;
-      const y1 = (r1.top + (r1.height / 2) - rectContainer.top) / scale;
-      
-      const x2 = (r2.left - rectContainer.left) / scale;
-      const y2 = (r2.top + (r2.height / 2) - rectContainer.top) / scale;
+      const cx1 = (r1.left + r1.width / 2 - rectContainer.left) / scale;
+      const cy1 = (r1.top + r1.height / 2 - rectContainer.top) / scale;
+      const cx2 = (r2.left + r2.width / 2 - rectContainer.left) / scale;
+      const cy2 = (r2.top + r2.height / 2 - rectContainer.top) / scale;
 
-      let pathD = '';
-      
-      if (Math.abs(y1 - y2) < 25) {
+      let x1, y1, x2, y2, pathD;
+
+      if (Math.abs(cx1 - cx2) < 50) {
+        // Same column
+        x1 = cx1; x2 = cx2;
+        if (cy1 < cy2) {
+           y1 = (r1.bottom - rectContainer.top) / scale;
+           y2 = (r2.top - rectContainer.top) / scale;
+        } else {
+           y1 = (r1.top - rectContainer.top) / scale;
+           y2 = (r2.bottom - rectContainer.top) / scale;
+        }
         pathD = `M ${x1} ${y1} L ${x2} ${y2}`;
       } else {
-        const mx = x1 + (x2 - x1) / 2;
-        pathD = `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`;
+        // Different columns
+        x1 = (r1.right - rectContainer.left) / scale;
+        y1 = cy1;
+        x2 = (r2.left - rectContainer.left) / scale;
+        y2 = cy2;
+        
+        if (x2 < x1) {
+           // Flow backwards (wrap around)
+           pathD = `M ${x1} ${y1} C ${x1+40} ${y1}, ${x2-40} ${y2}, ${x2} ${y2}`;
+        } else if (Math.abs(y1 - y2) < 25) {
+           // Straight line horizontal
+           pathD = `M ${x1} ${y1} L ${x2} ${y2}`;
+        } else {
+           // S-curve
+           const mx = x1 + (x2 - x1) / 2;
+           pathD = `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`;
+        }
       }
 
       const dash = arrow.type === 'dashed' ? 'stroke-dasharray="4,4"' : '';
