@@ -1,0 +1,214 @@
+function renderCourseProgress(c) {
+  return `
+        <div class="hub-scroll-area">
+          <div class="hub-grid">
+            <div class="glass-card nb-card">
+              <div class="section-hd">📊 คะแนนสะสม (Grade Structure) <button class="icon-btn-sm" style="float:right;" onclick="setupGradeStructure('${c.id}')">✏️</button></div>
+              ${renderGradeStructure(c.id)}
+            </div>
+            <div class="glass-card nb-card">
+              <div class="section-hd">🎯 ความเข้าใจรายหัวข้อ (Topic Mastery)</div>
+              ${renderTopicMastery(c.id)}
+            </div>
+          </div>
+        </div>
+      `;
+}
+
+function renderCourseAttendance(c) {
+  return `
+        <div class="hub-scroll-area">
+          <div class="hub-grid">
+            <div class="glass-card nb-card" style="grid-column: 1 / -1;">
+              <div class="section-hd">📍 ระบบเช็คอินและประวัติการเข้าเรียน</div>
+              ${renderAttendanceSummary(c.id)}
+            </div>
+          </div>
+        </div>
+      `;
+}
+
+function renderCourseSettings(c) {
+  const links = state.links[c.id] || [];
+  return `
+        <div class="hub-scroll-area" style="padding:0 20px 20px;">
+          <div class="hub-grid">
+            <div class="settings-form glass-card nb-card">
+              <div class="section-hd">⚙️ ตั้งค่ารายวิชา</div>
+              <div class="form-grid">
+                <div class="fg"><label>ชื่อวิชา (ภาษาไทย)</label><input type="text" class="glass-input" id="set-name-th" value="${c.nameTh || ''}"></div>
+                <div class="fg"><label>ชื่อวิชา (English)</label><input type="text" class="glass-input" id="set-name-en" value="${c.nameEn || ''}"></div>
+                <div class="form-row">
+                  <div class="fg"><label>รหัสวิชา</label><input type="text" class="glass-input" id="set-code" value="${c.code || ''}"></div>
+                  <div class="fg"><label>หน่วยกิต</label><input type="number" class="glass-input" id="set-credits" value="${c.credits || 0}"></div>
+                </div>
+                <div class="fg"><label>ผู้สอน</label><input type="text" class="glass-input" id="set-instructor" value="${c.instructor || ''}"></div>
+                <div class="fg">
+                  <label>สีประจำวิชา</label>
+                  <div class="color-picker-row">
+                    ${['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'].map(color => `
+                      <div class="cpick ${c.color === color ? 'sel' : ''}" style="background:${color}" onclick="updateSetColor('${color}', this)"></div>
+                    `).join('')}
+                    <input type="hidden" id="set-color" value="${c.color || '#4f46e5'}">
+                  </div>
+                </div>
+                <div class="fg"><label>ลิงก์ห้องเรียน / LMS</label><input type="text" class="glass-input" id="set-link" value="${c.link || ''}"></div>
+                <div class="fg"><label>Google Drive Folder ID</label><input type="text" class="glass-input" id="set-drive-id" value="${c.driveId || ''}"></div>
+              </div>
+            </div>
+                <div style="margin-top:20px; display:flex; gap:10px;">
+                  <button class="nb-btn-primary full" onclick="saveCourseSettings('${c.id}')">💾 บันทึกการตั้งค่า</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="glass-card nb-card">
+              <div class="section-hd">🔗 ลิงก์ห้องเรียน / แหล่งเรียนรู้</div>
+              <div id="linkManagerList" style="display:flex; flex-direction:column; gap:8px;">
+                ${links.map((l, idx) => `
+                  <div class="glass-card-sm" style="display:flex; justify-content:space-between; align-items:center; padding:10px;">
+                    <div>
+                      <div style="font-weight:700; font-size:13px;">${l.name}</div>
+                      <div style="font-size:11px; opacity:0.6; text-decoration:underline;">${l.url}</div>
+                    </div>
+                    <button class="btn-text-danger" onclick="removeCourseLink('${c.id}', ${idx})">✕</button>
+                  </div>
+                `).join('')}
+                ${links.length === 0 ? '<div class="empty-sm">ยังไม่มีลิงก์เสริม</div>' : ''}
+              </div>
+              <div class="form-grid" style="margin-top:15px; border-top:1px solid var(--glass-border); padding-top:15px;">
+                <input class="glass-input sm" id="new-link-name" placeholder="ชื่อลิงก์ (เช่น เข้าเรียน Zoom)">
+                <input class="glass-input sm" id="new-link-url" placeholder="URL (https://...)">
+                <button class="nb-btn sm" onclick="addCourseLink('${c.id}')">+ เพิ่มลิงก์</button>
+              </div>
+            </div>
+
+            <div class="glass-card nb-card">
+              <div class="section-hd">🛠 ตั้งค่าโครงสร้างคะแนน</div>
+              <p style="font-size:12px; margin-bottom:15px; opacity:0.7;">ระบุสัดส่วนคะแนนสะสมของรายวิชาเพื่อให้ระบบคำนวณ Progress</p>
+              <button class="nb-btn sm full" onclick="setupGradeStructure('${c.id}')">⚙️ จัดการโครงสร้างคะแนน</button>
+            </div>
+
+            <div class="glass-card nb-card">
+              <div class="section-hd">📂 Google Drive Folder</div>
+              <div class="fg">
+                <label>Folder ID (Auto-assigned)</label>
+                <div style="display:flex; gap:8px;">
+                   <input type="text" class="glass-input sm" id="set-drive-id" value="${c.driveId || ''}" readonly>
+                   <button class="nb-btn sm" onclick="automateDriveFolder('${c.id}')" ${!isDriveSupported() ? 'disabled style="opacity:0.5; cursor:not-allowed;" title="ต้องใช้ผ่าน Google Apps Script/Proxy"' : ''}>🔄 เชื่อมต่ออัตโนมัติ</button>
+                </div>
+              </div>
+              <button class="nb-btn-danger sm" style="margin-top:25px; width:100%;" onclick="if(confirm('คุณแน่ใจหรือไม่ว่าจะลบวิชานี้?')) { if(confirm('ยืนยันอีกครั้ง! ข้อมูลทั้งหมดจะหายไป')) deleteCourse('${c.id}') }">🗑 ลบวิชานี้จากระบบ</button>
+            </div>
+          </div>
+        </div>
+      `;
+}
+
+function renderAttendanceSummary(courseId) {
+  const history = state.attendanceHistory[courseId] || {};
+  const dates = Object.keys(history).sort((a, b) => new Date(b) - new Date(a));
+  const todayStr = new Date().toLocaleDateString('en-CA');
+  const todayRecord = history[todayStr];
+  const isOnline = state.classMode === 'online';
+
+  const counts = { 'ปกติ': 0, 'สาย': 0, 'ขาด': 0 };
+  Object.values(history).forEach(h => {
+    if (h.status.includes('ปกติ')) counts['ปกติ']++;
+    else if (h.status.includes('สาย')) counts['สาย']++;
+    else counts['ขาด']++;
+  });
+
+  let html = `
+        <div class="att-controls" style="margin-bottom:20px; display:flex; flex-direction:column; gap:12px;">
+          <div class="glass-card nb-card" style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:10px 15px;">
+             <div style="font-weight:800; font-size:13px;">📡 โหมดการเรียน</div>
+             <div style="display:flex; background:#e2e8f0; padding:3px; border-radius:10px; border:2px solid black;">
+                <button class="nb-btn sm ${!isOnline ? 'active' : ''}" style="padding:4px 10px; border:none; box-shadow:none; font-size:11px; background:${!isOnline ? 'var(--c-indigo)' : 'transparent'}; color:${!isOnline ? 'white' : 'black'};" onclick="state.classMode='onsite'; render();">Onsite</button>
+                <button class="nb-btn sm ${isOnline ? 'active' : ''}" style="padding:4px 10px; border:none; box-shadow:none; font-size:11px; background:${isOnline ? 'var(--c-indigo)' : 'transparent'}; color:${isOnline ? 'white' : 'black'};" onclick="state.classMode='online'; render();">Online</button>
+             </div>
+          </div>
+
+          <div class="att-status-card glass-card nb-card" style="background:#fff;">
+            <div style="font-weight:800; font-size:14px; margin-bottom:10px;">📍 เช็คอินวันนี้ (${new Date().toLocaleDateString('th-TH')})</div>
+            ${(() => {
+      const now = new Date();
+      const adjustedDay = getTodayDayIndex();
+      const currentTimeVal = now.getHours() + (now.getMinutes() / 60);
+      const curSem = getCurrentSemester();
+      const course = findCourseById(courseId);
+      const schedules = (course?.schedules || course?.schedule || []);
+      const activeSlot = schedules.find(s => s.day === adjustedDay && currentTimeVal >= s.startHour && currentTimeVal < s.endHour);
+
+      if (todayRecord) {
+        return `
+                  <div style="background:var(--c-lime)11; border:2px solid var(--c-lime); padding:12px; border-radius:12px; display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:20px;">✅</span>
+                    <div>
+                      <div style="font-weight:800; color:var(--c-lime); font-size:13px;">เช็คชื่อเรียบร้อยแล้ว</div>
+                      <div style="font-size:11px; opacity:0.7;">เวลา: ${todayRecord.timestamp?.split('T')[1].substring(0, 5) || '-'} | สถานะ: ${todayRecord.status}</div>
+                    </div>
+                  </div>`;
+      } else if (activeSlot) {
+        return `
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                    <button class="nb-btn sm nb-btn-primary" onclick="setAttendanceStatus('${courseId}', 'เข้าเรียนปกติ')">✅ เข้าเรียน</button>
+                    <button class="nb-btn sm nb-btn-danger" onclick="setAttendanceStatus('${courseId}', 'มาสาย')">⏳ สาย</button>
+                  </div>`;
+      } else {
+        return `<div class="glass-warn" style="text-align:center; padding:12px; border-radius:12px; font-size:13px;">⌛ ยังไม่ถึงเวลาคลาสเรียน (กดได้เฉพาะเวลาเรียน)</div>`;
+      }
+    })()}
+          </div>
+
+          <div class="reflection-card glass-card nb-card" style="background:#fff;">
+            <div style="font-weight:800; font-size:14px; margin-bottom:8px;">📝 Reflection หลังเลิกคลาส</div>
+            <textarea id="reflInput_adv" class="nb-input" style="width:100%; min-height:80px; padding:10px; font-family:var(--font-body); font-size:13px;" placeholder="วันนี้เรียนรู้อะไรบ้าง?">${getReflectionText(courseId)}</textarea>
+            <button class="nb-btn sm nb-btn-primary" style="width:100%; margin-top:8px;" onclick="window.saveReflection('${courseId}')">💾 บันทึก Reflection</button>
+          </div>
+        </div>
+
+        <div class="att-history-list" style="display:flex; flex-direction:column; gap:8px;">
+          <div style="font-weight:800; font-size:13px; opacity:0.5; margin-bottom:4px;">ประวัติย้อนหลัง (${counts['ปกติ']} มา, ${counts['สาย']} สาย, ${counts['ขาด']} ขาด)</div>
+          ${dates.map(d => {
+      const r = history[d];
+      const isPresent = r.status.includes('ปกติ');
+      const isLate = r.status.includes('สาย');
+      return `
+              <div class="glass-card" style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border:1px solid var(--glass-border);">
+                <div>
+                  <div style="font-weight:700; font-size:12px;">${new Date(d).toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' })}</div>
+                  <div style="font-size:10px; opacity:0.5;">${r.timestamp?.split('T')[1].substring(0, 5) || '-'}</div>
+                </div>
+                <div class="nb-chip" style="background:${isPresent ? 'var(--c-lime)22' : isLate ? 'var(--c-rust)22' : 'var(--c-red)22'}; color:${isPresent ? 'var(--c-lime)' : isLate ? 'var(--c-rust)' : 'var(--c-red)'}; border-color:${isPresent ? 'var(--c-lime)' : isLate ? 'var(--c-rust)' : 'var(--c-red)'}">${r.status}</div>
+              </div>
+            `;
+    }).join('') || '<div class="empty-sm">ยังไม่มีประวัติ</div>'}
+        </div>
+      `;
+  return html;
+}
+
+window.saveReflection = async (courseId) => {
+  const el = document.getElementById('reflInput_adv');
+  if (!el) return;
+  const val = el.value.trim();
+  if (!val) { showToast('⚠️ กรุณากรอกเนื้อหา', 'err'); return; }
+
+  showToast('⏳ กำลังบันทึก Reflection...');
+  try {
+    await saveReflectionData(courseId, val);
+    showToast('✅ บันทึก Reflection สำเร็จ!');
+    
+    // Push to Notion
+    
+    
+    render();
+  } catch (e) {
+    showToast('❌ บันทึกล้มเหลว: ' + e.message, 'err');
+  }
+};
+
+
+
+function renderExplorerUI(courseId) {
