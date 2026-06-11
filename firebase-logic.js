@@ -333,7 +333,6 @@ async function loadAll() {
     saveToLocalStorage();
     await autoArchiveCourses();
     state.isInitializing = false;
-    scheduleAllNotifications();
     if (!state.modal) render();
   } catch (e) {
     state.isInitializing = false;
