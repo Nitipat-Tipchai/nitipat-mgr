@@ -956,7 +956,9 @@ function renderTopNav(gpa, pro, curSem) {
       { id: 'dashboard', icon: '◈', label: 'Dashboard' }, { id: 'semesters', icon: '📅', label: 'เทอมการศึกษา' },
       { id: 'courses', icon: '📚', label: 'รายวิชา' }, { id: 'schedule', icon: '▦', label: 'ตารางเรียน' },
       { id: 'assignments', icon: '📋', label: 'การบ้าน' }, { id: 'exams', icon: '📝', label: 'ตารางสอบ' },
-      { id: 'grades', icon: '🎓', label: 'เกรด & GPA' }, { id: 'roadmap', icon: '🗺', label: 'Roadmap 4 ปี' },
+      { id: 'grades', icon: '🎓', label: 'เกรด & GPA' }, 
+      { id: 'roadmap', icon: '🗺', label: 'Roadmap หมวดวิชา' },
+      { id: 'curriculum', icon: '🗺️', label: 'แผนผังหลักสูตร' },
       { id: 'focus', icon: '🍅', label: 'Focus Mode' }, { id: 'club', icon: '🏛', label: 'งานชุมนุม' },
       { id: 'calendar', icon: '🗓', label: 'ปฏิทินการศึกษา' },
       { id: 'money-pod', icon: '🐽', label: 'MoneyPod' },
@@ -1270,6 +1272,7 @@ function renderPage(gpa, pro, curSem) {
     case 'exams': return renderExams();
     case 'grades': return renderGrades(gpa, pro);
     case 'roadmap': return renderRoadmap();
+    case 'curriculum': return renderCurriculumMap();
     case 'focus': return renderFocus();
     case 'club': return renderClub();
     case 'money-pod': return renderMoneyPod();
