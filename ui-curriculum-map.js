@@ -691,8 +691,17 @@ window.deleteCustomCourse = function(code) {
   if (confirm('คุณต้องการลบวิชานี้ออกจาก Roadmap ใช่หรือไม่?')) {
     if (state.customRoadmapCourses) {
       state.customRoadmapCourses = state.customRoadmapCourses.filter(c => c.code !== code);
-      localStorage.setItem('mgr_state', JSON.stringify(state));
-      if (state.user && typeof syncStateToCloud === 'function') syncStateToCloud();
+      localStorage.setItem('nitipat_custom_roadmap', JSON.stringify(state.customRoadmapCourses));
+      
+      if (typeof COURSE_DB !== 'undefined') {
+        for (const cat in COURSE_DB) {
+          COURSE_DB[cat] = COURSE_DB[cat].filter(c => c.code !== code || !c.isCustom);
+        }
+        if (typeof ALL_COURSES !== 'undefined') {
+          ALL_COURSES = ALL_COURSES.filter(c => c.code !== code || !c.isCustom);
+        }
+      }
+      
       showToast('ลบวิชาสำเร็จ', 'ok');
       render();
     }
@@ -729,9 +738,30 @@ window.saveCustomCourse = function() {
     state.customRoadmapCourses.push({ code, name, cr, category });
   }
   
+  if (typeof COURSE_DB !== 'undefined') {
+    let dbCat = 'elective';
+    if (category === 'ศึกษาทั่วไป') dbCat = 'general';
+    else if (category === 'วิทยาศาสตร์') dbCat = 'science';
+    else if (category === 'วิศวกรรม') dbCat = 'engineering_basic';
+    
+    if (originalCode) {
+      for (const cat in COURSE_DB) {
+        COURSE_DB[cat] = COURSE_DB[cat].filter(c => c.code !== originalCode || !c.isCustom);
+      }
+      if (typeof ALL_COURSES !== 'undefined') {
+        ALL_COURSES = ALL_COURSES.filter(c => c.code !== originalCode || !c.isCustom);
+      }
+    }
+    
+    if (COURSE_DB[dbCat] && !COURSE_DB[dbCat].find(c => c.code === code)) {
+      const newCourse = { code: code, name: name, credits: cr, group: category, isCustom: true };
+      COURSE_DB[dbCat].push(newCourse);
+      if (typeof ALL_COURSES !== 'undefined') ALL_COURSES.push(newCourse);
+    }
+  }
+
   // Save state locally
-  localStorage.setItem('mgr_state', JSON.stringify(state));
-  if (state.user && typeof syncStateToCloud === 'function') syncStateToCloud();
+  localStorage.setItem('nitipat_custom_roadmap', JSON.stringify(state.customRoadmapCourses));
   
   document.getElementById('addCustomCourseModal').style.display = 'none';
   showToast('บันทึกวิชาใน Roadmap เรียบร้อย', 'ok');
