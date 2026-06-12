@@ -9,6 +9,22 @@ async function loadCourseDatabase() {
     if (res.ok) {
       const data = await res.json();
       COURSE_DB = data;
+      
+      // Inject Custom Roadmap Courses so they appear in Trial Registration
+      try {
+        const customCourses = JSON.parse(localStorage.getItem('nitipat_custom_roadmap') || '[]');
+        customCourses.forEach(cc => {
+          let cat = 'elective';
+          if (cc.category === 'ศึกษาทั่วไป') cat = 'general';
+          else if (cc.category === 'วิทยาศาสตร์') cat = 'science';
+          else if (cc.category === 'วิศวกรรม') cat = 'engineering_basic';
+          
+          if (COURSE_DB[cat] && !COURSE_DB[cat].find(c => c.code === cc.code)) {
+            COURSE_DB[cat].push({ code: cc.code, name: cc.name, credits: cc.cr, group: cc.category, isCustom: true });
+          }
+        });
+      } catch(e) {}
+
       ALL_COURSES = [
         ...COURSE_DB.general,
         ...COURSE_DB.science,
