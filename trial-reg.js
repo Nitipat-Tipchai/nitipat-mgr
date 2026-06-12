@@ -39,8 +39,19 @@ function initTrialState() {
   if (saved) {
     try {
       const loaded = JSON.parse(saved);
+      
+      const now = Date.now();
+      if (loaded.lastUpdated && !loaded.isPrinted && (now - loaded.lastUpdated > 48 * 60 * 60 * 1000)) {
+        trialState.selectedCourses = [];
+        trialState.pinnedSchedules = loaded.pinnedSchedules || [];
+        trialState.isPrinted = false;
+        saveTrialState();
+        return;
+      }
+      
       trialState.selectedCourses = loaded.selectedCourses || [];
       trialState.pinnedSchedules = loaded.pinnedSchedules || [];
+      trialState.isPrinted = loaded.isPrinted || false;
       
       // Backward Compatibility
       trialState.selectedCourses = trialState.selectedCourses.map(item => {
@@ -62,6 +73,7 @@ function initTrialState() {
     } catch (e) {
       trialState.selectedCourses = [];
       trialState.pinnedSchedules = [];
+      trialState.isPrinted = false;
     }
   } else {
     // Migration from old key
@@ -80,7 +92,9 @@ function initTrialState() {
 function saveTrialState() {
   localStorage.setItem('nitipat_trial_state_v2', JSON.stringify({
     selectedCourses: trialState.selectedCourses,
-    pinnedSchedules: trialState.pinnedSchedules
+    pinnedSchedules: trialState.pinnedSchedules,
+    lastUpdated: Date.now(),
+    isPrinted: trialState.isPrinted || false
   }));
 }
 
@@ -1427,6 +1441,9 @@ function triggerSimReceiptPrinting() {
   const wrap = document.getElementById('receiptWrapper');
   const paper = document.getElementById('receiptPaper');
   if (!wrap || !paper) return;
+
+  trialState.isPrinted = true;
+  saveTrialState();
 
   paper.classList.remove('receipt-tear-away');
   wrap.style.display = 'block';
