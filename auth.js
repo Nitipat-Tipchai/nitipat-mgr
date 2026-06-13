@@ -285,23 +285,15 @@ window.LoginGate = LoginGate;
 
 async function startAppCore() {
   try {
-    let firebaseConfig;
-    if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron')) {
-      console.warn("Using aligned local Firebase config");
-      firebaseConfig = {
-        apiKey: "AIzaSyB7pGaPWn4n7NxrQ9l60V16u-qj05khqU8",
-        authDomain: "mat-e-db476.firebaseapp.com",
-        databaseURL: "https://mat-e-db476-default-rtdb.asia-southeast1.firebasedatabase.app",
-        projectId: "mat-e-db476",
-        storageBucket: "mat-e-db476.firebasestorage.app",
-        messagingSenderId: "986910230630",
-        appId: "1:986910230630:web:7b4b23ce828d18ab7bc5a7"
-      };
-    } else {
-      firebaseConfig = await new Promise((res, rej) => {
-        google.script.run.withSuccessHandler(res).withFailureHandler(rej).getFirebaseConfig();
-      });
-    }
+    let firebaseConfig = {
+      apiKey: "AIzaSyB7pGaPWn4n7NxrQ9l60V16u-qj05khqU8",
+      authDomain: "mat-e-db476.firebaseapp.com",
+      databaseURL: "https://mat-e-db476-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "mat-e-db476",
+      storageBucket: "mat-e-db476.firebasestorage.app",
+      messagingSenderId: "986910230630",
+      appId: "1:986910230630:web:7b4b23ce828d18ab7bc5a7"
+    };
 
     if (!firebaseConfig.apiKey) {
       console.error("Firebase API Key is missing.");
@@ -344,22 +336,15 @@ async function startAppCore() {
 
 window.startAppPublic = async function() {
   try {
-    let firebaseConfig;
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      firebaseConfig = {
-        apiKey: "AIzaSyB7pGaPWn4n7NxrQ9l60V16u-qj05khqU8",
-        authDomain: "mat-e-db476.firebaseapp.com",
-        databaseURL: "https://mat-e-db476-default-rtdb.asia-southeast1.firebasedatabase.app",
-        projectId: "mat-e-db476",
-        storageBucket: "mat-e-db476.firebasestorage.app",
-        messagingSenderId: "986910230630",
-        appId: "1:986910230630:web:7b4b23ce828d18ab7bc5a7"
-      };
-    } else {
-      firebaseConfig = await new Promise((res, rej) => {
-        google.script.run.withSuccessHandler(res).withFailureHandler(rej).getFirebaseConfig();
-      });
-    }
+    let firebaseConfig = {
+      apiKey: "AIzaSyB7pGaPWn4n7NxrQ9l60V16u-qj05khqU8",
+      authDomain: "mat-e-db476.firebaseapp.com",
+      databaseURL: "https://mat-e-db476-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "mat-e-db476",
+      storageBucket: "mat-e-db476.firebasestorage.app",
+      messagingSenderId: "986910230630",
+      appId: "1:986910230630:web:7b4b23ce828d18ab7bc5a7"
+    };
 
     if (!firebaseConfig.apiKey) return;
 
