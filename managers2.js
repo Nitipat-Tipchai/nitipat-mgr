@@ -1462,7 +1462,7 @@ function renderCourseSettings(c) {
                 <label>Folder ID (Auto-assigned)</label>
                 <div style="display:flex; gap:8px;">
                    <input type="text" class="glass-input sm" id="set-drive-id" value="${c.driveId || ''}" readonly>
-                   <button class="nb-btn sm" onclick="automateDriveFolder('${c.id}')" ${!isDriveSupported() ? 'disabled style="opacity:0.5; cursor:not-allowed;" title="ต้องใช้ผ่าน Google Apps Script/Proxy"' : ''}>🔄 เชื่อมต่ออัตโนมัติ</button>
+                   <button class="nb-btn sm" onclick="automateDriveFolder('${c.id}')" ${(typeof google === 'undefined' || !google.script) ? 'disabled style="opacity:0.5; cursor:not-allowed;" title="ต้องใช้ผ่าน Google Apps Script/Proxy"' : ''}>🔄 เชื่อมต่ออัตโนมัติ</button>
                 </div>
               </div>
               <button class="nb-btn-danger sm" style="margin-top:25px; width:100%;" onclick="if(confirm('คุณแน่ใจหรือไม่ว่าจะลบวิชานี้?')) { if(confirm('ยืนยันอีกครั้ง! ข้อมูลทั้งหมดจะหายไป')) deleteCourse('${c.id}') }">🗑 ลบวิชานี้จากระบบ</button>
