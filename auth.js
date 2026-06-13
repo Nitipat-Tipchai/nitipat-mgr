@@ -300,15 +300,15 @@ async function startAppCore() {
       return;
     }
 
-    if (!window.app) {
+    if (!window.firebaseApp) {
       const app = initializeApp(firebaseConfig);
-      window.app = app;
-      db = initializeFirestore(app, {
+      window.firebaseApp = app;
+      window.db = initializeFirestore(app, {
         localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
         experimentalForceLongPolling: true
       });
 
-      messaging = getMessaging(app);
+      window.messaging = getMessaging(app);
       onMessage(messaging, (payload) => {
         if (typeof Notification !== 'undefined') {
           new Notification(payload.notification.title, {
@@ -349,8 +349,8 @@ window.startAppPublic = async function() {
     if (!firebaseConfig.apiKey) return;
 
     const app = initializeApp(firebaseConfig);
-    window.app = app;
-    db = initializeFirestore(app, {
+    window.firebaseApp = app;
+    window.db = initializeFirestore(app, {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
       experimentalForceLongPolling: true
     });
@@ -359,7 +359,7 @@ window.startAppPublic = async function() {
     render(); // Update UI to show loading
 
     try {
-      const ilmFilesSnap = await getDoc(doc(db, "ilm_data", "files"));
+      const ilmFilesSnap = await getDoc(doc(window.db, "ilm_data", "files"));
       if (ilmFilesSnap.exists()) {
         state.ilmFiles = ilmFilesSnap.data().list || [];
       }
@@ -376,28 +376,21 @@ window.startAppPublic = async function() {
 
 window.startAppVerify = async function(docId) {
   try {
-    let firebaseConfig;
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      firebaseConfig = {
-        apiKey: "AIzaSyB7pGaPWn4n7NxrQ9l60V16u-qj05khqU8",
-        authDomain: "mat-e-db476.firebaseapp.com",
-        databaseURL: "https://mat-e-db476-default-rtdb.asia-southeast1.firebasedatabase.app",
-        projectId: "mat-e-db476",
-        storageBucket: "mat-e-db476.firebasestorage.app",
-        messagingSenderId: "986910230630",
-        appId: "1:986910230630:web:7b4b23ce828d18ab7bc5a7"
-      };
-    } else {
-      firebaseConfig = await new Promise((res, rej) => {
-        google.script.run.withSuccessHandler(res).withFailureHandler(rej).getFirebaseConfig();
-      });
-    }
+    let firebaseConfig = {
+      apiKey: "AIzaSyB7pGaPWn4n7NxrQ9l60V16u-qj05khqU8",
+      authDomain: "mat-e-db476.firebaseapp.com",
+      databaseURL: "https://mat-e-db476-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "mat-e-db476",
+      storageBucket: "mat-e-db476.firebasestorage.app",
+      messagingSenderId: "986910230630",
+      appId: "1:986910230630:web:7b4b23ce828d18ab7bc5a7"
+    };
 
     if (!firebaseConfig.apiKey) return;
 
     const app = initializeApp(firebaseConfig);
-    window.app = app;
-    db = initializeFirestore(app, {
+    window.firebaseApp = app;
+    window.db = initializeFirestore(app, {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
       experimentalForceLongPolling: true
     });
