@@ -18,37 +18,68 @@ function renderSchedule() {
       </div>
     </div>
 
-    <div class="tt-container glass-card" id="timetable">
-      <div class="tt-grid">
-        <div class="tt-corner"></div>
+    <div class="tt-container" id="timetable">
         ${(() => {
-      const now = new Date();
-      const currentDay = now.getDay() === 0 ? 6 : now.getDay() - 1;
-      const currentHour = now.getHours() + (now.getMinutes() / 60);
+          const now = new Date();
+          const currentDay = now.getDay() === 0 ? 6 : now.getDay() - 1;
+          const currentHour = now.getHours() + (now.getMinutes() / 60);
 
-      let html = daysShort.map((d, i) => `<div class="tt-header ${i === currentDay ? 'current-day' : ''}">${d}</div>`).join('');
+          let html = '';
+          const dayNames = ['วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์', 'วันอาทิตย์'];
+          const dayColors = ['#eab308', '#ec4899', '#22c55e', '#f97316', '#3b82f6', '#a855f7', '#ef4444']; 
 
-      html += Array.from({ length: 13 }, (_, i) => 8 + i).map(h => `
-            <div class="tt-time-label" style="grid-row: ${((h - 8) * 2) + 2}">${h}:00</div>
-          `).join('');
+          const scheduleByDay = {};
+          courses.forEach(c => {
+             (c.schedules || c.schedule || []).forEach(s => {
+                 if (!scheduleByDay[s.day]) scheduleByDay[s.day] = [];
+                 scheduleByDay[s.day].push({ ...s, course: c });
+             });
+          });
 
-      html += courses.flatMap(c => (c.schedules || c.schedule || []).map(s => {
-        const rowStart = Math.floor((s.startHour - 8) * 2) + 2;
-        const rowEnd = Math.ceil((s.endHour - 8) * 2) + 2;
-        const isActive = s.day === currentDay && currentHour >= s.startHour && currentHour < s.endHour;
-        const boxStyle = isActive ? `border-color: var(--c-lime); background: rgba(132,204,22,0.2); box-shadow: 0 0 10px rgba(132,204,22,0.4);` : `border-color: ${c.color}; background: ${c.color}22;`;
+          for (let i = 0; i < 7; i++) {
+            const daySchedules = scheduleByDay[i];
+            if (!daySchedules || daySchedules.length === 0) continue;
+            
+            daySchedules.sort((a, b) => a.startHour - b.startHour);
 
-        return `<div class="tt-entry" data-course-id="${c.id}" onclick="renderCourseHub('${c.id}')" style="grid-column: ${s.day + 2}; grid-row: ${rowStart} / ${rowEnd}; ${boxStyle} cursor:pointer; position:relative;" title="ผู้สอน: ${c.instructor || '-'}nห้อง: ${c.room || 'ไม่ระบุ'}">
-                <div class="tt-code" style="color: ${isActive ? 'var(--c-lime)' : c.color}">${c.code}</div>
-                <div class="tt-name">${c.nameTh}</div>
-                <div style="font-size: 9px; opacity: 0.8; margin-top: 4px;">📍 ${c.room || 'Online'}</div>
-                ${isActive ? `<div style="position:absolute; top:4px; right:4px; width:8px; height:8px; background:var(--c-lime); border-radius:50%; animation: pulse 1.5s infinite;"></div>` : ''}
-              </div>`;
-      })).join('');
+            html += `<div style="margin-bottom: 24px;">
+              <div style="font-size: 16px; font-weight: 800; color: ${dayColors[i]}; margin-bottom: 12px; border-bottom: 2px solid ${dayColors[i]}40; padding-bottom: 6px;">
+                ${dayNames[i]}
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+            `;
 
-      return html;
-    })()}
-      </div>
+            daySchedules.forEach(s => {
+              const c = s.course;
+              const startStr = Math.floor(s.startHour).toString().padStart(2, '0') + ':' + (s.startHour % 1 === 0.5 ? '30' : '00');
+              const endStr = Math.floor(s.endHour).toString().padStart(2, '0') + ':' + (s.endHour % 1 === 0.5 ? '30' : '00');
+              const isActive = s.day === currentDay && currentHour >= s.startHour && currentHour < s.endHour;
+              const boxStyle = isActive ? `border: 2px solid var(--c-lime); background: rgba(132,204,22,0.1);` : `border: 1px solid ${c.color}40; background: ${c.color}10;`;
+              
+              html += `
+                <div class="glass-card" onclick="renderCourseHub('${c.id}')" style="padding: 16px; border-radius: 14px; cursor: pointer; display: flex; align-items: stretch; gap: 15px; ${boxStyle} position: relative; transition: transform 0.2s;">
+                  ${isActive ? `<div style="position:absolute; top:12px; right:12px; width:10px; height:10px; background:var(--c-lime); border-radius:50%; animation: pulse 1.5s infinite;"></div>` : ''}
+                  <div style="min-width: 75px; font-family: var(--mono); font-weight: 700; color: ${isActive ? 'var(--c-lime)' : 'var(--text)'}; font-size: 15px; display: flex; flex-direction: column; justify-content: center; border-right: 2px solid ${c.color}30; padding-right: 15px;">
+                    <div>${startStr}</div>
+                    <div style="opacity: 0.5; font-size: 11px;">to ${endStr}</div>
+                  </div>
+                  <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+                    <div style="font-weight: 800; font-size: 16px; color: ${c.color}; margin-bottom: 2px;">${c.code}</div>
+                    <div style="font-weight: 600; font-size: 14px; margin-bottom: 6px;">${c.nameTh}</div>
+                    <div style="display: flex; gap: 8px; font-size: 11px; opacity: 0.85;">
+                      <span style="background: rgba(0,0,0,0.06); padding: 4px 8px; border-radius: 6px;">📍 ${c.room || 'ไม่ระบุ'}</span>
+                      <span style="background: rgba(0,0,0,0.06); padding: 4px 8px; border-radius: 6px;">👨‍🏫 ${c.instructor || 'ไม่ระบุ'}</span>
+                    </div>
+                  </div>
+                </div>
+              `;
+            });
+            html += `</div></div>`;
+          }
+          
+          if (html === '') html = `<div style="text-align:center; padding: 40px; color: var(--text-2); font-weight:500;">ไม่มีตารางเรียนในเทอมนี้ 🏖️</div>`;
+          return html;
+        })()}
     </div>
   </div>`;
 }
@@ -286,4 +317,4 @@ window.syncAllToCalendar = async (semId) => {
     google.script.run.withSuccessHandler(res => handleRes(e, 'exam', res)).syncCalendarEvent(`NITIPAT MANAGER - ${sem.name}`, 'exam', e);
   });
 };
-
+
