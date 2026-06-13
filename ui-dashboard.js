@@ -242,7 +242,12 @@ function renderDashboard(gpaVal, proVal, curSemVal) {
               <div class="s2-lbl">เวลา Focus รวม</div>
            </div>
            <div class="s2-item">
-              <div class="s2-val">${curSem ? (state.assignments[curSem.id] || []).filter(a => !a.submitted).length : 0}</div>
+              <div class="s2-val">${(() => {
+                if (!curSem) return 0;
+                const semCourseIds = (state.courses[curSem.id] || []).map(c => c.id);
+                const currentAssignments = Object.values(state.assignments).flat().filter(a => semCourseIds.includes(a.courseId));
+                return currentAssignments.filter(a => !a.submitted).length;
+              })()}</div>
               <div class="s2-lbl">งานที่ค้างอยู่ (เทอมนี้)</div>
            </div>
         </div>
@@ -416,4 +421,4 @@ function renderCourses() {
   }).join('') || `<div class="empty-hero"><div class="empty-icon">${isArchiveView ? '🗄' : '📚'}</div><h3>Empty</h3></div>`}
   </div>`;
 }
-
+
