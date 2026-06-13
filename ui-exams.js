@@ -2,10 +2,13 @@
 // EXAMS
 // ══════════════════════════════════════════════════
 function renderExams() {
+  const curSemId = state.selectedSemester || (getCurrentSemester()?.id) || (state.semesters.length ? state.semesters[state.semesters.length - 1].id : null);
+  const semCourseIds = (state.courses[curSemId] || []).map(c => c.id);
   const allCourses = Object.values(state.courses).flat();
   const allE = Object.entries(state.exams).flatMap(([cid, arr]) => {
+    if (!semCourseIds.includes(cid)) return [];
     const c = allCourses.find(x => x.id === cid);
-    return arr.map(e => ({ ...e, courseName: c?.code || e.courseName || cid, courseColor: c?.color }));
+    return arr.map(e => ({ ...e, courseName: c?.code || cid, courseColor: c?.color }));
   }).sort((a, b) => new Date(a.date) - new Date(b.date));
   const upcoming = allE.filter(e => getDaysUntil(e.date) >= 0);
   const past = allE.filter(e => getDaysUntil(e.date) < 0);
@@ -50,4 +53,4 @@ function renderExams() {
     </div>`).join('')}
   </div>`;
 }
-
+
