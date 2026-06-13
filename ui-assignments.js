@@ -2,8 +2,12 @@
 // ASSIGNMENTS
 // ══════════════════════════════════════════════════
 function renderAssignments() {
+  const curSemId = state.selectedSemester || (getCurrentSemester()?.id) || (state.semesters.length ? state.semesters[state.semesters.length - 1].id : null);
+  const semCourseIds = (state.courses[curSemId] || []).map(c => c.id);
   const allCourses = Object.values(state.courses).flat();
+  
   const allA = Object.entries(state.assignments).flatMap(([cid, arr]) => {
+    if (!semCourseIds.includes(cid)) return [];
     const c = allCourses.find(x => x.id === cid);
     return arr.map(a => ({ ...a, courseName: c?.code || cid, courseColor: c?.color }));
   }).sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
@@ -168,4 +172,4 @@ window.handleDrop = async (e, newStatus) => {
     }
   }
 };
-
+
