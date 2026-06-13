@@ -5257,7 +5257,7 @@
         grid-template-columns: 1fr;
       }
     }
-/* �� SMART DRIVE UI OVERHAUL �� */
+/*    SMART DRIVE UI OVERHAUL    */
 .drive-breadcrumbs {
   padding: 8px 12px;
   background: var(--glass);
@@ -5754,8 +5754,9 @@
    ========================================== */
 @media (max-width: 768px) {
   /* Layout Containers */
-  .page-content {
+  .page-content, .page-wrap {
     padding: 10px;
+    padding-bottom: 110px !important;
     margin: 0;
     overflow-x: hidden;
   }
