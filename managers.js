@@ -84,8 +84,17 @@ class RadioController {
   }
 
   async loadAudioSource(id) {
-    if (id.startsWith('http')) return id;
-    return `https://drive.google.com/uc?export=download&id=${id}`;
+    let url = id;
+    if (id.startsWith('http')) {
+      url = id.replace('&dl=1', '&raw=1');
+    } else {
+      url = `https://docs.google.com/uc?export=open&id=${id}`;
+    }
+    // Only use proxy if running inside Electron (.exe) where hostname is localhost
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return `/proxy-audio?url=${encodeURIComponent(url)}`;
+    }
+    return url;
   }
 
   pickRandomId(category) {
