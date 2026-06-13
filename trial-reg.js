@@ -1570,7 +1570,7 @@ window.setPinnedAsMain = async function(idx) {
   
   showToast('🌟 กำลังตั้งค่าเป็นตารางหลัก...', 'info');
   try {
-    const db = window.getFirestore(window.app);
+    const db = window.getFirestore(window.firebaseApp);
     // 1. Delete all current main courses
     const querySnapshot = await window.getDocs(window.collection(db, "courses"));
     for (const d of querySnapshot.docs) {
