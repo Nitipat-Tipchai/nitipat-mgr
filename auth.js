@@ -10,6 +10,7 @@ const LoginGate = {
 
   async init() {
     this.el = document.getElementById('login-gate');
+    if (this.el) this.el.classList.remove('inactive');
     
     // Check for admin parameter to hide the login pad from unauthorized visitors
     const urlParams = new URLSearchParams(window.location.search);
@@ -68,8 +69,8 @@ const LoginGate = {
     if (showToastMsg) this.statusEl.textContent = "VAULT SYNCED. TRY AGAIN.";
   },
 
-  getSecurityConfig() {
-    if (typeof google === 'undefined' || !google.script || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+  async getSecurityConfig() {
+    if (typeof google === 'undefined' || !google.script || ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron'))) {
       console.warn("Using local security fallback");
       return Promise.resolve({ pin: "246810" });
     }
@@ -245,8 +246,10 @@ const LoginGate = {
            const credential = await navigator.credentials.create({ publicKey: publicKeyCredentialCreationOptions });
            const rawIdStr = btoa(String.fromCharCode.apply(null, new Uint8Array(credential.rawId)));
            localStorage.setItem('webauthn_credential', rawIdStr);
+           alert("✅ Windows Hello ลงทะเบียนสำเร็จ!");
          } catch(e) {
-           console.log("WebAuthn creation failed or user cancelled", e);
+           console.log("WebAuthn creation failed", e);
+           alert("❌ ไม่สามารถเปิด Windows Hello ได้: " + e.message + " | Hostname: " + window.location.hostname);
          }
       }
 
@@ -283,7 +286,7 @@ window.LoginGate = LoginGate;
 async function startAppCore() {
   try {
     let firebaseConfig;
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron')) {
       console.warn("Using aligned local Firebase config");
       firebaseConfig = {
         apiKey: "AIzaSyB7pGaPWn4n7NxrQ9l60V16u-qj05khqU8",
@@ -305,22 +308,24 @@ async function startAppCore() {
       return;
     }
 
-    const app = initializeApp(firebaseConfig);
-    window.app = app;
-    db = initializeFirestore(app, {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-      experimentalForceLongPolling: true
-    });
+    if (!window.app) {
+      const app = initializeApp(firebaseConfig);
+      window.app = app;
+      db = initializeFirestore(app, {
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+        experimentalForceLongPolling: true
+      });
 
-    messaging = getMessaging(app);
-    onMessage(messaging, (payload) => {
-      if (typeof Notification !== 'undefined') {
-        new Notification(payload.notification.title, {
-          body: payload.notification.body,
-          icon: payload.notification.image || "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
-        });
-      }
-    });
+      messaging = getMessaging(app);
+      onMessage(messaging, (payload) => {
+        if (typeof Notification !== 'undefined') {
+          new Notification(payload.notification.title, {
+            body: payload.notification.body,
+            icon: payload.notification.image || "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+          });
+        }
+      });
+    }
 
     await loadAll();
     
