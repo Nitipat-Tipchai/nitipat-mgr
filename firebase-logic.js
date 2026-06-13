@@ -22,12 +22,12 @@ function hideLoadingBlocker() {
 
 async function fsSet(col, id, data) {
   saveToLocalStorage();
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+  if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron')) {
     return;
   }
   try {
     const plainData = JSON.parse(JSON.stringify(data));
-    setDoc(doc(db, col, id), { ...plainData, _t: serverTimestamp() })
+    setDoc(doc(window.db, col, id), { ...plainData, _t: serverTimestamp() })
       .catch(e => handleFirebaseError(e, 'fsSet'));
     
     // Notion Sync Trigger (only for main data objects)
@@ -45,11 +45,11 @@ async function fsSet(col, id, data) {
 }
 async function fsDel(col, id) {
   saveToLocalStorage();
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+  if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron')) {
     return;
   }
   try {
-    deleteDoc(doc(db, col, id))
+    deleteDoc(doc(window.db, col, id))
       .catch(e => handleFirebaseError(e, 'fsDel'));
   } catch (e) {
     handleFirebaseError(e, 'fsDel');
@@ -57,18 +57,18 @@ async function fsDel(col, id) {
 }
 async function fsUpd(col, id, data) {
   saveToLocalStorage();
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+  if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron')) {
     return;
   }
   try {
     const plainData = JSON.parse(JSON.stringify(data));
-    updateDoc(doc(db, col, id), plainData)
+    updateDoc(doc(window.db, col, id), plainData)
       .catch(e => handleFirebaseError(e, 'fsUpd'));
     
     // Trigger Notion Update if relevant
     if ((col === 'assignments' || col === 'exams') && !data._notion_syncing && typeof google !== 'undefined' && google.script) {
       // Need full data for Notion sync
-      getDoc(doc(db, col, id)).then(fullDoc => {
+      getDoc(doc(window.db, col, id)).then(fullDoc => {
         if (fullDoc.exists()) {
           const fullData = fullDoc.data();
           const syncFunc = col === 'assignments' ? 'syncAssignmentToNotion' : 'syncExamToNotion';
@@ -142,12 +142,12 @@ function saveMoneyPod() {
     localStorage.setItem('moneyTheme', state.moneyTheme);
     localStorage.setItem('moneyDailyBudget', state.moneyDailyBudget.toString());
     
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron')) {
       return;
     }
     
-    if (db) {
-      setDoc(doc(db, "app_settings", "money_pod"), {
+    if (window.db) {
+      setDoc(doc(window.db, "app_settings", "money_pod"), {
         wallets: state.moneyWallets,
         transactions: state.moneyTransactions,
         budgets: state.moneyBudgets,
@@ -175,28 +175,28 @@ async function loadAll() {
   }
   render(); // Instantly show UI to user
 
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+  if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron')) {
     console.warn("Local offline mode: Bypassing Firebase Sync");
     return;
   }
 
   try {
     const [sSnap, cSnap, aSnap, eSnap, secSnap, mastSnap, structSnap, reflSnap, profSnap, ilmCompSnap, ilmProfSnap, ilmLogsSnap, ilmFilesSnap, calSnap, radioSnap] = await Promise.all([
-      getDocs(collection(db, "semesters")),
-      getDocs(collection(db, "courses")),
-      getDocs(collection(db, "assignments")),
-      getDocs(collection(db, "exams")),
-      getDoc(doc(db, "app_settings", "security")),
-      getDocs(collection(db, "topic_mastery")),
-      getDocs(collection(db, "course_structures")),
-      getDocs(collection(db, "reflections")),
-      getDoc(doc(db, "app_settings", "profile")),
-      getDocs(collection(db, "internship_companies")),
-      getDoc(doc(db, "app_settings", "internship_profile")),
-      getDocs(collection(db, "daily_logs")),
-      getDoc(doc(db, "ilm_data", "files")),
-      getDoc(doc(db, "app_settings", "calendar")),
-      getDoc(doc(db, "app_settings", "radio"))
+      getDocs(collection(window.db, "semesters")),
+      getDocs(collection(window.db, "courses")),
+      getDocs(collection(window.db, "assignments")),
+      getDocs(collection(window.db, "exams")),
+      getDoc(doc(window.db, "app_settings", "security")),
+      getDocs(collection(window.db, "topic_mastery")),
+      getDocs(collection(window.db, "course_structures")),
+      getDocs(collection(window.db, "reflections")),
+      getDoc(doc(window.db, "app_settings", "profile")),
+      getDocs(collection(window.db, "internship_companies")),
+      getDoc(doc(window.db, "app_settings", "internship_profile")),
+      getDocs(collection(window.db, "daily_logs")),
+      getDoc(doc(window.db, "ilm_data", "files")),
+      getDoc(doc(window.db, "app_settings", "calendar")),
+      getDoc(doc(window.db, "app_settings", "radio"))
     ]);
 
     if (secSnap.exists()) {
@@ -271,7 +271,7 @@ async function loadAll() {
     localStorage.setItem('ilm_files', JSON.stringify(state.ilmFiles));
 
     // Focus Sync Listener
-    onSnapshot(doc(db, 'app_state', 'focus_session'), (snap) => {
+    onSnapshot(doc(window.db, 'app_state', 'focus_session'), (snap) => {
       const data = snap.data();
       if (data && data.active) {
         if (!state.pomodoroActive && data.initiatorId !== state.deviceId) {
@@ -290,7 +290,7 @@ async function loadAll() {
       }
     });
 
-    onSnapshot(collection(db, 'attendance_history'), (snap) => {
+    onSnapshot(collection(window.db, 'attendance_history'), (snap) => {
       let updated = false;
       snap.forEach(doc => {
         const courseId = doc.id;
@@ -307,7 +307,7 @@ async function loadAll() {
     });
 
     try {
-      const mpSnap = await getDoc(doc(db, "app_settings", "money_pod"));
+      const mpSnap = await getDoc(doc(window.db, "app_settings", "money_pod"));
       if (mpSnap.exists()) {
         const mpData = mpSnap.data();
         if (mpData.wallets) state.moneyWallets = mpData.wallets;
