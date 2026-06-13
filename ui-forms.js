@@ -681,7 +681,9 @@ function attachAllEvents() {
     };
     await fsSet('app_settings', 'calendar', settings);
     state.calendarSettings = settings;
+    localStorage.setItem('calendar_settings', JSON.stringify(settings));
     showToast('✅ บันทึกปฏิทินแล้ว');
+    render();
   });
 
   document.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => {
@@ -1044,4 +1046,4 @@ function renderCourseHub(courseId) {
   if (c && c.driveId) {
     refreshDriveFiles(courseId, c.driveId);
   }
-}
+}
