@@ -403,14 +403,46 @@ function renderMoneyPod() {
     };
 
     window.mpEditDailyBudget = function() {
-      const bStr = prompt("💸 ตั้งค่างบประมาณใช้จ่ายรายวัน (บาท):", state.moneyDailyBudget);
-      const budget = parseFloat(bStr);
-      if (!isNaN(budget) && budget >= 0) {
-        state.moneyDailyBudget = budget;
-        saveMoneyPod();
-        render();
-        showToast("💰 อัปเดตงบประมาณรายวันเรียบร้อยแล้ว");
-      }
+      const overlay = document.createElement('div');
+      overlay.style.position = 'fixed';
+      overlay.style.top = '0'; overlay.style.left = '0';
+      overlay.style.width = '100vw'; overlay.style.height = '100vh';
+      overlay.style.backgroundColor = 'rgba(0,0,0,0.5)';
+      overlay.style.display = 'flex';
+      overlay.style.alignItems = 'center'; overlay.style.justifyContent = 'center';
+      overlay.style.zIndex = '99999';
+
+      const box = document.createElement('div');
+      box.style.background = '#fff';
+      box.style.padding = '20px';
+      box.style.borderRadius = '16px';
+      box.style.textAlign = 'center';
+      box.style.boxShadow = '0 10px 25px rgba(0,0,0,0.2)';
+      box.innerHTML = `
+        <h3 style="margin-top:0; color:#1e293b;">💸 ตั้งค่างบประมาณ (บาท)</h3>
+        <input type="number" id="budgetInputCustom" value="${state.moneyDailyBudget}" style="width:100%; padding:10px; border-radius:8px; border:1px solid #ccc; font-size:16px; margin-bottom:15px; box-sizing:border-box;">
+        <div style="display:flex; gap:10px; justify-content:center;">
+          <button id="btnCancelBudget" style="padding:8px 16px; border:none; border-radius:8px; background:#f1f5f9; color:#64748b; font-weight:bold; cursor:pointer;">ยกเลิก</button>
+          <button id="btnSaveBudget" style="padding:8px 16px; border:none; border-radius:8px; background:#10b981; color:#fff; font-weight:bold; cursor:pointer;">บันทึก</button>
+        </div>
+      `;
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+
+      document.getElementById('btnCancelBudget').onclick = () => {
+        document.body.removeChild(overlay);
+      };
+      document.getElementById('btnSaveBudget').onclick = () => {
+        const bStr = document.getElementById('budgetInputCustom').value;
+        const budget = parseFloat(bStr);
+        if (!isNaN(budget) && budget >= 0) {
+          state.moneyDailyBudget = budget;
+          saveMoneyPod();
+          render();
+          showToast("💰 อัปเดตงบประมาณรายวันเรียบร้อยแล้ว");
+        }
+        document.body.removeChild(overlay);
+      };
     };
 
     window.mpHandlePhotoUpload = function(input) {
@@ -1623,4 +1655,4 @@ function renderMoneyPod() {
     </div>
   `;
 }
-
+
