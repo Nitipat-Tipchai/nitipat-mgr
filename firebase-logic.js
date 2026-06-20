@@ -22,7 +22,8 @@ function hideLoadingBlocker() {
 
 async function fsSet(col, id, data) {
   saveToLocalStorage();
-  if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron')) {
+  const isCapacitor_nitipat = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+  if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron') && !isCapacitor_nitipat) {
     return;
   }
   try {
@@ -45,7 +46,8 @@ async function fsSet(col, id, data) {
 }
 async function fsDel(col, id) {
   saveToLocalStorage();
-  if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron')) {
+  const isCapacitor_nitipat = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+  if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron') && !isCapacitor_nitipat) {
     return;
   }
   try {
@@ -57,7 +59,8 @@ async function fsDel(col, id) {
 }
 async function fsUpd(col, id, data) {
   saveToLocalStorage();
-  if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron')) {
+  const isCapacitor_nitipat = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+  if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron') && !isCapacitor_nitipat) {
     return;
   }
   try {
@@ -107,6 +110,7 @@ function loadFromLocalStorage() {
       if (parsed.ilmCompanies) state.ilmCompanies = parsed.ilmCompanies;
       if (parsed.ilmProfile) state.ilmProfile = parsed.ilmProfile;
       if (parsed.ilmLogs) state.ilmLogs = parsed.ilmLogs;
+      if (parsed.virtualFiles) state.virtualFiles = parsed.virtualFiles;
     }
     const pin = localStorage.getItem('user_pin');
     if (pin) {
@@ -127,7 +131,8 @@ function saveToLocalStorage() {
       attendanceHistory: state.attendanceHistory,
       ilmCompanies: state.ilmCompanies,
       ilmProfile: state.ilmProfile,
-      ilmLogs: state.ilmLogs
+      ilmLogs: state.ilmLogs,
+      virtualFiles: state.virtualFiles
     }));
   } catch (e) { console.warn('localStorage save error:', e); }
 }
@@ -142,7 +147,8 @@ function saveMoneyPod() {
     localStorage.setItem('moneyTheme', state.moneyTheme);
     localStorage.setItem('moneyDailyBudget', state.moneyDailyBudget.toString());
     
-    if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron')) {
+    const isCapacitor_nitipat = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+  if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron') && !isCapacitor_nitipat) {
       return;
     }
     
@@ -162,6 +168,23 @@ function saveMoneyPod() {
   }
 }
 
+async function saveVirtualFiles() {
+  try {
+    localStorage.setItem('virtual_files', JSON.stringify(state.virtualFiles));
+    const isCapacitor_nitipat = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+    if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron') && !isCapacitor_nitipat) {
+      return;
+    }
+    if (window.db) {
+      await setDoc(doc(window.db, "app_settings", "virtual_files"), {
+        files: state.virtualFiles
+      });
+    }
+  } catch(e) {
+    console.warn("VirtualFiles save error:", e);
+  }
+}
+
 async function loadAll() {
   state.isInitializing = false; // Allow immediate render using local data
   loadFromLocalStorage();
@@ -175,13 +198,14 @@ async function loadAll() {
   }
   render(); // Instantly show UI to user
 
-  if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron')) {
+  const isCapacitor_nitipat = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+  if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron') && !isCapacitor_nitipat) {
     console.warn("Local offline mode: Bypassing Firebase Sync");
     return;
   }
 
   try {
-    const [sSnap, cSnap, aSnap, eSnap, secSnap, mastSnap, structSnap, reflSnap, profSnap, ilmCompSnap, ilmProfSnap, ilmLogsSnap, ilmFilesSnap, calSnap, radioSnap] = await Promise.all([
+    const [sSnap, cSnap, aSnap, eSnap, secSnap, mastSnap, structSnap, reflSnap, profSnap, ilmCompSnap, ilmProfSnap, ilmLogsSnap, ilmFilesSnap, calSnap, radioSnap, vfSnap] = await Promise.all([
       getDocs(collection(window.db, "semesters")),
       getDocs(collection(window.db, "courses")),
       getDocs(collection(window.db, "assignments")),
@@ -196,7 +220,8 @@ async function loadAll() {
       getDocs(collection(window.db, "daily_logs")),
       getDoc(doc(window.db, "ilm_data", "files")),
       getDoc(doc(window.db, "app_settings", "calendar")),
-      getDoc(doc(window.db, "app_settings", "radio"))
+      getDoc(doc(window.db, "app_settings", "radio")),
+      getDoc(doc(window.db, "app_settings", "virtual_files"))
     ]);
 
     if (secSnap.exists()) {
@@ -215,6 +240,10 @@ async function loadAll() {
       state.customMusicUrls = radioSnap.data().customMusicUrls || [];
     }
 
+    if (vfSnap && vfSnap.exists()) {
+      state.virtualFiles = vfSnap.data().files || {};
+      localStorage.setItem('virtual_files', JSON.stringify(state.virtualFiles));
+    }
     if (profSnap.exists()) {
       const profData = profSnap.data();
       if (profData.idCardPhoto) {
