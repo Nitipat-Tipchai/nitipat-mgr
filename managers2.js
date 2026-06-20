@@ -1350,6 +1350,10 @@ function renderCourseHubPage() {
                <div style="font-size:26px; ${tab !== 'Attendance' ? 'opacity:0.8;' : 'margin-bottom:2px;'}">📋</div>
                ${tab === 'Attendance' ? '<div class="tab-label">Attendance</div>' : ''}
              </button>
+             <button class="nav-tab-btn ${tab === 'Files' ? 'active' : ''}" onclick="state.activeHubTab='Files'; render();">
+               <div style="font-size:26px; ${tab !== 'Files' ? 'opacity:0.8;' : 'margin-bottom:2px;'}">📂</div>
+               ${tab === 'Files' ? '<div class="tab-label">Files</div>' : ''}
+             </button>
              <button class="nav-tab-btn ${tab === 'Settings' ? 'active' : ''}" onclick="state.activeHubTab='Settings'; render();">
                <div style="font-size:26px; ${tab !== 'Settings' ? 'opacity:0.8;' : 'margin-bottom:2px;'}">⚙️</div>
                ${tab === 'Settings' ? '<div class="tab-label">Settings</div>' : ''}
@@ -1359,6 +1363,7 @@ function renderCourseHubPage() {
           <div class="hub-container">
             ${tab === 'Grades' ? renderCourseProgress(c) :
               tab === 'Attendance' ? renderCourseAttendance(c) :
+              tab === 'Files' ? renderCourseFiles(c) :
               renderCourseSettings(c)}
           </div>
         </div>
@@ -1430,42 +1435,13 @@ function renderCourseSettings(c) {
             </div>
 
             <div class="glass-card nb-card">
-              <div class="section-hd">🔗 ลิงก์ห้องเรียน / แหล่งเรียนรู้</div>
-              <div id="linkManagerList" style="display:flex; flex-direction:column; gap:8px;">
-                ${links.map((l, idx) => `
-                  <div class="glass-card-sm" style="display:flex; justify-content:space-between; align-items:center; padding:10px;">
-                    <div>
-                      <div style="font-weight:700; font-size:13px;">${l.name}</div>
-                      <div style="font-size:11px; opacity:0.6; text-decoration:underline;">${l.url}</div>
-                    </div>
-                    <button class="btn-text-danger" onclick="removeCourseLink('${c.id}', ${idx})">✕</button>
-                  </div>
-                `).join('')}
-                ${links.length === 0 ? '<div class="empty-sm">ยังไม่มีลิงก์เสริม</div>' : ''}
-              </div>
-              <div class="form-grid" style="margin-top:15px; border-top:1px solid var(--glass-border); padding-top:15px;">
-                <input class="glass-input sm" id="new-link-name" placeholder="ชื่อลิงก์ (เช่น เข้าเรียน Zoom)">
-                <input class="glass-input sm" id="new-link-url" placeholder="URL (https://...)">
-                <button class="nb-btn sm" onclick="addCourseLink('${c.id}')">+ เพิ่มลิงก์</button>
-              </div>
-            </div>
-
-            <div class="glass-card nb-card">
               <div class="section-hd">🛠 ตั้งค่าโครงสร้างคะแนน</div>
               <p style="font-size:12px; margin-bottom:15px; opacity:0.7;">ระบุสัดส่วนคะแนนสะสมของรายวิชาเพื่อให้ระบบคำนวณ Progress</p>
               <button class="nb-btn sm full" onclick="setupGradeStructure('${c.id}')">⚙️ จัดการโครงสร้างคะแนน</button>
             </div>
 
             <div class="glass-card nb-card">
-              <div class="section-hd">📂 Google Drive Folder</div>
-              <div class="fg">
-                <label>Folder ID (Auto-assigned)</label>
-                <div style="display:flex; gap:8px;">
-                   <input type="text" class="glass-input sm" id="set-drive-id" value="${c.driveId || ''}" readonly>
-                   <button class="nb-btn sm" onclick="automateDriveFolder('${c.id}')" ${(typeof google === 'undefined' || !google.script) ? 'disabled style="opacity:0.5; cursor:not-allowed;" title="ต้องใช้ผ่าน Google Apps Script/Proxy"' : ''}>🔄 เชื่อมต่ออัตโนมัติ</button>
-                </div>
-              </div>
-              <button class="nb-btn-danger sm" style="margin-top:25px; width:100%;" onclick="if(confirm('คุณแน่ใจหรือไม่ว่าจะลบวิชานี้?')) { if(confirm('ยืนยันอีกครั้ง! ข้อมูลทั้งหมดจะหายไป')) deleteCourse('${c.id}') }">🗑 ลบวิชานี้จากระบบ</button>
+              <button class="nb-btn-danger sm" style="width:100%;" onclick="if(confirm('คุณแน่ใจหรือไม่ว่าจะลบวิชานี้?')) { if(confirm('ยืนยันอีกครั้ง! ข้อมูลทั้งหมดจะหายไป')) deleteCourse('${c.id}') }">🗑 ลบวิชานี้จากระบบ</button>
             </div>
           </div>
         </div>
@@ -1677,7 +1653,9 @@ async function handleLinkedFiles(docs, courseId) {
     await fsUpd('courses', courseId, { linkedFiles: course.linkedFiles });
     showToast(`✅ Linked ${docs.length} files to ${course.code}`);
     render();
-    refreshDriveFiles(courseId, course.driveId);
+    if (typeof refreshDriveFiles === 'function') {
+      refreshDriveFiles(courseId, course.driveId);
+    }
 }
 
 async function unlinkFileFromCourse(courseId, fileId) {
@@ -1750,3 +1728,359 @@ async function deleteCourse(courseId) {
   await loadAll();
 }
 
+// ══════════════════════════════════════════════════
+// VIRTUAL FILE MANAGER (DRIVE ALTERNATIVE)
+// ══════════════════════════════════════════════════
+
+window.renderCourseFiles = function(c) {
+  if (!state.virtualFiles) state.virtualFiles = {};
+  if (!state.virtualFiles[c.id]) {
+    state.virtualFiles[c.id] = { items: {} };
+  }
+  const courseData = state.virtualFiles[c.id];
+  const currentFolderId = state.currentFolderId || 'root';
+  
+  // Build breadcrumbs
+  let breadcrumbs = [];
+  let curr = currentFolderId;
+  while(curr && curr !== 'root') {
+    const item = courseData.items[curr];
+    if(item) {
+      breadcrumbs.unshift(item);
+      curr = item.parentId;
+    } else {
+      break; // Safe exit if corrupted state
+    }
+  }
+  
+  const children = Object.values(courseData.items).filter(i => i.parentId === currentFolderId);
+  const folders = children.filter(i => i.type === 'folder').sort((a,b) => a.name.localeCompare(b.name));
+  const files = children.filter(i => i.type === 'file').sort((a,b) => a.name.localeCompare(b.name));
+
+  let breadcrumbHTML = `<span style="cursor:pointer; color:var(--c-indigo);" onclick="navigateVirtualFolder('root')">🏠 คลังเอกสาร</span>`;
+  breadcrumbs.forEach(b => {
+    breadcrumbHTML += ` <span style="opacity:0.5; margin:0 5px;">></span> <span style="cursor:pointer; color:var(--c-indigo);" onclick="navigateVirtualFolder('${b.id}')">${b.name}</span>`;
+  });
+
+  return \`
+    <div class="hub-scroll-area" style="padding:0 20px 20px;">
+      <div class="glass-card nb-card" style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+         <div style="font-weight:700; font-size:14px; display:flex; align-items:center;">\${breadcrumbHTML}</div>
+         <div style="display:flex; gap:8px;">
+           <button class="nb-btn sm" onclick="addVirtualFolder('\${c.id}', '\${currentFolderId}')">📁 สร้างโฟลเดอร์</button>
+           <button class="nb-btn sm nb-btn-primary" onclick="addVirtualFile('\${c.id}', '\${currentFolderId}')">🔗 เพิ่มลิงก์เอกสาร</button>
+         </div>
+      </div>
+      
+      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:12px;">
+        \${folders.length === 0 && files.length === 0 ? '<div class="empty-sm" style="grid-column: 1 / -1; padding:30px;">โฟลเดอร์นี้ยังว่างเปล่า กดปุ่มเพื่อเพิ่มไฟล์หรือโฟลเดอร์ได้เลยครับ</div>' : ''}
+        \${folders.map(f => \`
+          <div class="glass-card" style="padding:15px; text-align:center; position:relative; cursor:pointer; background:rgba(255,255,255,0.7); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" onclick="navigateVirtualFolder('\${f.id}')">
+            <div style="font-size:40px; margin-bottom:8px;">📁</div>
+            <div style="font-weight:700; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="\${f.name}">\${f.name}</div>
+            <button class="icon-btn-sm" style="position:absolute; top:5px; right:5px; background:rgba(255,0,0,0.1); color:red; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:10px;" onclick="event.stopPropagation(); deleteVirtualItem('\${c.id}', '\${f.id}')">✕</button>
+          </div>
+        \`).join('')}
+        \${files.map(f => \`
+          <div class="glass-card" style="padding:15px; text-align:center; position:relative; cursor:pointer; background:rgba(240,249,255,0.7); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" onclick="window.open('\${f.url}', '_blank')">
+            <div style="font-size:40px; margin-bottom:8px;">📄</div>
+            <div style="font-weight:700; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--c-indigo);" title="\${f.name}">\${f.name}</div>
+            <button class="icon-btn-sm" style="position:absolute; top:5px; right:5px; background:rgba(255,0,0,0.1); color:red; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:10px;" onclick="event.stopPropagation(); deleteVirtualItem('\${c.id}', '\${f.id}')">✕</button>
+          </div>
+        \`).join('')}
+      </div>
+    </div>
+  \`;
+}
+
+window.navigateVirtualFolder = function(folderId) {
+  state.currentFolderId = folderId;
+  render();
+}
+
+window.addVirtualFolder = function(courseId, parentId) {
+  openModal('สร้างโฟลเดอร์ใหม่', \`
+    <div class="form-grid">
+      <div class="fg full">
+        <label>ชื่อโฟลเดอร์</label>
+        <input type="text" class="glass-input" id="vFolderInput" placeholder="เช่น สไลด์เรียนบทที่ 1...">
+      </div>
+      <button class="nb-btn-primary full" onclick="submitVirtualFolder('\${courseId}', '\${parentId}')">บันทึกโฟลเดอร์</button>
+    </div>
+  \`);
+}
+
+window.submitVirtualFolder = function(courseId, parentId) {
+  const name = document.getElementById('vFolderInput').value.trim();
+  if(!name) return;
+  const id = 'vf_' + Date.now() + Math.random().toString(36).substr(2, 5);
+  state.virtualFiles[courseId].items[id] = { id, type: 'folder', name, parentId, createdAt: Date.now() };
+  closeModal();
+  saveVirtualFiles();
+  render();
+}
+
+window.addVirtualFile = function(courseId, parentId) {
+  openModal('เพิ่มลิงก์เอกสาร', \`
+    <div class="form-grid">
+      <div class="fg full">
+        <label>ชื่อไฟล์ / เอกสาร</label>
+        <input type="text" class="glass-input" id="vFileName" placeholder="เช่น PDF สรุปบทเรียน">
+      </div>
+      <div class="fg full">
+        <label>URL ลิงก์เอกสาร (Google Drive, Dropbox, ฯลฯ)</label>
+        <input type="url" class="glass-input" id="vFileUrl" placeholder="https://...">
+      </div>
+      <button class="nb-btn-primary full" onclick="submitVirtualFile('\${courseId}', '\${parentId}')">เพิ่มลงในระบบ</button>
+    </div>
+  \`);
+}
+
+window.submitVirtualFile = function(courseId, parentId) {
+  const name = document.getElementById('vFileName').value.trim();
+  const url = document.getElementById('vFileUrl').value.trim();
+  if(!name || !url) return;
+  const id = 'vfile_' + Date.now() + Math.random().toString(36).substr(2, 5);
+  state.virtualFiles[courseId].items[id] = { id, type: 'file', name, url, parentId, createdAt: Date.now() };
+  closeModal();
+  saveVirtualFiles();
+  render();
+}
+
+window.deleteVirtualItem = function(courseId, itemId) {
+  if(!confirm("คุณแน่ใจหรือไม่ที่จะลบรายการนี้? (ถ้าลบโฟลเดอร์ ไฟล์ที่อยู่ข้างในจะหายทั้งหมดเลยนะครับ)")) return;
+  
+  function deleteRecursive(id) {
+    const item = state.virtualFiles[courseId].items[id];
+    if(!item) return;
+    if(item.type === 'folder') {
+      const children = Object.values(state.virtualFiles[courseId].items).filter(i => i.parentId === id);
+  const course = findCourseById(courseId);
+  if (course && course.linkedFiles) {
+    course.linkedFiles = course.linkedFiles.filter(f => f.id !== fileId);
+    await fsUpd('courses', courseId, { linkedFiles: course.linkedFiles });
+    showToast('✅ ยกเลิกลิงก์ไฟล์สำเร็จ');
+    render();
+  }
+}
+window.unlinkFileFromCourse = unlinkFileFromCourse;
+
+
+async function deleteTopic(courseId, topicId) {
+  if (!confirm('ยืนยันการลบหัวข้อนี้และหัวข้อย่อย?')) return;
+  const removeRecursive = (id) => {
+    const subs = state.topicMastery[courseId].filter(x => x.parentId === id);
+    subs.forEach(s => removeRecursive(s.id));
+    state.topicMastery[courseId] = state.topicMastery[courseId].filter(x => x.id !== id);
+  };
+  removeRecursive(topicId);
+  localStorage.setItem('topic_mastery', JSON.stringify(state.topicMastery));
+  render();
+  await fsSet('topic_mastery', courseId, { topics: state.topicMastery[courseId] });
+}
+
+async function saveCourseSettings(courseId) {
+  const updated = {
+    nameTh: document.getElementById('set-name-th')?.value || '',
+    nameEn: document.getElementById('set-name-en')?.value || '',
+    code: document.getElementById('set-code')?.value || '',
+    credits: parseInt(document.getElementById('set-credits')?.value) || 0,
+    instructor: document.getElementById('set-instructor')?.value || '',
+    link: document.getElementById('set-link')?.value || '',
+    driveId: document.getElementById('set-drive-id')?.value || '',
+    color: document.getElementById('set-color')?.value || ''
+  };
+
+  showToast('⏳ กำลังบันทึก...');
+  await fsUpd('courses', courseId, updated);
+  const semId = findSemIdByCourseId(courseId);
+  if (semId) {
+    const cIdx = state.courses[semId].findIndex(x => x.id === courseId);
+    state.courses[semId][cIdx] = { ...state.courses[semId][cIdx], ...updated };
+  }
+  showToast('✅ บันทึกเรียบร้อย');
+  render();
+}
+
+function findSemIdByCourseId(courseId) {
+  for (const semId in state.courses) {
+    if (state.courses[semId].find(c => c.id === courseId)) return semId;
+  }
+  return null;
+}
+
+function updateSetColor(color, el) {
+  document.getElementById('set-color').value = color;
+  document.querySelectorAll('.cpick').forEach(p => p.classList.remove('sel'));
+  el.classList.add('sel');
+}
+
+async function deleteCourse(courseId) {
+  if (!confirm('ยืนยันการลบวิชานี้? ข้อมูลทั้งหมดรวมถึงคะแนนจะหายไป')) return;
+  showToast('🗑 กำลังลบ...');
+  await fsDel('courses', courseId);
+  state.view = 'courses';
+  await loadAll();
+}
+
+// ══════════════════════════════════════════════════
+// VIRTUAL FILE MANAGER (DRIVE ALTERNATIVE)
+// ══════════════════════════════════════════════════
+
+window.renderCourseFiles = function(c) {
+  if (!state.virtualFiles) state.virtualFiles = {};
+  if (!state.virtualFiles[c.id]) {
+    state.virtualFiles[c.id] = { items: {} };
+  }
+  const courseData = state.virtualFiles[c.id];
+  const currentFolderId = state.currentFolderId || 'root';
+  
+  // Build breadcrumbs
+  let breadcrumbs = [];
+  let curr = currentFolderId;
+  while(curr && curr !== 'root') {
+    const item = courseData.items[curr];
+    if(item) {
+      breadcrumbs.unshift(item);
+      curr = item.parentId;
+    } else {
+      break; // Safe exit if corrupted state
+    }
+  }
+  
+  const children = Object.values(courseData.items).filter(i => i.parentId === currentFolderId);
+  const folders = children.filter(i => i.type === 'folder').sort((a,b) => a.name.localeCompare(b.name));
+  const files = children.filter(i => i.type === 'file').sort((a,b) => a.name.localeCompare(b.name));
+
+  let breadcrumbHTML = `<span style="cursor:pointer; color:var(--c-indigo);" onclick="navigateVirtualFolder('root')">🏠 คลังเอกสาร</span>`;
+  breadcrumbs.forEach(b => {
+    breadcrumbHTML += ` <span style="opacity:0.5; margin:0 5px;">></span> <span style="cursor:pointer; color:var(--c-indigo);" onclick="navigateVirtualFolder('${b.id}')">${b.name}</span>`;
+  });
+
+  return `
+    <div class="hub-scroll-area" style="padding:0 20px 20px;">
+      <div class="glass-card nb-card" style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+         <div style="font-weight:700; font-size:14px; display:flex; align-items:center;">${breadcrumbHTML}</div>
+         <div style="display:flex; gap:8px;">
+           <button class="nb-btn sm" onclick="addVirtualFolder('${c.id}', '${currentFolderId}')">📁 สร้างโฟลเดอร์</button>
+           <button class="nb-btn sm nb-btn-primary" onclick="addVirtualFile('${c.id}', '${currentFolderId}')">🔗 เพิ่มลิงก์เอกสาร</button>
+         </div>
+      </div>
+      
+      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:12px;">
+        ${folders.length === 0 && files.length === 0 ? '<div class="empty-sm" style="grid-column: 1 / -1; padding:30px;">โฟลเดอร์นี้ยังว่างเปล่า กดปุ่มเพื่อเพิ่มไฟล์หรือโฟลเดอร์ได้เลยครับ</div>' : ''}
+        ${folders.map(f => `
+          <div class="glass-card" style="padding:15px; text-align:center; position:relative; cursor:pointer; background:rgba(255,255,255,0.7); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" onclick="navigateVirtualFolder('${f.id}')">
+            <div style="font-size:40px; margin-bottom:8px;">📁</div>
+            <div style="font-weight:700; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${f.name}">${f.name}</div>
+            <button class="icon-btn-sm" style="position:absolute; top:5px; right:5px; background:rgba(255,0,0,0.1); color:red; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:10px;" onclick="event.stopPropagation(); deleteVirtualItem('${c.id}', '${f.id}')">✕</button>
+          </div>
+        `).join('')}
+        ${files.map(f => `
+          <div class="glass-card" style="padding:15px; text-align:center; position:relative; cursor:pointer; background:rgba(240,249,255,0.7); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" onclick="window.open('${f.url}', '_blank')">
+            <div style="font-size:40px; margin-bottom:8px;">📄</div>
+            <div style="font-weight:700; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--c-indigo);" title="${f.name}">${f.name}</div>
+            <button class="icon-btn-sm" style="position:absolute; top:5px; right:5px; background:rgba(255,0,0,0.1); color:red; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:10px;" onclick="event.stopPropagation(); deleteVirtualItem('${c.id}', '${f.id}')">✕</button>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+window.navigateVirtualFolder = function(folderId) {
+  state.currentFolderId = folderId;
+  render();
+}
+
+window.addVirtualFolder = function(courseId, parentId) {
+  openModal('สร้างโฟลเดอร์ใหม่', `
+    <div class="form-grid">
+      <div class="fg full">
+        <label>ชื่อโฟลเดอร์</label>
+        <input type="text" class="glass-input" id="vFolderInput" placeholder="เช่น สไลด์เรียนบทที่ 1...">
+      </div>
+      <button class="nb-btn-primary full" onclick="submitVirtualFolder('${courseId}', '${parentId}')">บันทึกโฟลเดอร์</button>
+    </div>
+  `);
+}
+
+window.submitVirtualFolder = function(courseId, parentId) {
+  const name = document.getElementById('vFolderInput').value.trim();
+  if(!name) return;
+  const id = 'vf_' + Date.now() + Math.random().toString(36).substr(2, 5);
+  state.virtualFiles[courseId].items[id] = { id, type: 'folder', name, parentId, createdAt: Date.now() };
+  closeModal();
+  saveVirtualFiles();
+  render();
+}
+
+window.addVirtualFile = function(courseId, parentId) {
+  openModal('เพิ่มลิงก์เอกสาร', `
+    <div class="form-grid">
+      <div class="fg full">
+        <label>ชื่อไฟล์ / เอกสาร</label>
+        <input type="text" class="glass-input" id="vFileName" placeholder="เช่น PDF สรุปบทเรียน">
+      </div>
+      <div class="fg full">
+        <label>URL ลิงก์เอกสาร (Google Drive, Dropbox, ฯลฯ)</label>
+        <input type="url" class="glass-input" id="vFileUrl" placeholder="https://...">
+      </div>
+      <button class="nb-btn-primary full" onclick="submitVirtualFile('${courseId}', '${parentId}')">เพิ่มลงในระบบ</button>
+    </div>
+  `);
+}
+
+window.submitVirtualFile = function(courseId, parentId) {
+  const name = document.getElementById('vFileName').value.trim();
+  const url = document.getElementById('vFileUrl').value.trim();
+  if(!name || !url) return;
+  const id = 'vfile_' + Date.now() + Math.random().toString(36).substr(2, 5);
+  state.virtualFiles[courseId].items[id] = { id, type: 'file', name, url, parentId, createdAt: Date.now() };
+  closeModal();
+  saveVirtualFiles();
+  render();
+}
+
+window.deleteVirtualItem = function(courseId, itemId) {
+  if(!confirm("คุณแน่ใจหรือไม่ที่จะลบรายการนี้? (ถ้าลบโฟลเดอร์ ไฟล์ที่อยู่ข้างในจะหายทั้งหมดเลยนะครับ)")) return;
+  
+  function deleteRecursive(id) {
+    const item = state.virtualFiles[courseId].items[id];
+    if(!item) return;
+    if(item.type === 'folder') {
+      const children = Object.values(state.virtualFiles[courseId].items).filter(i => i.parentId === id);
+      children.forEach(c => deleteRecursive(c.id));
+    }
+    delete state.virtualFiles[courseId].items[id];
+  }
+  
+  deleteRecursive(itemId);
+  saveVirtualFiles();
+  render();
+}
+
+window.openTopicFileModal = function(courseId, topicId) {
+  openModal('🔗 เพิ่มลิงก์เอกสารให้หัวข้อย่อย', `
+    <div class="form-grid">
+      <div class="fg full">
+        <label>ชื่อไฟล์ / เอกสาร</label>
+        <input type="text" class="glass-input" id="tfName" placeholder="เช่น สไลด์บทที่ 1">
+      </div>
+      <div class="fg full">
+        <label>URL (ลิงก์ Google Drive ฯลฯ)</label>
+        <input type="text" class="glass-input" id="tfUrl" placeholder="https://...">
+      </div>
+      <button class="nb-btn-primary full" onclick="submitTopicFile('${courseId}', '${topicId}')">เพิ่มเอกสาร</button>
+    </div>
+  `);
+}
+
+window.submitTopicFile = function(courseId, topicId) {
+  const name = document.getElementById('tfName').value.trim();
+  const url = document.getElementById('tfUrl').value.trim();
+  if(!name || !url) return;
+  const docs = [{ id: 'tf_' + Date.now(), name, url, mimeType: 'url' }];
+  linkFilesToTopic(courseId, topicId, docs);
+  closeModal();
+}
