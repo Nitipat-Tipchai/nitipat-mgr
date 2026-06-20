@@ -1607,24 +1607,54 @@ async function setTopicLevel(courseId, topicId, level) {
   const t = state.topicMastery[courseId].find(x => x.id === topicId);
   if (t) t.level = level;
   localStorage.setItem('topic_mastery', JSON.stringify(state.topicMastery));
-    if (!docs || docs.length === 0) return;
-    showToast(`🔗 Linking ${docs.length} files to course...`);
-    const course = findCourseById(courseId);
-    if (!course) return;
-    
-    if (!course.linkedFiles) course.linkedFiles = [];
-    docs.forEach(d => {
-      if (!course.linkedFiles.find(f => f.id === d.id)) {
-        course.linkedFiles.push({ id: d.id, name: d.name, url: d.url, mimeType: d.mimeType });
-      }
-    });
-    
-    await fsUpd('courses', courseId, { linkedFiles: course.linkedFiles });
-    showToast(`✅ Linked ${docs.length} files to ${course.code}`);
-    render();
-    if (typeof refreshDriveFiles === 'function') {
-      refreshDriveFiles(courseId, course.driveId);
+  render();
+  await fsSet('topic_mastery', courseId, { topics: state.topicMastery[courseId] });
+}
+
+async function linkFilesToTopic(courseId, topicId, docs) {
+  if (!docs || docs.length === 0) return;
+  const t = state.topicMastery[courseId].find(x => x.id === topicId);
+  if (!t) return;
+  if (!t.files) t.files = [];
+  docs.forEach(d => {
+    if (!t.files.find(f => f.id === d.id)) {
+      t.files.push({ id: d.id, name: d.name, url: d.url, mimeType: d.mimeType });
     }
+  });
+  localStorage.setItem('topic_mastery', JSON.stringify(state.topicMastery));
+  await fsSet('topic_mastery', courseId, { topics: state.topicMastery[courseId] });
+  render();
+}
+
+async function unlinkFileFromTopic(courseId, topicId, fileId) {
+  const t = state.topicMastery[courseId].find(x => x.id === topicId);
+  if (t && t.files) {
+    t.files = t.files.filter(f => f.id !== fileId);
+    localStorage.setItem('topic_mastery', JSON.stringify(state.topicMastery));
+    await fsSet('topic_mastery', courseId, { topics: state.topicMastery[courseId] });
+    render();
+  }
+}
+
+async function handleLinkedFiles(docs, courseId) {
+  if (!docs || docs.length === 0) return;
+  showToast(`🔗 Linking ${docs.length} files to course...`);
+  const course = findCourseById(courseId);
+  if (!course) return;
+  
+  if (!course.linkedFiles) course.linkedFiles = [];
+  docs.forEach(d => {
+    if (!course.linkedFiles.find(f => f.id === d.id)) {
+      course.linkedFiles.push({ id: d.id, name: d.name, url: d.url, mimeType: d.mimeType });
+    }
+  });
+  
+  await fsUpd('courses', courseId, { linkedFiles: course.linkedFiles });
+  showToast(`✅ Linked ${docs.length} files to ${course.code}`);
+  render();
+  if (typeof refreshDriveFiles === 'function') {
+    refreshDriveFiles(courseId, course.driveId);
+  }
 }
 
 async function unlinkFileFromCourse(courseId, fileId) {
@@ -1638,156 +1668,6 @@ async function unlinkFileFromCourse(courseId, fileId) {
   }
 }
 window.unlinkFileFromCourse = unlinkFileFromCourse;
-
-
-async function deleteTopic(courseId, topicId) {
-  if (!confirm('ยืนยันการลบหัวข้อนี้และหัวข้อย่อย?')) return;
-  const removeRecursive = (id) => {
-    const subs = state.topicMastery[courseId].filter(x => x.parentId === id);
-    subs.forEach(s => removeRecursive(s.id));
-    state.topicMastery[courseId] = state.topicMastery[courseId].filter(x => x.id !== id);
-  };
-  removeRecursive(topicId);
-  localStorage.setItem('topic_mastery', JSON.stringify(state.topicMastery));
-  render();
-  await fsSet('topic_mastery', courseId, { topics: state.topicMastery[courseId] });
-}
-
-async function saveCourseSettings(courseId) {
-  const updated = {
-    nameTh: document.getElementById('set-name-th')?.value || '',
-    nameEn: document.getElementById('set-name-en')?.value || '',
-    code: document.getElementById('set-code')?.value || '',
-    credits: parseInt(document.getElementById('set-credits')?.value) || 0,
-    instructor: document.getElementById('set-instructor')?.value || '',
-    link: document.getElementById('set-link')?.value || '',
-    driveId: document.getElementById('set-drive-id')?.value || '',
-    color: document.getElementById('set-color')?.value || ''
-  };
-
-  showToast('⏳ กำลังบันทึก...');
-  await fsUpd('courses', courseId, updated);
-  const semId = findSemIdByCourseId(courseId);
-  if (semId) {
-    const cIdx = state.courses[semId].findIndex(x => x.id === courseId);
-    state.courses[semId][cIdx] = { ...state.courses[semId][cIdx], ...updated };
-  }
-  showToast('✅ บันทึกเรียบร้อย');
-  render();
-}
-
-function findSemIdByCourseId(courseId) {
-  for (const semId in state.courses) {
-    if (state.courses[semId].find(c => c.id === courseId)) return semId;
-  }
-  return null;
-}
-
-function updateSetColor(color, el) {
-  document.getElementById('set-color').value = color;
-  document.querySelectorAll('.cpick').forEach(p => p.classList.remove('sel'));
-  el.classList.add('sel');
-}
-
-async function deleteCourse(courseId) {
-  if (!confirm('ยืนยันการลบวิชานี้? ข้อมูลทั้งหมดรวมถึงคะแนนจะหายไป')) return;
-  showToast('🗑 กำลังลบ...');
-  await fsDel('courses', courseId);
-  state.view = 'courses';
-  await loadAll();
-}
-
-// ══════════════════════════════════════════════════
-// VIRTUAL FILE MANAGER (DRIVE ALTERNATIVE)
-// ══════════════════════════════════════════════════
-
-window.renderCourseFiles = function(c) {
-  if (!state.virtualFiles) state.virtualFiles = {};
-  if (!state.virtualFiles[c.id]) {
-    state.virtualFiles[c.id] = { items: {} };
-  }
-  const courseData = state.virtualFiles[c.id];
-  const currentFolderId = state.currentFolderId || 'root';
-  
-  // Build breadcrumbs
-  let breadcrumbs = [];
-  let curr = currentFolderId;
-  while(curr && curr !== 'root') {
-    const item = courseData.items[curr];
-    if(item) {
-      breadcrumbs.unshift(item);
-      curr = item.parentId;
-    } else {
-      break; // Safe exit if corrupted state
-    }
-  }
-  
-  const children = Object.values(courseData.items).filter(i => i.parentId === currentFolderId);
-  const folders = children.filter(i => i.type === 'folder').sort((a,b) => a.name.localeCompare(b.name));
-  const files = children.filter(i => i.type === 'file').sort((a,b) => a.name.localeCompare(b.name));
-
-  let breadcrumbHTML = `<span style="cursor:pointer; color:var(--c-indigo);" onclick="navigateVirtualFolder('root')">🏠 คลังเอกสาร</span>`;
-  breadcrumbs.forEach(b => {
-    breadcrumbHTML += ` <span style="opacity:0.5; margin:0 5px;">></span> <span style="cursor:pointer; color:var(--c-indigo);" onclick="navigateVirtualFolder('${b.id}')">${b.name}</span>`;
-  });
-
-  return `
-    <div class="hub-scroll-area" style="padding:0 20px 20px;">
-      <div class="glass-card nb-card" style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-         <div style="font-weight:700; font-size:14px; display:flex; align-items:center;">${breadcrumbHTML}</div>
-         <div style="display:flex; gap:8px;">
-           <button class="nb-btn sm" onclick="addVirtualFolder('${c.id}', '${currentFolderId}')">📁 สร้างโฟลเดอร์</button>
-           <button class="nb-btn sm nb-btn-primary" onclick="addVirtualFile('${c.id}', '${currentFolderId}')">🔗 เพิ่มลิงก์เอกสาร</button>
-         </div>
-      </div>
-      
-      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:12px;">
-        ${folders.length === 0 && files.length === 0 ? '<div class="empty-sm" style="grid-column: 1 / -1; padding:30px;">โฟลเดอร์นี้ยังว่างเปล่า กดปุ่มเพื่อเพิ่มไฟล์หรือโฟลเดอร์ได้เลยครับ</div>' : ''}
-        ${folders.map(f => `
-          <div class="glass-card" style="padding:15px; text-align:center; position:relative; cursor:pointer; background:rgba(255,255,255,0.7); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" onclick="navigateVirtualFolder('${f.id}')">
-            <div style="font-size:40px; margin-bottom:8px;">📁</div>
-            <div style="font-weight:700; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${f.name}">${f.name}</div>
-            <button class="icon-btn-sm" style="position:absolute; top:5px; right:5px; background:rgba(255,0,0,0.1); color:red; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:10px;" onclick="event.stopPropagation(); deleteVirtualItem('${c.id}', '${f.id}')">✕</button>
-          </div>
-        `).join('')}
-        ${files.map(f => `
-          <div class="glass-card" style="padding:15px; text-align:center; position:relative; cursor:pointer; background:rgba(240,249,255,0.7); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" onclick="window.open('${f.url}', '_blank')">
-            <div style="font-size:40px; margin-bottom:8px;">📄</div>
-            <div style="font-weight:700; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--c-indigo);" title="${f.name}">${f.name}</div>
-            <button class="icon-btn-sm" style="position:absolute; top:5px; right:5px; background:rgba(255,0,0,0.1); color:red; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:10px;" onclick="event.stopPropagation(); deleteVirtualItem('${c.id}', '${f.id}')">✕</button>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-  `;
-}
-
-window.navigateVirtualFolder = function(folderId) {
-  state.currentFolderId = folderId;
-  render();
-}
-
-window.addVirtualFolder = function(courseId, parentId) {
-  openModal('สร้างโฟลเดอร์ใหม่', `
-    <div class="form-grid">
-      <div class="fg full">
-        <label>ชื่อโฟลเดอร์</label>
-        <input type="text" class="glass-input" id="vFolderInput" placeholder="เช่น สไลด์เรียนบทที่ 1...">
-      </div>
-    const item = state.virtualFiles[courseId].items[id];
-    if(!item) return;
-    if(item.type === 'folder') {
-      const children = Object.values(state.virtualFiles[courseId].items).filter(i => i.parentId === id);
-  const course = findCourseById(courseId);
-  if (course && course.linkedFiles) {
-    course.linkedFiles = course.linkedFiles.filter(f => f.id !== fileId);
-    await fsUpd('courses', courseId, { linkedFiles: course.linkedFiles });
-    showToast('✅ ยกเลิกลิงก์ไฟล์สำเร็จ');
-    render();
-  }
-}
-window.unlinkFileFromCourse = unlinkFileFromCourse;
-
 
 async function deleteTopic(courseId, topicId) {
   if (!confirm('ยืนยันการลบหัวข้อนี้และหัวข้อย่อย?')) return;
