@@ -179,6 +179,7 @@ var state = {
   driveBreadcrumbs: [],
   courseFiles: {},
   courseFilesCache: {},
+  virtualFiles: JSON.parse(localStorage.getItem('virtual_files') || '{}'),
   driveViewMode: localStorage.getItem('drive_view_mode') || 'grid',
   drivePickerConfig: null,
   topicMastery: JSON.parse(localStorage.getItem('topic_mastery') || '{}'),
