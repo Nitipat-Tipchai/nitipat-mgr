@@ -1037,13 +1037,15 @@ function attachAllEvents() {
 function renderCourseHub(courseId) {
   state.activeCourseId = courseId;
   state.view = 'course-hub';
-  state.activeHubTab = 'Files';
+  state.activeHubTab = 'Grades';
   state.driveBreadcrumbs = [];
   state.currentFolderId = null;
   render();
 
   const c = findCourseById(courseId);
   if (c && c.driveId) {
-    refreshDriveFiles(courseId, c.driveId);
+    if (typeof refreshDriveFiles === 'function') {
+      refreshDriveFiles(courseId, c.driveId);
+    }
   }
 }
