@@ -91,7 +91,8 @@ class RadioController {
       url = `https://docs.google.com/uc?export=open&id=${id}`;
     }
     // Only use proxy if running inside Electron (.exe) where hostname is localhost
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    const isCapacitor_nitipat = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+    if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !isCapacitor_nitipat) {
       return `/proxy-audio?url=${encodeURIComponent(url)}`;
     }
     return url;
@@ -521,7 +522,7 @@ function renderTopicMastery(courseId, parentId = null) {
                 <button class="mastery-btn ${t.level === 'review' ? 'active' : ''}" style="background:var(--c-rust);" title="Review" onclick="setTopicLevel('${courseId}', '${t.id}', 'review')">❓ ทวน</button>
                 <button class="mastery-btn ${t.level === 'ok' ? 'active' : ''}" style="background:var(--c-indigo);" title="OK" onclick="setTopicLevel('${courseId}', '${t.id}', 'ok')">📖 พอได้</button>
                 <button class="mastery-btn ${t.level === 'mastered' ? 'active' : ''}" style="background:var(--c-lime);" title="Mastered" onclick="setTopicLevel('${courseId}', '${t.id}', 'mastered')">⭐ แม่น</button>
-                <button class="tool-btn sm" style="font-size:10px; width:auto; padding:0 8px; border:1px solid black; border-radius:6px;" title="Link File" onclick="PickerManager.openPicker('${courseId}', null, (docs) => linkFilesToTopic('${courseId}', '${t.id}', docs))">🔗</button>
+                <button class="tool-btn sm" style="font-size:10px; width:auto; padding:0 8px; border:1px solid black; border-radius:6px;" title="Link File" onclick="openTopicFileModal('${courseId}', '${t.id}')">🔗</button>
                 <button class="tool-btn sm" style="font-size:10px; width:auto; padding:0 8px; border:1px solid black; border-radius:6px;" title="เพิ่มหัวข้อย่อย" onclick="addTopic('${courseId}', '${t.id}')">➕ ย่อย</button>
                 <button class="btn-text-danger" style="font-size:14px; font-weight:800;" onclick="deleteTopic('${courseId}', '${t.id}')">✕</button>
               </div>
