@@ -1607,37 +1607,6 @@ async function setTopicLevel(courseId, topicId, level) {
   const t = state.topicMastery[courseId].find(x => x.id === topicId);
   if (t) t.level = level;
   localStorage.setItem('topic_mastery', JSON.stringify(state.topicMastery));
-  render();
-  await fsSet('topic_mastery', courseId, { topics: state.topicMastery[courseId] });
-}
-
-async function linkFilesToTopic(courseId, topicId, docs) {
-  if (!docs || docs.length === 0) return;
-  const t = state.topicMastery[courseId].find(x => x.id === topicId);
-  if (!t) return;
-  if (!t.files) t.files = [];
-  docs.forEach(d => {
-    if (!t.files.find(f => f.id === d.id)) {
-      t.files.push({ id: d.id, name: d.name, url: d.url, mimeType: d.mimeType });
-    }
-  });
-  localStorage.setItem('topic_mastery', JSON.stringify(state.topicMastery));
-  await fsSet('topic_mastery', courseId, { topics: state.topicMastery[courseId] });
-  render();
-  showToast(`✅ Linked ${docs.length} files to topic`);
-}
-
-async function unlinkFileFromTopic(courseId, topicId, fileId) {
-  const t = state.topicMastery[courseId].find(x => x.id === topicId);
-  if (t && t.files) {
-    t.files = t.files.filter(f => f.id !== fileId);
-    localStorage.setItem('topic_mastery', JSON.stringify(state.topicMastery));
-    await fsSet('topic_mastery', courseId, { topics: state.topicMastery[courseId] });
-    render();
-  }
-}
-
-async function handleLinkedFiles(docs, courseId) {
     if (!docs || docs.length === 0) return;
     showToast(`🔗 Linking ${docs.length} files to course...`);
     const course = findCourseById(courseId);
@@ -1805,52 +1774,6 @@ window.addVirtualFolder = function(courseId, parentId) {
         <label>ชื่อโฟลเดอร์</label>
         <input type="text" class="glass-input" id="vFolderInput" placeholder="เช่น สไลด์เรียนบทที่ 1...">
       </div>
-      <button class="nb-btn-primary full" onclick="submitVirtualFolder('${courseId}', '${parentId}')">บันทึกโฟลเดอร์</button>
-    </div>
-  `);
-}
-
-window.submitVirtualFolder = function(courseId, parentId) {
-  const name = document.getElementById('vFolderInput').value.trim();
-  if(!name) return;
-  const id = 'vf_' + Date.now() + Math.random().toString(36).substr(2, 5);
-  state.virtualFiles[courseId].items[id] = { id, type: 'folder', name, parentId, createdAt: Date.now() };
-  closeModal();
-  saveVirtualFiles();
-  render();
-}
-
-window.addVirtualFile = function(courseId, parentId) {
-  openModal('เพิ่มลิงก์เอกสาร', `
-    <div class="form-grid">
-      <div class="fg full">
-        <label>ชื่อไฟล์ / เอกสาร</label>
-        <input type="text" class="glass-input" id="vFileName" placeholder="เช่น PDF สรุปบทเรียน">
-      </div>
-      <div class="fg full">
-        <label>URL ลิงก์เอกสาร (Google Drive, Dropbox, ฯลฯ)</label>
-        <input type="url" class="glass-input" id="vFileUrl" placeholder="https://...">
-      </div>
-      <button class="nb-btn-primary full" onclick="submitVirtualFile('${courseId}', '${parentId}')">เพิ่มลงในระบบ</button>
-    </div>
-  `);
-}
-
-window.submitVirtualFile = function(courseId, parentId) {
-  const name = document.getElementById('vFileName').value.trim();
-  const url = document.getElementById('vFileUrl').value.trim();
-  if(!name || !url) return;
-  const id = 'vfile_' + Date.now() + Math.random().toString(36).substr(2, 5);
-  state.virtualFiles[courseId].items[id] = { id, type: 'file', name, url, parentId, createdAt: Date.now() };
-  closeModal();
-  saveVirtualFiles();
-  render();
-}
-
-window.deleteVirtualItem = function(courseId, itemId) {
-  if(!confirm("คุณแน่ใจหรือไม่ที่จะลบรายการนี้? (ถ้าลบโฟลเดอร์ ไฟล์ที่อยู่ข้างในจะหายทั้งหมดเลยนะครับ)")) return;
-  
-  function deleteRecursive(id) {
     const item = state.virtualFiles[courseId].items[id];
     if(!item) return;
     if(item.type === 'folder') {
