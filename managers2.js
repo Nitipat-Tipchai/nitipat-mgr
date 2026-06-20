@@ -1762,35 +1762,35 @@ window.renderCourseFiles = function(c) {
     breadcrumbHTML += ` <span style="opacity:0.5; margin:0 5px;">></span> <span style="cursor:pointer; color:var(--c-indigo);" onclick="navigateVirtualFolder('${b.id}')">${b.name}</span>`;
   });
 
-  return \`
+  return `
     <div class="hub-scroll-area" style="padding:0 20px 20px;">
       <div class="glass-card nb-card" style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-         <div style="font-weight:700; font-size:14px; display:flex; align-items:center;">\${breadcrumbHTML}</div>
+         <div style="font-weight:700; font-size:14px; display:flex; align-items:center;">${breadcrumbHTML}</div>
          <div style="display:flex; gap:8px;">
-           <button class="nb-btn sm" onclick="addVirtualFolder('\${c.id}', '\${currentFolderId}')">📁 สร้างโฟลเดอร์</button>
-           <button class="nb-btn sm nb-btn-primary" onclick="addVirtualFile('\${c.id}', '\${currentFolderId}')">🔗 เพิ่มลิงก์เอกสาร</button>
+           <button class="nb-btn sm" onclick="addVirtualFolder('${c.id}', '${currentFolderId}')">📁 สร้างโฟลเดอร์</button>
+           <button class="nb-btn sm nb-btn-primary" onclick="addVirtualFile('${c.id}', '${currentFolderId}')">🔗 เพิ่มลิงก์เอกสาร</button>
          </div>
       </div>
       
       <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:12px;">
-        \${folders.length === 0 && files.length === 0 ? '<div class="empty-sm" style="grid-column: 1 / -1; padding:30px;">โฟลเดอร์นี้ยังว่างเปล่า กดปุ่มเพื่อเพิ่มไฟล์หรือโฟลเดอร์ได้เลยครับ</div>' : ''}
-        \${folders.map(f => \`
-          <div class="glass-card" style="padding:15px; text-align:center; position:relative; cursor:pointer; background:rgba(255,255,255,0.7); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" onclick="navigateVirtualFolder('\${f.id}')">
+        ${folders.length === 0 && files.length === 0 ? '<div class="empty-sm" style="grid-column: 1 / -1; padding:30px;">โฟลเดอร์นี้ยังว่างเปล่า กดปุ่มเพื่อเพิ่มไฟล์หรือโฟลเดอร์ได้เลยครับ</div>' : ''}
+        ${folders.map(f => `
+          <div class="glass-card" style="padding:15px; text-align:center; position:relative; cursor:pointer; background:rgba(255,255,255,0.7); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" onclick="navigateVirtualFolder('${f.id}')">
             <div style="font-size:40px; margin-bottom:8px;">📁</div>
-            <div style="font-weight:700; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="\${f.name}">\${f.name}</div>
-            <button class="icon-btn-sm" style="position:absolute; top:5px; right:5px; background:rgba(255,0,0,0.1); color:red; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:10px;" onclick="event.stopPropagation(); deleteVirtualItem('\${c.id}', '\${f.id}')">✕</button>
+            <div style="font-weight:700; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${f.name}">${f.name}</div>
+            <button class="icon-btn-sm" style="position:absolute; top:5px; right:5px; background:rgba(255,0,0,0.1); color:red; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:10px;" onclick="event.stopPropagation(); deleteVirtualItem('${c.id}', '${f.id}')">✕</button>
           </div>
-        \`).join('')}
-        \${files.map(f => \`
-          <div class="glass-card" style="padding:15px; text-align:center; position:relative; cursor:pointer; background:rgba(240,249,255,0.7); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" onclick="window.open('\${f.url}', '_blank')">
+        `).join('')}
+        ${files.map(f => `
+          <div class="glass-card" style="padding:15px; text-align:center; position:relative; cursor:pointer; background:rgba(240,249,255,0.7); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" onclick="window.open('${f.url}', '_blank')">
             <div style="font-size:40px; margin-bottom:8px;">📄</div>
-            <div style="font-weight:700; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--c-indigo);" title="\${f.name}">\${f.name}</div>
-            <button class="icon-btn-sm" style="position:absolute; top:5px; right:5px; background:rgba(255,0,0,0.1); color:red; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:10px;" onclick="event.stopPropagation(); deleteVirtualItem('\${c.id}', '\${f.id}')">✕</button>
+            <div style="font-weight:700; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--c-indigo);" title="${f.name}">${f.name}</div>
+            <button class="icon-btn-sm" style="position:absolute; top:5px; right:5px; background:rgba(255,0,0,0.1); color:red; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:10px;" onclick="event.stopPropagation(); deleteVirtualItem('${c.id}', '${f.id}')">✕</button>
           </div>
-        \`).join('')}
+        `).join('')}
       </div>
     </div>
-  \`;
+  `;
 }
 
 window.navigateVirtualFolder = function(folderId) {
@@ -1799,15 +1799,15 @@ window.navigateVirtualFolder = function(folderId) {
 }
 
 window.addVirtualFolder = function(courseId, parentId) {
-  openModal('สร้างโฟลเดอร์ใหม่', \`
+  openModal('สร้างโฟลเดอร์ใหม่', `
     <div class="form-grid">
       <div class="fg full">
         <label>ชื่อโฟลเดอร์</label>
         <input type="text" class="glass-input" id="vFolderInput" placeholder="เช่น สไลด์เรียนบทที่ 1...">
       </div>
-      <button class="nb-btn-primary full" onclick="submitVirtualFolder('\${courseId}', '\${parentId}')">บันทึกโฟลเดอร์</button>
+      <button class="nb-btn-primary full" onclick="submitVirtualFolder('${courseId}', '${parentId}')">บันทึกโฟลเดอร์</button>
     </div>
-  \`);
+  `);
 }
 
 window.submitVirtualFolder = function(courseId, parentId) {
@@ -1821,7 +1821,7 @@ window.submitVirtualFolder = function(courseId, parentId) {
 }
 
 window.addVirtualFile = function(courseId, parentId) {
-  openModal('เพิ่มลิงก์เอกสาร', \`
+  openModal('เพิ่มลิงก์เอกสาร', `
     <div class="form-grid">
       <div class="fg full">
         <label>ชื่อไฟล์ / เอกสาร</label>
@@ -1831,9 +1831,9 @@ window.addVirtualFile = function(courseId, parentId) {
         <label>URL ลิงก์เอกสาร (Google Drive, Dropbox, ฯลฯ)</label>
         <input type="url" class="glass-input" id="vFileUrl" placeholder="https://...">
       </div>
-      <button class="nb-btn-primary full" onclick="submitVirtualFile('\${courseId}', '\${parentId}')">เพิ่มลงในระบบ</button>
+      <button class="nb-btn-primary full" onclick="submitVirtualFile('${courseId}', '${parentId}')">เพิ่มลงในระบบ</button>
     </div>
-  \`);
+  `);
 }
 
 window.submitVirtualFile = function(courseId, parentId) {
