@@ -57,9 +57,9 @@ async function setAttendanceStatus(courseId, status, skipGPS = false) {
     const { latitude: lat, longitude: lon } = pos.coords;
     const [tLat, tLon] = c.targetCoords.split(',').map(Number);
     const dist = getDistance(lat, lon, tLat, tLon);
-    distMeters = Math.round(dist * 1000);
+    distMeters = Math.round(dist);
 
-    const isInside = dist <= 0.5;
+    const isInside = dist <= 500;
 
     document.getElementById('gpsStatusText').innerHTML = `
       คุณอยู่ห่างจากห้องเรียน <strong>${distMeters} เมตร</strong><br>
@@ -153,4 +153,4 @@ function promptAbsenceReason(courseId) {
   const status = reason.trim() === "" ? "ขาดเรียน" : `ขาดเรียน (${reason.trim()})`;
   setAttendanceStatus(courseId, status, true);
 }
-
+
