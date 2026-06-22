@@ -1,6 +1,18 @@
 // ══════════════════════════════════════════════════
 // FORMS
 // ══════════════════════════════════════════════════
+
+window.showCheckinBanner = function(c) {
+  openModal(`📍 ถึงเวลาเรียน ${c.nameTh}`, `
+    <div style="text-align:center; padding: 20px;">
+       <div style="font-size:40px; margin-bottom:10px;">🕒</div>
+       <div style="font-size:16px; font-weight:700; margin-bottom:10px;">ถึงเวลาเข้าเรียนวิชา ${c.nameTh} แล้วครับ!</div>
+       <p style="margin-bottom:20px; color:#666;">ระบบต้องการให้คุณยืนยันการเข้าเรียนตอนนี้ เพื่อบันทึก Attendance ของวันนี้</p>
+       <button class="btn-pastel-primary full" style="border-radius:10px; padding:12px; margin-bottom:10px;" onclick="closeModal(); setAttendanceStatus('${c.id}', 'เข้าเรียน (Onsite)')">📍 เข้าเรียน (Onsite) - เปิด GPS</button>
+       <button class="btn-glass full" style="border-radius:10px; padding:12px;" onclick="closeModal(); setAttendanceStatus('${c.id}', 'เข้าเรียน (Online)')">💻 เข้าเรียน (Online) - ไม่ใช้ GPS</button>
+    </div>
+  `);
+}
 function openAddSemesterForm(existing = null) {
   const calOptions = Object.entries(ACADEMIC_CALENDAR).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
   openModal(existing ? 'แก้ไขเทอม' : 'เพิ่มเทอมการศึกษา', `
