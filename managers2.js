@@ -1354,6 +1354,10 @@ function renderCourseHubPage() {
                <div style="font-size:26px; ${tab !== 'Files' ? 'opacity:0.8;' : 'margin-bottom:2px;'}">📂</div>
                ${tab === 'Files' ? '<div class="tab-label">Files</div>' : ''}
              </button>
+             <button class="nav-tab-btn ${tab === 'Tasks' ? 'active' : ''}" onclick="state.activeHubTab='Tasks'; render();">
+               <div style="font-size:26px; ${tab !== 'Tasks' ? 'opacity:0.8;' : 'margin-bottom:2px;'}">⚡</div>
+               ${tab === 'Tasks' ? '<div class="tab-label">Tasks</div>' : ''}
+             </button>
              <button class="nav-tab-btn ${tab === 'Settings' ? 'active' : ''}" onclick="state.activeHubTab='Settings'; render();">
                <div style="font-size:26px; ${tab !== 'Settings' ? 'opacity:0.8;' : 'margin-bottom:2px;'}">⚙️</div>
                ${tab === 'Settings' ? '<div class="tab-label">Settings</div>' : ''}
@@ -1364,6 +1368,7 @@ function renderCourseHubPage() {
             ${tab === 'Grades' ? renderCourseProgress(c) :
               tab === 'Attendance' ? renderCourseAttendance(c) :
               tab === 'Files' ? renderCourseFiles(c) :
+              tab === 'Tasks' ? (typeof renderCourseTasks === 'function' ? renderCourseTasks(c) : '') :
               renderCourseSettings(c)}
           </div>
         </div>
