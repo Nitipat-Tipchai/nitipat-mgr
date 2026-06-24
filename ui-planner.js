@@ -119,24 +119,24 @@ function renderPlannerKanban() {
     const theme = colColors[col] || { bg: 'rgba(0,0,0,0.02)', headBg: '#64748b', text: 'white', border: 'rgba(0,0,0,0.1)' };
     
     html += `
-      <div style="flex: 0 0 300px; background: \${theme.bg}; border: 1px solid \${theme.border}; border-radius: 20px; display:flex; flex-direction:column; max-height: 75vh; box-shadow: 0 10px 30px rgba(0,0,0,0.02); backdrop-filter: blur(20px);">
-        <div style="padding:16px 20px; font-weight:800; font-size:15px; background: \${theme.headBg}; color: \${theme.text}; border-radius: 20px 20px 0 0; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-          <span>\${col}</span>
-          <span style="font-size:12px; background:rgba(255,255,255,0.2); padding:2px 10px; border-radius:12px;">\${colTasks.length}</span>
+      <div style="flex: 0 0 300px; background: ${theme.bg}; border: 1px solid ${theme.border}; border-radius: 20px; display:flex; flex-direction:column; max-height: 75vh; box-shadow: 0 10px 30px rgba(0,0,0,0.02); backdrop-filter: blur(20px);">
+        <div style="padding:16px 20px; font-weight:800; font-size:15px; background: ${theme.headBg}; color: ${theme.text}; border-radius: 20px 20px 0 0; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+          <span>${col}</span>
+          <span style="font-size:12px; background:rgba(255,255,255,0.2); padding:2px 10px; border-radius:12px;">${colTasks.length}</span>
         </div>
         <div style="padding:15px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:12px; min-height:100px; transition: 0.2s;" 
              ondragover="event.preventDefault(); this.style.background='rgba(0,0,0,0.05)';" 
              ondragleave="this.style.background='transparent';"
-             ondrop="event.preventDefault(); this.style.background='transparent'; moveKanbanTask(event.dataTransfer.getData('text/plain'), '\${col}')">
-          \${colTasks.map(t => \`
-            <div draggable="true" ondragstart="event.dataTransfer.setData('text/plain', \${t.origIdx}); this.style.opacity='0.5';" ondragend="this.style.opacity='1';" style="background:white; border: 1px solid rgba(0,0,0,0.05); border-radius:14px; padding:15px; cursor:grab; box-shadow: 0 4px 15px rgba(0,0,0,0.03); transition: 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 25px rgba(0,0,0,0.06)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.03)';">
-              <div style="font-weight:700; font-size:14px; margin-bottom:8px; color: var(--c-slate); line-height: 1.4;">\${t.title}</div>
+             ondrop="event.preventDefault(); this.style.background='transparent'; moveKanbanTask(event.dataTransfer.getData('text/plain'), '${col}')">
+          ${colTasks.map(t => `
+            <div draggable="true" ondragstart="event.dataTransfer.setData('text/plain', ${t.origIdx}); this.style.opacity='0.5';" ondragend="this.style.opacity='1';" style="background:white; border: 1px solid rgba(0,0,0,0.05); border-radius:14px; padding:15px; cursor:grab; box-shadow: 0 4px 15px rgba(0,0,0,0.03); transition: 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 25px rgba(0,0,0,0.06)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.03)';">
+              <div style="font-weight:700; font-size:14px; margin-bottom:8px; color: var(--c-slate); line-height: 1.4;">${t.title}</div>
               <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                 \${t.due ? \`<span style="font-size:10px; background:rgba(239,68,68,0.1); color:var(--c-rust); padding:4px 8px; border-radius:6px; font-weight:600;">\${t.due}</span>\` : ''}
-                 \${t.courseId ? \`<span style="font-size:10px; background:rgba(79,70,229,0.1); color:var(--c-indigo); padding:4px 8px; border-radius:6px; font-weight:600;">\${getCourseCodeById(t.courseId) || 'วิชา'}</span>\` : ''}
+                 ${t.due ? `<span style="font-size:10px; background:rgba(239,68,68,0.1); color:var(--c-rust); padding:4px 8px; border-radius:6px; font-weight:600;">${t.due}</span>` : ''}
+                 ${t.courseId ? `<span style="font-size:10px; background:rgba(79,70,229,0.1); color:var(--c-indigo); padding:4px 8px; border-radius:6px; font-weight:600;">${getCourseCodeById(t.courseId) || 'วิชา'}</span>` : ''}
               </div>
             </div>
-          \`).join('')}
+          `).join('')}
         </div>
       </div>
     `;
@@ -163,28 +163,28 @@ function renderPlannerMatrix() {
   const q4 = tasks.filter(t => t.urgency !== 'Urgent' && t.importance !== 'Important');
   
   const renderQ = (title, items, color, bgGradient, u, i) => `
-    <div style="background: rgba(255,255,255,0.6); border: 1px solid \${color}; border-radius: 20px; display:flex; flex-direction:column; min-height: 250px; box-shadow: 0 10px 30px rgba(0,0,0,0.02); backdrop-filter: blur(20px); overflow:hidden;"
+    <div style="background: rgba(255,255,255,0.6); border: 1px solid ${color}; border-radius: 20px; display:flex; flex-direction:column; min-height: 250px; box-shadow: 0 10px 30px rgba(0,0,0,0.02); backdrop-filter: blur(20px); overflow:hidden;"
          ondragover="event.preventDefault(); this.style.transform='scale(1.02)';" 
          ondragleave="this.style.transform='scale(1)';"
-         ondrop="event.preventDefault(); this.style.transform='scale(1)'; moveMatrixTask(event.dataTransfer.getData('text/plain'), '\${u}', '\${i}')">
-      <div style="background: \${bgGradient}; color: white; font-weight: 800; font-size: 15px; padding: 16px 20px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">\${title} (\${items.length})</div>
+         ondrop="event.preventDefault(); this.style.transform='scale(1)'; moveMatrixTask(event.dataTransfer.getData('text/plain'), '${u}', '${i}')">
+      <div style="background: ${bgGradient}; color: white; font-weight: 800; font-size: 15px; padding: 16px 20px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">${title} (${items.length})</div>
       <div style="padding:15px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:10px;">
-        \${items.map(t => \`
-          <div draggable="true" ondragstart="event.dataTransfer.setData('text/plain', \${t.origIdx});" style="font-size:13px; padding:12px; background:white; border: 1px solid rgba(0,0,0,0.05); border-radius:12px; cursor:grab; box-shadow: 0 4px 15px rgba(0,0,0,0.02); transition: 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(0,0,0,0.05)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.02)';">
-            <div style="font-weight:700; color:var(--c-slate); line-height:1.4;">\${t.title}</div>
-            \${t.due ? \`<div style="font-size:10px; color:var(--c-rust); font-weight:600; background:rgba(239,68,68,0.1); display:inline-block; padding:3px 6px; border-radius:6px; margin-top:6px;">📅 \${t.due}</div>\` : ''}
+        ${items.map(t => `
+          <div draggable="true" ondragstart="event.dataTransfer.setData('text/plain', ${t.origIdx});" style="font-size:13px; padding:12px; background:white; border: 1px solid rgba(0,0,0,0.05); border-radius:12px; cursor:grab; box-shadow: 0 4px 15px rgba(0,0,0,0.02); transition: 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(0,0,0,0.05)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.02)';">
+            <div style="font-weight:700; color:var(--c-slate); line-height:1.4;">${t.title}</div>
+            ${t.due ? `<div style="font-size:10px; color:var(--c-rust); font-weight:600; background:rgba(239,68,68,0.1); display:inline-block; padding:3px 6px; border-radius:6px; margin-top:6px;">📅 ${t.due}</div>` : ''}
           </div>
-        \`).join('')}
+        `).join('')}
       </div>
     </div>
   `;
   
   return `
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
-      \${renderQ('Q1: Do First (ด่วน & สำคัญ)', q1, 'rgba(239,68,68,0.3)', 'linear-gradient(135deg, #ef4444, #dc2626)', 'Urgent', 'Important')}
-      \${renderQ('Q2: Schedule (ไม่ด่วน แต่สำคัญ)', q2, 'rgba(59,130,246,0.3)', 'linear-gradient(135deg, #3b82f6, #2563eb)', 'Not Urgent', 'Important')}
-      \${renderQ('Q3: Delegate (ด่วน แต่ไม่สำคัญ)', q3, 'rgba(245,158,11,0.3)', 'linear-gradient(135deg, #f59e0b, #d97706)', 'Urgent', 'Not Important')}
-      \${renderQ("Q4: Don't Do (ไม่ด่วน & ไม่สำคัญ)", q4, 'rgba(148,163,184,0.3)', 'linear-gradient(135deg, #94a3b8, #64748b)', 'Not Urgent', 'Not Important')}
+      ${renderQ('Q1: Do First (ด่วน & สำคัญ)', q1, 'rgba(239,68,68,0.3)', 'linear-gradient(135deg, #ef4444, #dc2626)', 'Urgent', 'Important')}
+      ${renderQ('Q2: Schedule (ไม่ด่วน แต่สำคัญ)', q2, 'rgba(59,130,246,0.3)', 'linear-gradient(135deg, #3b82f6, #2563eb)', 'Not Urgent', 'Important')}
+      ${renderQ('Q3: Delegate (ด่วน แต่ไม่สำคัญ)', q3, 'rgba(245,158,11,0.3)', 'linear-gradient(135deg, #f59e0b, #d97706)', 'Urgent', 'Not Important')}
+      ${renderQ("Q4: Don't Do (ไม่ด่วน & ไม่สำคัญ)", q4, 'rgba(148,163,184,0.3)', 'linear-gradient(135deg, #94a3b8, #64748b)', 'Not Urgent', 'Not Important')}
     </div>
   `;
 }
