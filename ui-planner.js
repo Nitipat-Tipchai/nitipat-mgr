@@ -590,14 +590,14 @@ window.forceSyncCalendar = async function() {
     const term = state.selectedSemester || (typeof getCurrentSemester === 'function' ? getCurrentSemester()?.id : null) || (state.semesters && state.semesters.length ? state.semesters[state.semesters.length - 1].id : null);
     const courses = state.courses[term] || [];
     
-    // ดึงข้อมูลวันเปิด-ปิดเทอมจาก ACADEMIC_CALENDAR
-    const termConfig = typeof ACADEMIC_CALENDAR !== 'undefined' ? ACADEMIC_CALENDAR[term] : null;
-    if (!termConfig) {
-      return showToast('ไม่พบข้อมูลปฏิทินการศึกษาของเทอมนี้', 'err');
+    const sem = state.semesters ? state.semesters.find(s => s.id === term) : null;
+    
+    if (!sem || !sem.startDate || !sem.endDate) {
+      return showToast('กรุณาระบุวันเปิด-ปิดเทอมให้ครบถ้วนก่อนซิงก์ (แก้ไขได้ที่หน้าตั้งค่าระบบ)', 'err');
     }
     
     // สร้าง UNTIL string: YYYYMMDDTHHmmssZ
-    const endTermDate = new Date(termConfig.end);
+    const endTermDate = new Date(sem.endDate);
     endTermDate.setHours(23, 59, 59, 0);
     const untilStr = endTermDate.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
     
@@ -616,11 +616,11 @@ window.forceSyncCalendar = async function() {
           location: c.room || 'ไม่ระบุห้อง',
           description: `อาจารย์: ${c.teacher || '-'}\nหมวดหมู่: ${s.type || 'Lecture'}\n\n📍 <a href="${checkinLink}">กดที่นี่เพื่อเช็คชื่อเข้าเรียน / ดูข้อมูลวิชา</a>`,
           start: {
-            dateTime: getFirstClassDate(termConfig.start, s.day, s.startHour),
+            dateTime: getFirstClassDate(sem.startDate, s.day, s.startHour),
             timeZone: 'Asia/Bangkok'
           },
           end: {
-            dateTime: getFirstClassDate(termConfig.start, s.day, s.endHour),
+            dateTime: getFirstClassDate(sem.startDate, s.day, s.endHour),
             timeZone: 'Asia/Bangkok'
           },
           recurrence: [
