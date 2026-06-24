@@ -590,14 +590,14 @@ window.forceSyncCalendar = async function() {
     const term = state.selectedSemester || (typeof getCurrentSemester === 'function' ? getCurrentSemester()?.id : null) || (state.semesters && state.semesters.length ? state.semesters[state.semesters.length - 1].id : null);
     const courses = state.courses[term] || [];
     
-    const sem = state.semesters ? state.semesters.find(s => s.id === term) : null;
+    const settings = state.calendarSettings || {};
     
-    if (!sem || !sem.startDate || !sem.endDate) {
-      return showToast('กรุณาระบุวันเปิด-ปิดเทอมให้ครบถ้วนก่อนซิงก์ (แก้ไขได้ที่หน้าตั้งค่าระบบ)', 'err');
+    if (!settings.semesterStart || !settings.semesterEnd) {
+      return showToast('กรุณาระบุ วันเปิดเทอม และ วันสิ้นสุดเทอม ในหน้า "ตั้งค่าปฏิทินการศึกษา" ก่อนซิงก์ครับ', 'err');
     }
     
     // สร้าง UNTIL string: YYYYMMDDTHHmmssZ
-    const endTermDate = new Date(sem.endDate);
+    const endTermDate = new Date(settings.semesterEnd);
     endTermDate.setHours(23, 59, 59, 0);
     const untilStr = endTermDate.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
     
@@ -616,11 +616,11 @@ window.forceSyncCalendar = async function() {
           location: c.room || 'ไม่ระบุห้อง',
           description: `อาจารย์: ${c.teacher || '-'}\nหมวดหมู่: ${s.type || 'Lecture'}\n\n📍 <a href="${checkinLink}">กดที่นี่เพื่อเช็คชื่อเข้าเรียน / ดูข้อมูลวิชา</a>`,
           start: {
-            dateTime: getFirstClassDate(sem.startDate, s.day, s.startHour),
+            dateTime: getFirstClassDate(settings.semesterStart, s.day, s.startHour),
             timeZone: 'Asia/Bangkok'
           },
           end: {
-            dateTime: getFirstClassDate(sem.startDate, s.day, s.endHour),
+            dateTime: getFirstClassDate(settings.semesterStart, s.day, s.endHour),
             timeZone: 'Asia/Bangkok'
           },
           recurrence: [
