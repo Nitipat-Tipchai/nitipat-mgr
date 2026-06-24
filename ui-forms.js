@@ -577,7 +577,7 @@ function startHyperNotifications() {
     const todayKey = now.toLocaleDateString('en-CA');
 
     // 1. Academic Events (Courses)
-    Object.values(state.courses).flat().forEach(c => {
+    (state.courses[state.activeSemester] || []).forEach(c => {
       (c.schedules || []).forEach(s => {
         if (s.day !== todayIdx) return;
         const startMin = Math.floor(s.startHour * 60);
@@ -596,7 +596,7 @@ function startHyperNotifications() {
         const eventKeyStart = `start_${c.id}_${todayKey}`;
         if (diff === 0 && !state.notifiedEvents.has(eventKeyStart)) {
           pushNotif(`📍 ถึงเวลาเรียน ${c.nameTh}`, `เปิดแอปเพื่อเช็คชื่อ (Smart Check-in)`);
-          showCheckinBanner(c);
+          window.showCheckinBanner(c);
           state.notifiedEvents.add(eventKeyStart);
         }
 
@@ -623,7 +623,7 @@ function startHyperNotifications() {
         // Auto-Check-in Banner
         if (diff <= 0 && nowMin < endMin) {
           const attended = state.attendanceHistory?.[c.id]?.[todayKey];
-          if (!attended) showCheckinBanner(c);
+          if (!attended) window.showCheckinBanner(c);
         }
       });
     });
