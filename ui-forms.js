@@ -577,7 +577,9 @@ function startHyperNotifications() {
     const todayKey = now.toLocaleDateString('en-CA');
 
     // 1. Academic Events (Courses)
-    (state.courses[state.activeSemester] || []).forEach(c => {
+    const currentSem = typeof getCurrentSemester === 'function' ? getCurrentSemester() : null;
+    const activeCourses = currentSem && state.courses[currentSem.id] ? state.courses[currentSem.id] : [];
+    activeCourses.forEach(c => {
       (c.schedules || []).forEach(s => {
         if (s.day !== todayIdx) return;
         const startMin = Math.floor(s.startHour * 60);
