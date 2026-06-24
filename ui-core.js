@@ -154,6 +154,7 @@ async function initApp() {
     const urlParams = new URLSearchParams(window.location.search);
     const isShareLink = urlParams.has('share');
     const isVerifyLink = urlParams.has('verify');
+    const checkinCourseId = urlParams.get('checkin');
 
     if (isShareLink) {
       state.isLocked = false;
@@ -213,4 +214,4 @@ document.addEventListener('visibilitychange', () => {
     localStorage.setItem('focusTree', JSON.stringify(state.tree));
     showToast('🪨 ต้นไม้ตายแล้ว! อย่าออกจากหน้าจอระหว่างโฟกัส', 'err');
   }
-});
+});
