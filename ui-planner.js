@@ -590,32 +590,46 @@ window.forceSyncCalendar = async function() {
     const term = state.activeSemester;
     const courses = state.courses[term] || [];
     
-    // In Phase 1: We will just push the classes to the primary calendar
+    // ดึงข้อมูลวันเปิด-ปิดเทอมจาก ACADEMIC_CALENDAR
+    const termConfig = typeof ACADEMIC_CALENDAR !== 'undefined' ? ACADEMIC_CALENDAR[term] : null;
+    if (!termConfig) {
+      return showToast('ไม่พบข้อมูลปฏิทินการศึกษาของเทอมนี้', 'err');
+    }
+    
+    // สร้าง UNTIL string: YYYYMMDDTHHmmssZ
+    const endTermDate = new Date(termConfig.end);
+    endTermDate.setHours(23, 59, 59, 0);
+    const untilStr = endTermDate.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    
     // Mapping our schedule logic to Google Calendar Event logic
     courses.forEach(c => {
       if (!c.schedules) return;
       c.schedules.forEach(s => {
         const dayMap = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
         const byDay = dayMap[s.day];
+        
+        // แนบลิงก์เช็คชื่อ
+        const checkinLink = `https://nitipat-mgr.vercel.app/?checkin=${c.id}`;
+        
         const event = {
           summary: `[${c.id}] ${c.name}`,
           location: c.room || 'ไม่ระบุห้อง',
-          description: `อาจารย์: ${c.teacher || '-'}\nหมวดหมู่: ${s.type || 'Lecture'}`,
+          description: `อาจารย์: ${c.teacher || '-'}\nหมวดหมู่: ${s.type || 'Lecture'}\n\n📍 <a href="${checkinLink}">กดที่นี่เพื่อเช็คชื่อเข้าเรียน / ดูข้อมูลวิชา</a>`,
           start: {
-            dateTime: getNextDayOfWeek(s.day, s.startHour),
+            dateTime: getFirstClassDate(termConfig.start, s.day, s.startHour),
             timeZone: 'Asia/Bangkok'
           },
           end: {
-            dateTime: getNextDayOfWeek(s.day, s.endHour),
+            dateTime: getFirstClassDate(termConfig.start, s.day, s.endHour),
             timeZone: 'Asia/Bangkok'
           },
           recurrence: [
-            `RRULE:FREQ=WEEKLY;BYDAY=${byDay}` // Simple recurrence (Can be improved with END date in future)
+            `RRULE:FREQ=WEEKLY;BYDAY=${byDay};UNTIL=${untilStr}`
           ],
           reminders: {
             useDefault: false,
             overrides: [
-              { method: 'popup', minutes: 30 }
+              { method: 'popup', minutes: 10 }
             ]
           }
         };
@@ -652,18 +666,22 @@ window.forceSyncCalendar = async function() {
   }
 };
 
-function getNextDayOfWeek(dayOfWeek, hourFloat) {
-  const date = new Date();
-  const day = date.getDay();
-  const diff = date.getDate() - day + (day === 0 && dayOfWeek !== 0 ? -6 : 1) + dayOfWeek - 1; // adjust when day is sunday
-  const nextDate = new Date(date.setDate(diff));
-  if (nextDate < new Date()) {
-    nextDate.setDate(nextDate.getDate() + 7);
+function getFirstClassDate(termStartStr, dayOfWeek, hourFloat) {
+  let d = new Date(termStartStr);
+  const day = d.getDay();
+  let diff = dayOfWeek - day;
+  if (diff < 0) {
+    diff += 7;
   }
+  d.setDate(d.getDate() + diff);
+  
   const h = Math.floor(hourFloat);
   const m = Math.round((hourFloat - h) * 60);
-  nextDate.setHours(h, m, 0, 0);
-  return nextDate.toISOString();
+  d.setHours(h, m, 0, 0);
+  
+  const pad = n => String(n).padStart(2, '0');
+  const localStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+  return localStr;
 }
 
 // ══════════════════════════════════════════════════
