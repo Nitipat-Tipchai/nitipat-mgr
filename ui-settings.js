@@ -109,7 +109,8 @@ window.removeIdCard = async () => {
     showToast(`❌ ลบไม่สำเร็จ: ${err.message}`, 'err');
   }
 };
-
+
+
 window.renderCalendar = function() {
   const settings = state.calendarSettings || {};
   return `<div class="page-wrap">
@@ -119,6 +120,8 @@ window.renderCalendar = function() {
       <div class="form-grid">
         <div class="fg"><label>วันเปิดเทอม (Start Semester)</label>
           <input type="date" class="glass-input" id="cal-start" value="${settings.semesterStart || ''}"></div>
+        <div class="fg"><label>วันสิ้นสุดเทอม (End Semester)</label>
+          <input type="date" class="glass-input" id="cal-end" value="${settings.semesterEnd || ''}"></div>
         <div class="fg"><label>วันถอนวิชา (Withdraw Deadline)</label>
           <input type="date" class="glass-input" id="cal-withdraw" value="${settings.withdrawDeadline || ''}"></div>
         <div class="fg"><label>วันเริ่มสอบกลางภาค (Midterm Start)</label>
