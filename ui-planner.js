@@ -2,8 +2,8 @@
 // PLANNER & CALENDAR SYNC (PHASE 1)
 // ══════════════════════════════════════════════════
 function renderPlanner() {
-  const tasks = state.plannerTasks || [];
   const cal = state.calendarConfig || { syncEnabled: false, calendarId: null };
+  const v = state.plannerView || 'list';
   
   return `<div class="page-wrap">
     <div class="page-header-row">
@@ -33,7 +33,24 @@ function renderPlanner() {
       </div>
     </div>
 
-    <!-- Master Task List -->
+    <!-- Sub Tabs -->
+    <div style="display:flex; gap:8px; margin-bottom:20px; overflow-x:auto; padding-bottom:5px;">
+      <button class="btn-glass-secondary sm ${v === 'list' ? 'active-tab' : ''}" onclick="state.plannerView='list'; render()" style="${v==='list'?'background:var(--c-indigo); color:white; border-color:var(--c-indigo);':''}">📋 Master List</button>
+      <button class="btn-glass-secondary sm ${v === 'kanban' ? 'active-tab' : ''}" onclick="state.plannerView='kanban'; render()" style="${v==='kanban'?'background:var(--c-indigo); color:white; border-color:var(--c-indigo);':''}">📋 Kanban Board</button>
+      <button class="btn-glass-secondary sm ${v === 'matrix' ? 'active-tab' : ''}" onclick="state.plannerView='matrix'; render()" style="${v==='matrix'?'background:var(--c-indigo); color:white; border-color:var(--c-indigo);':''}">⏱️ Eisenhower Matrix</button>
+      <button class="btn-glass-secondary sm ${v === 'project' ? 'active-tab' : ''}" onclick="state.plannerView='project'; render()" style="${v==='project'?'background:var(--c-indigo); color:white; border-color:var(--c-indigo);':''}">🏛️ งานชุมนุม & โปรเจกต์</button>
+    </div>
+
+    ${v === 'list' ? renderPlannerList() : ''}
+    ${v === 'kanban' ? renderPlannerKanban() : ''}
+    ${v === 'matrix' ? renderPlannerMatrix() : ''}
+    ${v === 'project' ? renderPlannerProject() : ''}
+  </div>`;
+}
+
+function renderPlannerList() {
+  const tasks = state.plannerTasks || [];
+  return `
     <div class="glass-card nb-card" style="padding:20px;">
       <div style="font-weight:800; font-size:16px; margin-bottom:15px; border-bottom:2px solid black; padding-bottom:10px; display:flex; justify-content:space-between;">
         <span>📋 Master To-Do List</span>
@@ -42,26 +59,219 @@ function renderPlanner() {
       <div class="planner-task-list" style="display:flex; flex-direction:column; gap:10px;">
         ${tasks.map((t, i) => `
           <div class="planner-task-row ${t.done ? 'done' : ''}" style="display:flex; align-items:center; gap:12px; padding:12px; background:white; border:1.5px solid black; border-radius:12px;">
-            <button class="check-circle sm ${t.done ? 'checked' : ''}" data-toggle-planner="${i}" style="width:28px; height:28px; border-radius:50%; border:2px solid black; background:${t.done ? 'var(--c-indigo)' : 'white'}; color:white; display:flex; align-items:center; justify-content:center; font-weight:800;">${t.done ? '✓' : ''}</button>
+            <button class="check-circle sm ${t.done ? 'checked' : ''}" data-toggle-planner="${i}" style="width:28px; height:28px; border-radius:50%; border:2px solid black; background:${t.done ? 'var(--c-indigo)' : 'white'}; color:white; display:flex; align-items:center; justify-content:center; font-weight:800; cursor:pointer;">${t.done ? '✓' : ''}</button>
             <div style="flex:1;">
               <div style="font-weight:700; font-size:14px; text-decoration:${t.done ? 'line-through' : 'none'}; opacity:${t.done ? 0.5 : 1};">${t.title}</div>
               ${t.note ? `<div style="font-size:11px; opacity:0.6;">${t.note}</div>` : ''}
-              ${t.due ? `<div style="font-size:11px; color:var(--c-rust); font-weight:700; margin-top:2px;">📅 กำหนด: ${t.due}</div>` : ''}
-              ${t.project ? `<span style="font-size:10px; background:#f1f5f9; padding:2px 6px; border-radius:4px; margin-top:4px; display:inline-block;">📁 ${t.project}</span>` : ''}
+              <div style="display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;">
+                ${t.due ? `<span style="font-size:10px; background:#fee2e2; color:var(--c-rust); font-weight:700; padding:2px 6px; border-radius:4px;">📅 ${t.due}</span>` : ''}
+                ${t.courseId ? `<span style="font-size:10px; background:#e0e7ff; color:var(--c-indigo); padding:2px 6px; border-radius:4px;">📚 ${getCourseCodeById(t.courseId) || 'วิชา'}</span>` : ''}
+                ${t.project ? `<span style="font-size:10px; background:#f1f5f9; padding:2px 6px; border-radius:4px;">📁 ${t.project}</span>` : ''}
+                ${t.urgency ? `<span style="font-size:10px; background:#fef3c7; color:#b45309; padding:2px 6px; border-radius:4px;">🔥 ${t.urgency}</span>` : ''}
+              </div>
             </div>
-            <button class="icon-btn danger sm" data-del-planner="${i}" style="background:transparent; border:none; color:var(--c-red); font-size:16px;">🗑</button>
+            <button class="icon-btn danger sm" data-del-planner="${i}" style="background:transparent; border:none; color:var(--c-red); font-size:16px; cursor:pointer;">🗑</button>
           </div>
         `).join('')}
         ${tasks.length === 0 ? '<div class="empty-sm" style="padding:40px;">ไม่มีงานค้าง เยี่ยมมาก! 🎉</div>' : ''}
       </div>
-    </div>
-  </div>`;
+    </div>`;
 }
+
+function getCourseCodeById(courseId) {
+  for(let sid in state.courses) {
+    let c = state.courses[sid].find(x => x.id === courseId);
+    if(c) return c.code;
+  }
+  return null;
+}
+
+function renderPlannerKanban() {
+  const tasks = state.plannerTasks || [];
+  const cols = state.kanbanColumns || ['To Do', 'In Progress', 'Done'];
+  
+  let html = `<div style="display:flex; gap:15px; overflow-x:auto; padding-bottom:15px;">`;
+  cols.forEach(col => {
+    const colTasks = tasks.map((t, i) => ({...t, origIdx: i})).filter(t => (t.kanbanStage || 'To Do') === col);
+    html += `
+      <div style="flex: 0 0 280px; background:rgba(255,255,255,0.5); border:2px solid black; border-radius:12px; display:flex; flex-direction:column; max-height: 60vh;">
+        <div style="padding:15px; font-weight:800; border-bottom:2px solid black; background:var(--c-indigo); color:white; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center;">
+          <span>${col}</span>
+          <span style="font-size:12px; background:rgba(255,255,255,0.2); padding:2px 8px; border-radius:10px;">${colTasks.length}</span>
+        </div>
+        <div style="padding:10px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:10px; min-height:100px;" 
+             ondragover="event.preventDefault(); this.style.background='rgba(0,0,0,0.05)';" 
+             ondragleave="this.style.background='transparent';"
+             ondrop="event.preventDefault(); this.style.background='transparent'; moveKanbanTask(event.dataTransfer.getData('text/plain'), '${col}')">
+          ${colTasks.map(t => `
+            <div draggable="true" ondragstart="event.dataTransfer.setData('text/plain', ${t.origIdx}); this.style.opacity='0.5';" ondragend="this.style.opacity='1';" style="background:white; border:1.5px solid black; border-radius:8px; padding:10px; cursor:grab; box-shadow: 2px 2px 0px rgba(0,0,0,0.1);">
+              <div style="font-weight:700; font-size:13px; margin-bottom:4px;">${t.title}</div>
+              <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                 ${t.due ? `<span style="font-size:9px; background:#fee2e2; color:var(--c-rust); padding:2px 4px; border-radius:4px;">${t.due}</span>` : ''}
+                 ${t.courseId ? `<span style="font-size:9px; background:#e0e7ff; color:var(--c-indigo); padding:2px 4px; border-radius:4px;">${getCourseCodeById(t.courseId) || 'วิชา'}</span>` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  });
+  html += `</div>`;
+  return html;
+}
+
+window.moveKanbanTask = function(idxStr, newStage) {
+  const idx = parseInt(idxStr);
+  if(isNaN(idx)) return;
+  state.plannerTasks[idx].kanbanStage = newStage;
+  if(newStage === 'Done') state.plannerTasks[idx].done = true;
+  else state.plannerTasks[idx].done = false;
+  localStorage.setItem('plannerTasks', JSON.stringify(state.plannerTasks));
+  render();
+};
+
+function renderPlannerMatrix() {
+  const tasks = (state.plannerTasks || []).map((t, i) => ({...t, origIdx: i})).filter(t => !t.done);
+  const q1 = tasks.filter(t => t.urgency === 'Urgent' && t.importance === 'Important');
+  const q2 = tasks.filter(t => t.urgency !== 'Urgent' && t.importance === 'Important');
+  const q3 = tasks.filter(t => t.urgency === 'Urgent' && t.importance !== 'Important');
+  const q4 = tasks.filter(t => t.urgency !== 'Urgent' && t.importance !== 'Important');
+  
+  const renderQ = (title, items, color, u, i) => `
+    <div style="background:white; border:2px solid ${color}; border-radius:12px; display:flex; flex-direction:column; min-height:200px;"
+         ondragover="event.preventDefault(); this.style.opacity='0.8';" 
+         ondragleave="this.style.opacity='1';"
+         ondrop="event.preventDefault(); this.style.opacity='1'; moveMatrixTask(event.dataTransfer.getData('text/plain'), '${u}', '${i}')">
+      <div style="background:${color}; color:white; font-weight:800; padding:10px; border-radius:8px 8px 0 0; text-align:center;">${title} (${items.length})</div>
+      <div style="padding:10px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:8px;">
+        ${items.map(t => `
+          <div draggable="true" ondragstart="event.dataTransfer.setData('text/plain', ${t.origIdx});" style="font-size:12px; padding:8px; border:1px solid #e2e8f0; border-radius:6px; cursor:grab;">
+            <div style="font-weight:700;">${t.title}</div>
+            ${t.due ? `<div style="font-size:9px; color:#64748b; margin-top:2px;">📅 ${t.due}</div>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+  
+  return `
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+      ${renderQ('Q1: Do First (ด่วน & สำคัญ)', q1, 'var(--c-rust)', 'Urgent', 'Important')}
+      ${renderQ('Q2: Schedule (ไม่ด่วน แต่สำคัญ)', q2, 'var(--c-blue)', 'Not Urgent', 'Important')}
+      ${renderQ('Q3: Delegate (ด่วน แต่ไม่สำคัญ)', q3, 'var(--c-yellow)', 'Urgent', 'Not Important')}
+      ${renderQ('Q4: Don\\'t Do (ไม่ด่วน & ไม่สำคัญ)', q4, '#94a3b8', 'Not Urgent', 'Not Important')}
+    </div>
+  `;
+}
+
+window.moveMatrixTask = function(idxStr, urgency, importance) {
+  const idx = parseInt(idxStr);
+  if(isNaN(idx)) return;
+  state.plannerTasks[idx].urgency = urgency;
+  state.plannerTasks[idx].importance = importance;
+  localStorage.setItem('plannerTasks', JSON.stringify(state.plannerTasks));
+  render();
+};
+
+function renderPlannerProject() {
+  const budgets = state.projectBudgets || [];
+  const meetings = state.meetings || [];
+  return `
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:20px;">
+      <div class="glass-card nb-card" style="padding:20px;">
+         <div style="font-weight:800; font-size:16px; margin-bottom:15px; border-bottom:2px solid black; padding-bottom:10px;">
+           💰 Project Budgeting
+         </div>
+         <div style="display:flex; flex-direction:column; gap:10px;">
+           ${budgets.map(b => `
+             <div style="border:1.5px solid black; border-radius:8px; padding:12px; background:white;">
+               <div style="font-weight:700;">${b.name}</div>
+               <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:12px;">
+                 <span>รายรับ: <span style="color:var(--c-green)">฿${b.income}</span></span>
+                 <span>รายจ่าย: <span style="color:var(--c-red)">฿${b.expense}</span></span>
+               </div>
+               <div style="margin-top:5px; font-size:12px; font-weight:800; text-align:right;">คงเหลือ: ฿${b.income - b.expense}</div>
+             </div>
+           `).join('')}
+           <button class="btn-glass-secondary sm" onclick="alert('Coming soon: สร้างกระเป๋างบโปรเจกต์ใหม่')">+ เพิ่มกระเป๋างบ</button>
+         </div>
+      </div>
+      
+      <div class="glass-card nb-card" style="padding:20px;">
+         <div style="font-weight:800; font-size:16px; margin-bottom:15px; border-bottom:2px solid black; padding-bottom:10px;">
+           👥 Meeting Organizer
+         </div>
+         <div style="display:flex; flex-direction:column; gap:10px;">
+           ${meetings.map(m => `
+             <div style="border:1.5px solid black; border-radius:8px; padding:12px; background:white;">
+               <div style="font-weight:700;">${m.topic}</div>
+               <div style="font-size:11px; color:#64748b;">📅 ${m.date} | 📍 ${m.location}</div>
+             </div>
+           `).join('')}
+           <button class="btn-glass-secondary sm" onclick="alert('Coming soon: จัดการประชุมใหม่')">+ สร้างวาระการประชุม</button>
+         </div>
+      </div>
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════════════
+// COURSE INTEGRATION (PHASE 2)
+// ══════════════════════════════════════════════════
+window.renderCourseTasks = function(course) {
+  const tasks = (state.plannerTasks || []).filter(t => t.courseId === course.id);
+  const doneTasks = tasks.filter(t => t.done);
+  const pendingTasks = tasks.filter(t => !t.done);
+  
+  return `
+    <div class="hub-scroll-area">
+      <div class="glass-card nb-card">
+        <div class="section-hd" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>⚡ งานของรายวิชานี้ (${pendingTasks.length} รอดำเนินการ)</span>
+          <button class="btn-glass-primary sm" onclick="state.view='planner'; state.plannerView='list'; render(); setTimeout(()=>openAddPlannerTask(), 100);">+ เพิ่มงานใหม่</button>
+        </div>
+        
+        <div style="display:flex; flex-direction:column; gap:10px; margin-top:15px;">
+          ${pendingTasks.map(t => `
+            <div style="display:flex; align-items:center; gap:12px; padding:12px; background:white; border:1.5px solid black; border-radius:12px;">
+              <div style="flex:1;">
+                <div style="font-weight:700; font-size:14px;">${t.title}</div>
+                ${t.note ? `<div style="font-size:11px; opacity:0.6;">${t.note}</div>` : ''}
+                <div style="display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;">
+                  ${t.due ? `<span style="font-size:10px; background:#fee2e2; color:var(--c-rust); font-weight:700; padding:2px 6px; border-radius:4px;">📅 ${t.due}</span>` : ''}
+                  ${t.kanbanStage ? `<span style="font-size:10px; background:#f1f5f9; padding:2px 6px; border-radius:4px;">📋 ${t.kanbanStage}</span>` : ''}
+                  ${t.urgency ? `<span style="font-size:10px; background:#fef3c7; color:#b45309; padding:2px 6px; border-radius:4px;">🔥 ${t.urgency}</span>` : ''}
+                </div>
+              </div>
+            </div>
+          `).join('')}
+          ${pendingTasks.length === 0 ? '<div style="text-align:center; padding:20px; color:#64748b; font-size:13px;">ไม่มีงานค้าง เยี่ยมมาก!</div>' : ''}
+        </div>
+        
+        ${doneTasks.length > 0 ? `
+          <div style="margin-top:20px; font-weight:700; font-size:14px; border-top:1px dashed #cbd5e1; padding-top:15px;">งานที่เสร็จแล้ว (${doneTasks.length})</div>
+          <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
+            ${doneTasks.map(t => `
+              <div style="font-size:12px; opacity:0.6; text-decoration:line-through;">✓ ${t.title}</div>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
+
 
 // ══════════════════════════════════════════════════
 // PLANNER FUNCTIONS (PHASE 1)
 // ══════════════════════════════════════════════════
 window.openAddPlannerTask = function() {
+  let latestCourses = [];
+  if (state.semesters && state.semesters.length > 0) {
+    const latestSem = state.semesters[state.semesters.length - 1];
+    latestCourses = state.courses[latestSem.id] || [];
+  }
+  
   const html = `
     <div style="display:flex; flex-direction:column; gap:12px;">
       <div>
@@ -78,10 +288,45 @@ window.openAddPlannerTask = function() {
           <input type="date" id="pTaskDue" class="glass-input sm" style="width:100%">
         </div>
         <div>
-          <label style="font-size:12px; font-weight:700;">โปรเจกต์/หมวดหมู่</label>
+          <label style="font-size:12px; font-weight:700;">โปรเจกต์/ชุมนุม</label>
           <input type="text" id="pTaskProj" class="glass-input sm" style="width:100%" placeholder="เช่น งานกลุ่ม, ส่วนตัว">
         </div>
       </div>
+      
+      <!-- New Fields for Phase 2 -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:5px;">
+        <div>
+          <label style="font-size:12px; font-weight:700; color:var(--c-indigo);">📚 เชื่อมโยงรายวิชา (เทอมล่าสุด)</label>
+          <select id="pTaskCourse" class="glass-input sm" style="width:100%">
+            <option value="">-- ไม่เชื่อมโยง --</option>
+            ${latestCourses.map(c => `<option value="${c.id}">${c.code} ${c.nameTh}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:700;">สถานะงาน (Kanban)</label>
+          <select id="pTaskStage" class="glass-input sm" style="width:100%">
+            ${(state.kanbanColumns || ['To Do', 'In Progress', 'Done']).map(c => `<option value="${c}">${c}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:5px;">
+        <div>
+          <label style="font-size:12px; font-weight:700;">ความเร่งด่วน (Urgency)</label>
+          <select id="pTaskUrg" class="glass-input sm" style="width:100%">
+            <option value="Not Urgent">ไม่ด่วน (Not Urgent)</option>
+            <option value="Urgent">ด่วนมาก (Urgent)</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:700;">ความสำคัญ (Importance)</label>
+          <select id="pTaskImp" class="glass-input sm" style="width:100%">
+            <option value="Important">สำคัญ (Important)</option>
+            <option value="Not Important">ไม่สำคัญ (Not Important)</option>
+          </select>
+        </div>
+      </div>
+
     </div>
   `;
   const footer = `
@@ -90,7 +335,7 @@ window.openAddPlannerTask = function() {
       <button class="btn-pastel-primary" onclick="savePlannerTask()">+ บันทึกงาน</button>
     </div>
   `;
-  openModal('⚡ เพิ่มงานใหม่', html, footer);
+  openModal('⚡ เพิ่มงานใหม่ลง Planner', html, footer);
 };
 
 window.savePlannerTask = function() {
@@ -103,6 +348,10 @@ window.savePlannerTask = function() {
     note: document.getElementById('pTaskNote')?.value.trim() || '',
     due: document.getElementById('pTaskDue')?.value || '',
     project: document.getElementById('pTaskProj')?.value.trim() || '',
+    courseId: document.getElementById('pTaskCourse')?.value || null,
+    kanbanStage: document.getElementById('pTaskStage')?.value || 'To Do',
+    urgency: document.getElementById('pTaskUrg')?.value || 'Not Urgent',
+    importance: document.getElementById('pTaskImp')?.value || 'Important',
     done: false,
     createdAt: new Date().toISOString()
   });
