@@ -422,4 +422,4 @@ function renderCourses() {
   </div>`;
 }
 
-window.openPendingReflectionsModal = function() { alert(\'ระบบแจ้งเตือน: กรุณาเข้าไปสรุป Reflection ในรายวิชาที่มีงานค้างครับ\'); };
+window.openPendingReflectionsModal = function() { alert('ระบบแจ้งเตือน: กรุณาเข้าไปสรุป Reflection ในรายวิชาที่มีงานค้างครับ'); };
