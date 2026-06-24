@@ -140,10 +140,10 @@ document.addEventListener('click', e => {
 // ══════════════════════════════════════════════════
 // GOOGLE CALENDAR SYNC LOGIC (PHASE 1)
 // ══════════════════════════════════════════════════
-var tokenClient;
-var gapiInited = false;
-var gisInited = false;
-const CALENDAR_SCOPES = 'https://www.googleapis.com/auth/calendar.events';
+var plannerTokenClient;
+var plannerGapiInited = false;
+var plannerGisInited = false;
+var CALENDAR_SCOPES = 'https://www.googleapis.com/auth/calendar.events';
 
 function getGoogleClientId() {
   return localStorage.getItem('google_client_id') || '';
@@ -166,8 +166,8 @@ window.connectGoogleCalendar = function() {
     return;
   }
   
-  if (!tokenClient) {
-    tokenClient = google.accounts.oauth2.initTokenClient({
+  if (!plannerTokenClient) {
+    plannerTokenClient = google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: CALENDAR_SCOPES,
       callback: (tokenResponse) => {
@@ -181,7 +181,7 @@ window.connectGoogleCalendar = function() {
       },
     });
   }
-  tokenClient.requestAccessToken({prompt: 'consent'});
+  plannerTokenClient.requestAccessToken({prompt: 'consent'});
 };
 
 window.saveGoogleClientId = function() {
