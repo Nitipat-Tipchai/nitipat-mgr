@@ -726,7 +726,7 @@ function attachAllEvents() {
     if (b.dataset.quick === 'assignment') openAddAssignmentForm();
     else if (b.dataset.quick === 'exam') openAddExamForm();
     else if (b.dataset.quick === 'course') { if (state.semesters.length === 0) { showToast('⚠️ เพิ่มเทอมก่อนนะ', 'err'); return; } openAddCourseForm(); }
-    else if (b.dataset.quick === 'club') openAddClubTaskForm();
+    else if (b.dataset.quick === 'planner') openAddPlannerTask();
   });
 
   document.getElementById('globalSearch')?.addEventListener('input', e => { state.searchQuery = e.target.value; render(); });
@@ -905,34 +905,6 @@ function attachAllEvents() {
     }
   });
 
-  document.getElementById('addClubTaskBtn')?.addEventListener('click', openAddClubTaskForm);
-  document.querySelectorAll('[data-toggle-club]').forEach(b => b.onclick = () => {
-    const idx = parseInt(b.dataset.toggleClub);
-    state.clubTasks[idx].done = !state.clubTasks[idx].done;
-    localStorage.setItem('clubTasks', JSON.stringify(state.clubTasks)); render();
-    if (!state.clubTasks[idx].done && Object.values(state.clubTasks).every(t => t.done)) {
-      triggerConfetti();
-    }
-  });
-  document.querySelectorAll('[data-del-club]').forEach(b => b.onclick = () => {
-    state.clubTasks.splice(parseInt(b.dataset.delClub), 1);
-    localStorage.setItem('clubTasks', JSON.stringify(state.clubTasks)); render();
-  });
-  document.getElementById('restModeBtn')?.addEventListener('click', () => { state.view = 'dashboard'; render(); showToast('😴 พักร่างประธานแล้ว'); });
-  document.getElementById('editBudgetBtn')?.addEventListener('click', () => {
-    const cur = JSON.parse(localStorage.getItem('clubBudget') || '{"in":0,"out":0}');
-    openModal('แก้ไขงบประมาณชุมนุม', `
-      <div class="form-grid">
-        <div class="fg"><label>รายรับ (฿)</label><input type="number" class="glass-input" id="f-bIn" value="${cur.in}"></div>
-        <div class="fg"><label>รายจ่าย (฿)</label><input type="number" class="glass-input" id="f-bOut" value="${cur.out}"></div>
-      </div>`,
-      `<button class="btn-glass-primary" id="saveBudgetClubBtn">บันทึก</button>`
-    );
-    document.getElementById('saveBudgetClubBtn').onclick = () => {
-      localStorage.setItem('clubBudget', JSON.stringify({ in: parseFloat(document.getElementById('f-bIn').value) || 0, out: parseFloat(document.getElementById('f-bOut').value) || 0 }));
-      closeModal(); render(); showToast('✅ บันทึกงบแล้ว');
-    };
-  });
 
 
 
@@ -1013,33 +985,6 @@ function attachAllEvents() {
     );
   });
 
-  // Club & Rest Mode Listeners
-  document.getElementById('addClubTaskBtn')?.addEventListener('click', openAddClubTaskForm);
-  document.querySelectorAll('[data-toggle-club]').forEach(b => b.onclick = () => {
-    const idx = parseInt(b.dataset.toggleClub);
-    state.clubTasks[idx].done = !state.clubTasks[idx].done;
-    localStorage.setItem('clubTasks', JSON.stringify(state.clubTasks)); render();
-    if (!state.clubTasks[idx].done && Object.values(state.clubTasks).every(t => t.done)) triggerConfetti();
-  });
-  document.querySelectorAll('[data-del-club]').forEach(b => b.onclick = () => {
-    state.clubTasks.splice(parseInt(b.dataset.delClub), 1);
-    localStorage.setItem('clubTasks', JSON.stringify(state.clubTasks)); render();
-  });
-  document.getElementById('restModeBtn')?.addEventListener('click', () => { state.view = 'dashboard'; render(); showToast('😴 พักร่างประธานแล้ว'); });
-  document.getElementById('editBudgetBtn')?.addEventListener('click', () => {
-    const cur = JSON.parse(localStorage.getItem('clubBudget') || '{"in":0,"out":0}');
-    openModal('แก้ไขงบประมาณชุมนุม', `
-          <div class="form-grid">
-            <div class="fg"><label>รายรับ (฿)</label><input type="number" class="glass-input" id="f-bIn" value="${cur.in}"></div>
-            <div class="fg"><label>รายจ่าย (฿)</label><input type="number" class="glass-input" id="f-bOut" value="${cur.out}"></div>
-          </div>`,
-      `<button class="btn-glass-primary" id="saveBudgetClubBtn">บันทึก</button>`
-    );
-    document.getElementById('saveBudgetClubBtn').onclick = () => {
-      localStorage.setItem('clubBudget', JSON.stringify({ in: parseFloat(document.getElementById('f-bIn').value) || 0, out: parseFloat(document.getElementById('f-bOut').value) || 0 }));
-      closeModal(); render(); showToast('✅ บันทึกงบแล้ว');
-    };
-  });
 
   if (state.view === 'trial-reg') {
     if (typeof attachTrialRegEvents === 'function') {
