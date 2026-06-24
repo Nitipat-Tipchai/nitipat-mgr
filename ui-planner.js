@@ -140,9 +140,9 @@ document.addEventListener('click', e => {
 // ══════════════════════════════════════════════════
 // GOOGLE CALENDAR SYNC LOGIC (PHASE 1)
 // ══════════════════════════════════════════════════
-let tokenClient;
-let gapiInited = false;
-let gisInited = false;
+var tokenClient;
+var gapiInited = false;
+var gisInited = false;
 const CALENDAR_SCOPES = 'https://www.googleapis.com/auth/calendar.events';
 
 function getGoogleClientId() {
