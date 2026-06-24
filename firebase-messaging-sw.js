@@ -37,7 +37,7 @@ self.addEventListener('notificationclick', function (event) {
 // ══════════════════════════════════════════════════
 // PWA OFFLINE-FIRST ASSETS CACHING
 // ══════════════════════════════════════════════════
-const CACHE_NAME = 'nitipat-manager-v7';
+const CACHE_NAME = 'nitipat-manager-v8';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -57,7 +57,7 @@ const ASSETS_TO_CACHE = [
   './ui-grades.js',
   './ui-curriculum-map.js',
   './ui-focus.js',
-  './ui-club.js',
+  './ui-planner.js',
   './ui-moneypod.js',
   './ui-settings.js',
   './ui-styles.js',
