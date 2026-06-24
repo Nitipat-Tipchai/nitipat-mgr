@@ -341,7 +341,8 @@ const GPSManager = {
     const now = new Date();
     const day = now.getDay() === 0 ? 6 : now.getDay() - 1;
     const h = now.getHours();
-    const all = Object.values(state.courses).flat();
+    const currentSem = getCurrentSemester();
+    const all = currentSem && state.courses[currentSem.id] ? state.courses[currentSem.id] : [];
     return all.find(c => (c.schedules || []).some(s => s.day === day && s.startHour <= h && (s.endHour || s.startHour + 3) > h));
   },
 
