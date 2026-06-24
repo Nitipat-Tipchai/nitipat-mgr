@@ -223,7 +223,7 @@ function renderPlannerProject() {
              </div>
            `).join('')}
            ${budgets.length === 0 ? '<div style="padding:20px; text-align:center; color:#94a3b8; font-size:13px;">ยังไม่มีกระเป๋างบประมาณ</div>' : ''}
-           <button class="btn-glass-primary" style="margin-top:5px; box-shadow: 0 4px 15px rgba(59,130,246,0.2);" onclick="alert('Coming soon: สร้างกระเป๋างบโปรเจกต์ใหม่')">+ เพิ่มกระเป๋างบ</button>
+           <button class="btn-glass-primary" style="margin-top:5px; box-shadow: 0 4px 15px rgba(59,130,246,0.2);" onclick="openAddBudgetModal()">+ เพิ่มกระเป๋างบ</button>
          </div>
       </div>
       
@@ -241,7 +241,7 @@ function renderPlannerProject() {
              </div>
            `).join('')}
            ${meetings.length === 0 ? '<div style="padding:20px; text-align:center; color:#94a3b8; font-size:13px;">ยังไม่มีการนัดหมายประชุม</div>' : ''}
-           <button class="btn-glass-primary" style="margin-top:5px; box-shadow: 0 4px 15px rgba(59,130,246,0.2);" onclick="alert('Coming soon: จัดการประชุมใหม่')">+ สร้างวาระการประชุม</button>
+           <button class="btn-glass-primary" style="margin-top:5px; box-shadow: 0 4px 15px rgba(59,130,246,0.2);" onclick="openAddMeetingModal()">+ สร้างวาระการประชุม</button>
          </div>
       </div>
     </div>
@@ -393,6 +393,101 @@ window.savePlannerTask = function() {
   closeModal();
   render();
   showToast('✅ เพิ่มงานลง Planner แล้ว');
+};
+
+window.openAddBudgetModal = function() {
+  const html = `
+    <div style="display:flex; flex-direction:column; gap:15px; padding:10px 0;">
+      <div>
+        <label style="font-size:12px; font-weight:700;">ชื่อกระเป๋างบประมาณ</label>
+        <input type="text" id="pBudgetName" class="glass-input sm" style="width:100%" placeholder="เช่น งานกีฬาสี, โปรเจกต์จบ">
+      </div>
+      <div>
+        <label style="font-size:12px; font-weight:700;">งบประมาณที่ตั้งไว้ (บาท)</label>
+        <input type="number" id="pBudgetTotal" class="glass-input sm" style="width:100%" placeholder="0">
+      </div>
+    </div>
+  `;
+  const footer = `
+    <div style="display:flex; gap:10px; justify-content:flex-end; width:100%;">
+      <button class="btn-glass-pastel" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn-pastel-primary" onclick="saveBudget()">+ สร้างกระเป๋า</button>
+    </div>
+  `;
+  openModal('💰 สร้างกระเป๋างบโปรเจกต์ใหม่', html, footer);
+};
+
+window.saveBudget = function() {
+  const name = document.getElementById('pBudgetName')?.value.trim();
+  const total = parseFloat(document.getElementById('pBudgetTotal')?.value) || 0;
+  if (!name) return showToast('กรุณาใส่ชื่อกระเป๋า', 'err');
+  
+  if (!state.projectBudgets) state.projectBudgets = [];
+  state.projectBudgets.push({
+    name: name,
+    budget: total,
+    income: 0,
+    expense: 0
+  });
+  localStorage.setItem('projectBudgets', JSON.stringify(state.projectBudgets));
+  closeModal();
+  render();
+  showToast('✅ สร้างกระเป๋างบประมาณแล้ว');
+};
+
+window.openAddMeetingModal = function() {
+  const html = `
+    <div style="display:flex; flex-direction:column; gap:15px; padding:10px 0;">
+      <div>
+        <label style="font-size:12px; font-weight:700;">หัวข้อการประชุม</label>
+        <input type="text" id="pMeetingTopic" class="glass-input sm" style="width:100%" placeholder="เช่น ประชุมวางแผนงานชุมนุม">
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div>
+          <label style="font-size:12px; font-weight:700;">วันที่-เวลา</label>
+          <input type="datetime-local" id="pMeetingDate" class="glass-input sm" style="width:100%">
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:700;">สถานที่/ลิงก์</label>
+          <input type="text" id="pMeetingLocation" class="glass-input sm" style="width:100%" placeholder="Google Meet / ห้องสมุด">
+        </div>
+      </div>
+    </div>
+  `;
+  const footer = `
+    <div style="display:flex; gap:10px; justify-content:flex-end; width:100%;">
+      <button class="btn-glass-pastel" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn-pastel-primary" onclick="saveMeeting()">+ สร้างวาระการประชุม</button>
+    </div>
+  `;
+  openModal('👥 สร้างวาระการประชุมใหม่', html, footer);
+};
+
+window.saveMeeting = function() {
+  const topic = document.getElementById('pMeetingTopic')?.value.trim();
+  const date = document.getElementById('pMeetingDate')?.value;
+  const location = document.getElementById('pMeetingLocation')?.value.trim();
+  
+  if (!topic) return showToast('กรุณาใส่หัวข้อการประชุม', 'err');
+  
+  if (!state.meetings) state.meetings = [];
+  
+  // Format date a bit nicer if it exists
+  let displayDate = date;
+  if(date) {
+    const d = new Date(date);
+    displayDate = d.toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' });
+  }
+
+  state.meetings.push({
+    topic: topic,
+    date: displayDate || 'ยังไม่กำหนดเวลา',
+    location: location || 'ยังไม่กำหนดสถานที่'
+  });
+  localStorage.setItem('meetings', JSON.stringify(state.meetings));
+  closeModal();
+  render();
+  showToast('✅ สร้างวาระการประชุมแล้ว');
 };
 
 document.addEventListener('click', e => {
