@@ -360,6 +360,23 @@ async function startAppCore() {
     // Notion Initial Sync
 
     render();
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const checkinCourseId = urlParams.get('checkin');
+    if (checkinCourseId) {
+      setTimeout(() => {
+        let foundCourse = null;
+        for (const term in state.courses) {
+          const course = state.courses[term]?.find(c => c.id === checkinCourseId);
+          if (course) { foundCourse = course; break; }
+        }
+        if (foundCourse && typeof showCheckinBanner === 'function') {
+          showCheckinBanner(foundCourse);
+        } else {
+          showToast('ไม่พบข้อมูลรายวิชาสำหรับเช็คชื่อ (วิชาอาจถูกลบไปแล้ว)', 'err');
+        }
+      }, 500);
+    }
   } catch (err) {
     console.error("App initialization failed:", err);
   }
