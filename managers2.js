@@ -1269,7 +1269,7 @@ function renderPage(gpa, pro, curSem) {
     case 'roadmap': return renderRoadmap();
     case 'curriculum': return renderCurriculumMap();
     case 'focus': return renderFocus();
-    case 'club': return renderClub();
+    case 'planner': return renderPlanner();
     case 'money-pod': return renderMoneyPod();
     case 'calendar': return renderCalendar();
     case 'settings': return renderSettings();
