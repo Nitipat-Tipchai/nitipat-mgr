@@ -689,6 +689,7 @@ function attachAllEvents() {
   document.getElementById('saveCalendarBtn')?.addEventListener('click', async () => {
     const settings = {
       semesterStart: document.getElementById('cal-start')?.value,
+      semesterEnd: document.getElementById('cal-end')?.value,
       withdrawDeadline: document.getElementById('cal-withdraw')?.value,
       midtermStart: document.getElementById('cal-midterm')?.value,
       finalStart: document.getElementById('cal-final')?.value
@@ -1007,4 +1008,4 @@ function renderCourseHub(courseId) {
       refreshDriveFiles(courseId, c.driveId);
     }
   }
-}
+}
