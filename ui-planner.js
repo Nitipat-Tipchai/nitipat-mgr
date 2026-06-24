@@ -639,9 +639,33 @@ window.forceSyncCalendar = async function() {
 
     if (eventsToSync.length === 0) return showToast('ไม่มีตารางเรียนให้ซิงค์', 'err');
 
+    let targetCalendarId = state.calendarConfig.calendarId;
+    
+    // ถ้ายังไม่มีปฏิทินแยก ให้สร้างใหม่
+    if (!targetCalendarId) {
+      showToast('กำลังสร้างปฏิทินใหม่แยกเฉพาะ...', 'info');
+      const createRes = await fetch('https://www.googleapis.com/calendar/v3/calendars', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${state.calendarConfig.accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ summary: "ตารางเรียน (Nitipat Manager)", timeZone: "Asia/Bangkok" })
+      });
+      
+      if (createRes.ok) {
+        const calData = await createRes.json();
+        targetCalendarId = calData.id;
+        state.calendarConfig.calendarId = targetCalendarId;
+        localStorage.setItem('calendarConfig', JSON.stringify(state.calendarConfig));
+      } else {
+        targetCalendarId = 'primary'; // fallback
+      }
+    }
+
     let successCount = 0;
     for (const ev of eventsToSync) {
-      const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+      const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendarId)}/events`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${state.calendarConfig.accessToken}`,
