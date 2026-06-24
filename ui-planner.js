@@ -612,7 +612,7 @@ window.forceSyncCalendar = async function() {
         const checkinLink = `https://nitipat-mgr.vercel.app/?checkin=${c.id}`;
         
         const event = {
-          summary: `[${c.id}] ${c.name}`,
+          summary: `[${c.code || 'ไม่มีรหัส'}] ${c.nameTh || c.nameEn || 'ไม่ระบุชื่อวิชา'}`,
           location: c.room || 'ไม่ระบุห้อง',
           description: `อาจารย์: ${c.teacher || '-'}\nหมวดหมู่: ${s.type || 'Lecture'}\n\n📍 <a href="${checkinLink}">กดที่นี่เพื่อเช็คชื่อเข้าเรียน / ดูข้อมูลวิชา</a>`,
           start: {
