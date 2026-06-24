@@ -587,7 +587,7 @@ window.forceSyncCalendar = async function() {
   showToast('กำลังเตรียมข้อมูลซิงค์...', 'info');
   try {
     const eventsToSync = [];
-    const term = state.activeSemester;
+    const term = state.selectedSemester || (typeof getCurrentSemester === 'function' ? getCurrentSemester()?.id : null) || (state.semesters && state.semesters.length ? state.semesters[state.semesters.length - 1].id : null);
     const courses = state.courses[term] || [];
     
     // ดึงข้อมูลวันเปิด-ปิดเทอมจาก ACADEMIC_CALENDAR
