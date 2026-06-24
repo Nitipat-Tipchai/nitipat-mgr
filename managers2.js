@@ -954,7 +954,7 @@ function renderTopNav(gpa, pro, curSem) {
       { id: 'assignments', icon: '📋', label: 'การบ้าน' }, { id: 'exams', icon: '📝', label: 'ตารางสอบ' },
       { id: 'grades', icon: '🎓', label: 'เกรด & GPA' }, 
       { id: 'curriculum', icon: '🗺️', label: 'แผนผัง & Roadmap' },
-      { id: 'focus', icon: '🍅', label: 'Focus Mode' }, { id: 'club', icon: '🏛', label: 'งานชุมนุม' },
+      { id: 'focus', icon: '🍅', label: 'Focus Mode' }, { id: 'planner', icon: '⚡', label: 'Pro Planner' },
       { id: 'calendar', icon: '🗓', label: 'ปฏิทินการศึกษา' },
       { id: 'money-pod', icon: '🐽', label: 'MoneyPod' },
       { id: 'ilm', icon: '💼', label: 'ฝึกงาน (ILM)' },
@@ -987,7 +987,7 @@ function renderFAB() {
       <button class="fab-item" data-quick="assignment">📋 การบ้าน</button>
       <button class="fab-item" data-quick="exam">📝 การสอบ</button>
       <button class="fab-item" data-quick="course">📚 วิชา</button>
-      <button class="fab-item" data-quick="club">🏛 งานชุมนุม</button>
+      <button class="fab-item" data-quick="planner">⚡ เพิ่ม Planner</button>
     </div>
   </div>`;
 }
