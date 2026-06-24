@@ -5,75 +5,92 @@ function renderPlanner() {
   const cal = state.calendarConfig || { syncEnabled: false, calendarId: null };
   const v = state.plannerView || 'list';
   
-  return `<div class="page-wrap">
-    <div class="page-header-row">
+  return `<div class="page-wrap" style="background: linear-gradient(135deg, #f8fafc, #eff6ff); min-height: 100vh; padding: 20px; border-radius: 24px;">
+    <div class="page-header-row" style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:25px;">
       <div>
-        <h1 class="page-title">⚡ Pro Planner</h1>
-        <div class="page-sub">ศูนย์บัญชาการชีวิต & จัดการเวลา</div>
+        <h1 class="page-title" style="font-size:32px; font-weight:900; background: linear-gradient(135deg, var(--c-indigo), #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin:0;">⚡ Pro Planner</h1>
+        <div class="page-sub" style="font-size:14px; color:#64748b; font-weight:600; margin-top:5px;">ศูนย์บัญชาการชีวิต & จัดการเวลา</div>
       </div>
-      <button class="btn-glass-primary" onclick="openAddPlannerTask()">+ เพิ่มงาน</button>
+      <button class="btn-glass-primary" onclick="openAddPlannerTask()" style="padding: 12px 24px; font-size:15px; font-weight:800; border-radius:16px; box-shadow: 0 8px 25px rgba(59,130,246,0.3); transition: 0.2s;" onmouseover="this.style.transform='translateY(-2px)';" onmouseout="this.style.transform='translateY(0)';">+ เพิ่มงาน</button>
     </div>
 
     <!-- Google Calendar Sync Status -->
-    <div class="glass-card nb-card" style="padding:20px; margin-bottom:20px; border-left: 5px solid var(--c-blue);">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
+    <div class="glass-card" style="padding:20px 25px; margin-bottom:25px; border-radius: 20px; background: rgba(255,255,255,0.7); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.8); box-shadow: 0 10px 30px rgba(0,0,0,0.03); display:flex; justify-content:space-between; align-items:center;">
+      <div style="display:flex; align-items:center; gap:15px;">
+        <div style="font-size:30px; background: rgba(59,130,246,0.1); padding: 10px; border-radius: 16px;">🗓️</div>
         <div>
-          <div style="font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px;">
-            🗓️ Google Calendar Auto-Sync
-            ${cal.syncEnabled ? '<span style="background:var(--c-green); color:white; font-size:10px; padding:2px 6px; border-radius:10px;">เชื่อมต่อแล้ว</span>' : '<span style="background:#e2e8f0; color:#64748b; font-size:10px; padding:2px 6px; border-radius:10px;">ยังไม่เชื่อมต่อ</span>'}
+          <div style="font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px; color: var(--c-slate);">
+            Google Calendar Auto-Sync
+            ${cal.syncEnabled ? '<span style="background:var(--c-green); color:white; font-size:11px; padding:4px 8px; border-radius:12px; font-weight:700; box-shadow: 0 4px 10px rgba(16,185,129,0.2);">เชื่อมต่อแล้ว</span>' : '<span style="background:#e2e8f0; color:#64748b; font-size:11px; padding:4px 8px; border-radius:12px; font-weight:700;">ยังไม่เชื่อมต่อ</span>'}
           </div>
-          <div style="font-size:12px; color:#64748b; margin-top:4px;">ซิงค์ตารางเรียนไปยัง Google Calendar อัตโนมัติ (รับแจ้งเตือนได้แม้ปิดแอป)</div>
+          <div style="font-size:13px; color:#64748b; margin-top:4px; font-weight:500;">ซิงค์ตารางเรียนไปยัง Google Calendar อัตโนมัติ (รับแจ้งเตือนได้แม้ปิดแอป)</div>
         </div>
-        <div>
-          ${cal.syncEnabled 
-            ? `<button class="btn-glass-secondary sm" onclick="forceSyncCalendar()">🔄 ซิงค์ทันที</button>
-               <button class="icon-btn danger sm" onclick="disconnectCalendar()" style="background:transparent; border:none; color:var(--c-red); font-size:16px;">⏏️</button>` 
-            : `<button class="btn-glass-primary sm" onclick="connectGoogleCalendar()">🔗 เชื่อมต่อ Google</button>`}
-        </div>
+      </div>
+      <div>
+        ${cal.syncEnabled 
+          ? `<div style="display:flex; gap:10px;">
+               <button class="btn-glass-secondary sm" onclick="forceSyncCalendar()" style="border-radius:12px; font-weight:700;">🔄 ซิงค์ทันที</button>
+               <button class="icon-btn danger sm" onclick="disconnectCalendar()" style="background:rgba(239,68,68,0.1); border:none; color:var(--c-red); font-size:16px; border-radius:12px; transition:0.2s;" onmouseover="this.style.background='var(--c-red)'; this.style.color='white';" onmouseout="this.style.background='rgba(239,68,68,0.1)'; this.style.color='var(--c-red)';">⏏️</button>
+             </div>` 
+          : `<button class="btn-glass-primary sm" onclick="connectGoogleCalendar()" style="border-radius:12px; font-weight:700; box-shadow: 0 4px 15px rgba(59,130,246,0.2);">🔗 เชื่อมต่อ Google</button>`}
       </div>
     </div>
 
     <!-- Sub Tabs -->
-    <div style="display:flex; gap:8px; margin-bottom:20px; overflow-x:auto; padding-bottom:5px;">
-      <button class="btn-glass-secondary sm ${v === 'list' ? 'active-tab' : ''}" onclick="state.plannerView='list'; render()" style="${v==='list'?'background:var(--c-indigo); color:white; border-color:var(--c-indigo);':''}">📋 Master List</button>
-      <button class="btn-glass-secondary sm ${v === 'kanban' ? 'active-tab' : ''}" onclick="state.plannerView='kanban'; render()" style="${v==='kanban'?'background:var(--c-indigo); color:white; border-color:var(--c-indigo);':''}">📋 Kanban Board</button>
-      <button class="btn-glass-secondary sm ${v === 'matrix' ? 'active-tab' : ''}" onclick="state.plannerView='matrix'; render()" style="${v==='matrix'?'background:var(--c-indigo); color:white; border-color:var(--c-indigo);':''}">⏱️ Eisenhower Matrix</button>
-      <button class="btn-glass-secondary sm ${v === 'project' ? 'active-tab' : ''}" onclick="state.plannerView='project'; render()" style="${v==='project'?'background:var(--c-indigo); color:white; border-color:var(--c-indigo);':''}">🏛️ งานชุมนุม & โปรเจกต์</button>
+    <div style="display:flex; gap:10px; margin-bottom:25px; overflow-x:auto; padding-bottom:10px; padding-top: 5px;">
+      <style>
+        .planner-tab-btn {
+          padding: 12px 20px; font-size: 14px; font-weight: 700; border-radius: 16px; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          background: rgba(255,255,255,0.5); border: 1px solid rgba(255,255,255,0.6); color: var(--c-slate);
+          backdrop-filter: blur(10px); white-space: nowrap; display:flex; align-items:center; gap:8px;
+        }
+        .planner-tab-btn:hover { background: rgba(255,255,255,0.9); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .planner-tab-btn.active {
+          background: linear-gradient(135deg, var(--c-indigo), #3b82f6); color: white; border: none; box-shadow: 0 6px 20px rgba(79,70,229,0.3); transform: translateY(-2px);
+        }
+      </style>
+      <button class="planner-tab-btn ${v === 'list' ? 'active' : ''}" onclick="state.plannerView='list'; render()">📋 Master List</button>
+      <button class="planner-tab-btn ${v === 'kanban' ? 'active' : ''}" onclick="state.plannerView='kanban'; render()">📊 Kanban Board</button>
+      <button class="planner-tab-btn ${v === 'matrix' ? 'active' : ''}" onclick="state.plannerView='matrix'; render()">⏱️ Eisenhower Matrix</button>
+      <button class="planner-tab-btn ${v === 'project' ? 'active' : ''}" onclick="state.plannerView='project'; render()">🏛️ งานชุมนุม & โปรเจกต์</button>
     </div>
 
-    ${v === 'list' ? renderPlannerList() : ''}
-    ${v === 'kanban' ? renderPlannerKanban() : ''}
-    ${v === 'matrix' ? renderPlannerMatrix() : ''}
-    ${v === 'project' ? renderPlannerProject() : ''}
+    <div style="animation: fade-in 0.3s ease-out;">
+      ${v === 'list' ? renderPlannerList() : ''}
+      ${v === 'kanban' ? renderPlannerKanban() : ''}
+      ${v === 'matrix' ? renderPlannerMatrix() : ''}
+      ${v === 'project' ? renderPlannerProject() : ''}
+    </div>
   </div>`;
 }
 
 function renderPlannerList() {
   const tasks = state.plannerTasks || [];
   return `
-    <div class="glass-card nb-card" style="padding:20px;">
-      <div style="font-weight:800; font-size:16px; margin-bottom:15px; border-bottom:2px solid black; padding-bottom:10px; display:flex; justify-content:space-between;">
-        <span>📋 Master To-Do List</span>
+    <div class="glass-card" style="padding:25px; border-radius: 20px; background: rgba(255,255,255,0.7); backdrop-filter: blur(30px); border: 1px solid rgba(255,255,255,0.8); box-shadow: 0 15px 35px rgba(0,0,0,0.04);">
+      <div style="font-weight:800; font-size:18px; margin-bottom:20px; border-bottom: 2px solid rgba(0,0,0,0.05); padding-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+        <span style="color: var(--c-slate); display:flex; align-items:center; gap:8px;"><div style="background:#f1f5f9; padding:6px; border-radius:10px;">📋</div> Master To-Do List</span>
+        <span style="font-size:13px; font-weight:600; background:rgba(79,70,229,0.1); color:var(--c-indigo); padding:4px 10px; border-radius:20px;">${tasks.filter(t=>!t.done).length} งานที่ต้องทำ</span>
       </div>
       
-      <div class="planner-task-list" style="display:flex; flex-direction:column; gap:10px;">
+      <div class="planner-task-list" style="display:flex; flex-direction:column; gap:12px;">
         ${tasks.map((t, i) => `
-          <div class="planner-task-row ${t.done ? 'done' : ''}" style="display:flex; align-items:center; gap:12px; padding:12px; background:white; border:1.5px solid black; border-radius:12px;">
-            <button class="check-circle sm ${t.done ? 'checked' : ''}" data-toggle-planner="${i}" style="width:28px; height:28px; border-radius:50%; border:2px solid black; background:${t.done ? 'var(--c-indigo)' : 'white'}; color:white; display:flex; align-items:center; justify-content:center; font-weight:800; cursor:pointer;">${t.done ? '✓' : ''}</button>
+          <div class="planner-task-row ${t.done ? 'done' : ''}" style="display:flex; align-items:flex-start; gap:15px; padding:16px; background: ${t.done ? 'rgba(248,250,252,0.6)' : 'white'}; border: 1px solid ${t.done ? 'rgba(0,0,0,0.05)' : 'rgba(0,0,0,0.08)'}; border-radius:16px; transition: all 0.2s ease; box-shadow: ${t.done ? 'none' : '0 4px 15px rgba(0,0,0,0.02)'}; transform: scale(1);" onmouseover="this.style.transform='scale(1.01)'; this.style.boxShadow='0 8px 25px rgba(0,0,0,0.05)';" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='${t.done ? 'none' : '0 4px 15px rgba(0,0,0,0.02)'}';">
+            <button class="check-circle sm ${t.done ? 'checked' : ''}" data-toggle-planner="${i}" style="width:28px; height:28px; border-radius:50%; border: 2px solid ${t.done ? 'var(--c-indigo)' : '#cbd5e1'}; background:${t.done ? 'var(--c-indigo)' : 'white'}; color:white; display:flex; align-items:center; justify-content:center; font-weight:800; cursor:pointer; transition: 0.2s; margin-top:2px;">${t.done ? '✓' : ''}</button>
             <div style="flex:1;">
-              <div style="font-weight:700; font-size:14px; text-decoration:${t.done ? 'line-through' : 'none'}; opacity:${t.done ? 0.5 : 1};">${t.title}</div>
-              ${t.note ? `<div style="font-size:11px; opacity:0.6;">${t.note}</div>` : ''}
-              <div style="display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;">
-                ${t.due ? `<span style="font-size:10px; background:#fee2e2; color:var(--c-rust); font-weight:700; padding:2px 6px; border-radius:4px;">📅 ${t.due}</span>` : ''}
-                ${t.courseId ? `<span style="font-size:10px; background:#e0e7ff; color:var(--c-indigo); padding:2px 6px; border-radius:4px;">📚 ${getCourseCodeById(t.courseId) || 'วิชา'}</span>` : ''}
-                ${t.project ? `<span style="font-size:10px; background:#f1f5f9; padding:2px 6px; border-radius:4px;">📁 ${t.project}</span>` : ''}
-                ${t.urgency ? `<span style="font-size:10px; background:#fef3c7; color:#b45309; padding:2px 6px; border-radius:4px;">🔥 ${t.urgency}</span>` : ''}
+              <div style="font-weight:700; font-size:15px; text-decoration:${t.done ? 'line-through' : 'none'}; opacity:${t.done ? 0.5 : 1}; color: var(--c-slate);">${t.title}</div>
+              ${t.note ? `<div style="font-size:12px; opacity:0.6; margin-top:4px; line-height:1.4;">${t.note}</div>` : ''}
+              <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+                ${t.due ? `<span style="font-size:10px; background:rgba(239,68,68,0.1); color:var(--c-rust); font-weight:700; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;">📅 ${t.due}</span>` : ''}
+                ${t.courseId ? `<span style="font-size:10px; background:rgba(79,70,229,0.1); color:var(--c-indigo); font-weight:600; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;">📚 ${getCourseCodeById(t.courseId) || 'วิชา'}</span>` : ''}
+                ${t.project ? `<span style="font-size:10px; background:#f1f5f9; color:#475569; font-weight:600; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;">📁 ${t.project}</span>` : ''}
+                ${t.urgency ? `<span style="font-size:10px; background:rgba(245,158,11,0.15); color:#b45309; font-weight:700; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;">🔥 ${t.urgency}</span>` : ''}
               </div>
             </div>
-            <button class="icon-btn danger sm" data-del-planner="${i}" style="background:transparent; border:none; color:var(--c-red); font-size:16px; cursor:pointer;">🗑</button>
+            <button class="icon-btn danger sm" data-del-planner="${i}" style="background:rgba(239,68,68,0.08); border:none; color:var(--c-red); font-size:14px; cursor:pointer; width:32px; height:32px; border-radius:10px; transition:0.2s;" onmouseover="this.style.background='var(--c-red)'; this.style.color='white';" onmouseout="this.style.background='rgba(239,68,68,0.08)'; this.style.color='var(--c-red)';">✕</button>
           </div>
         `).join('')}
-        ${tasks.length === 0 ? '<div class="empty-sm" style="padding:40px;">ไม่มีงานค้าง เยี่ยมมาก! 🎉</div>' : ''}
+        ${tasks.length === 0 ? '<div class="empty-sm" style="padding:50px; text-align:center; color:#94a3b8;"><div style="font-size:40px; margin-bottom:10px;">🎉</div>ไม่มีงานค้าง เยี่ยมมาก!</div>' : ''}
       </div>
     </div>`;
 }
@@ -90,28 +107,36 @@ function renderPlannerKanban() {
   const tasks = state.plannerTasks || [];
   const cols = state.kanbanColumns || ['To Do', 'In Progress', 'Done'];
   
-  let html = `<div style="display:flex; gap:15px; overflow-x:auto; padding-bottom:15px;">`;
+  const colColors = {
+    'To Do': { bg: 'rgba(79,70,229,0.05)', headBg: 'var(--c-indigo)', text: 'white', border: 'rgba(79,70,229,0.2)' },
+    'In Progress': { bg: 'rgba(245,158,11,0.05)', headBg: 'var(--c-yellow)', text: 'white', border: 'rgba(245,158,11,0.2)' },
+    'Done': { bg: 'rgba(16,185,129,0.05)', headBg: 'var(--c-green)', text: 'white', border: 'rgba(16,185,129,0.2)' }
+  };
+  
+  let html = `<div style="display:flex; gap:20px; overflow-x:auto; padding-bottom:15px; min-height: 70vh;">`;
   cols.forEach(col => {
     const colTasks = tasks.map((t, i) => ({...t, origIdx: i})).filter(t => (t.kanbanStage || 'To Do') === col);
+    const theme = colColors[col] || { bg: 'rgba(0,0,0,0.02)', headBg: '#64748b', text: 'white', border: 'rgba(0,0,0,0.1)' };
+    
     html += `
-      <div style="flex: 0 0 280px; background:rgba(255,255,255,0.5); border:2px solid black; border-radius:12px; display:flex; flex-direction:column; max-height: 60vh;">
-        <div style="padding:15px; font-weight:800; border-bottom:2px solid black; background:var(--c-indigo); color:white; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center;">
-          <span>${col}</span>
-          <span style="font-size:12px; background:rgba(255,255,255,0.2); padding:2px 8px; border-radius:10px;">${colTasks.length}</span>
+      <div style="flex: 0 0 300px; background: \${theme.bg}; border: 1px solid \${theme.border}; border-radius: 20px; display:flex; flex-direction:column; max-height: 75vh; box-shadow: 0 10px 30px rgba(0,0,0,0.02); backdrop-filter: blur(20px);">
+        <div style="padding:16px 20px; font-weight:800; font-size:15px; background: \${theme.headBg}; color: \${theme.text}; border-radius: 20px 20px 0 0; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+          <span>\${col}</span>
+          <span style="font-size:12px; background:rgba(255,255,255,0.2); padding:2px 10px; border-radius:12px;">\${colTasks.length}</span>
         </div>
-        <div style="padding:10px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:10px; min-height:100px;" 
+        <div style="padding:15px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:12px; min-height:100px; transition: 0.2s;" 
              ondragover="event.preventDefault(); this.style.background='rgba(0,0,0,0.05)';" 
              ondragleave="this.style.background='transparent';"
-             ondrop="event.preventDefault(); this.style.background='transparent'; moveKanbanTask(event.dataTransfer.getData('text/plain'), '${col}')">
-          ${colTasks.map(t => `
-            <div draggable="true" ondragstart="event.dataTransfer.setData('text/plain', ${t.origIdx}); this.style.opacity='0.5';" ondragend="this.style.opacity='1';" style="background:white; border:1.5px solid black; border-radius:8px; padding:10px; cursor:grab; box-shadow: 2px 2px 0px rgba(0,0,0,0.1);">
-              <div style="font-weight:700; font-size:13px; margin-bottom:4px;">${t.title}</div>
-              <div style="display:flex; gap:5px; flex-wrap:wrap;">
-                 ${t.due ? `<span style="font-size:9px; background:#fee2e2; color:var(--c-rust); padding:2px 4px; border-radius:4px;">${t.due}</span>` : ''}
-                 ${t.courseId ? `<span style="font-size:9px; background:#e0e7ff; color:var(--c-indigo); padding:2px 4px; border-radius:4px;">${getCourseCodeById(t.courseId) || 'วิชา'}</span>` : ''}
+             ondrop="event.preventDefault(); this.style.background='transparent'; moveKanbanTask(event.dataTransfer.getData('text/plain'), '\${col}')">
+          \${colTasks.map(t => \`
+            <div draggable="true" ondragstart="event.dataTransfer.setData('text/plain', \${t.origIdx}); this.style.opacity='0.5';" ondragend="this.style.opacity='1';" style="background:white; border: 1px solid rgba(0,0,0,0.05); border-radius:14px; padding:15px; cursor:grab; box-shadow: 0 4px 15px rgba(0,0,0,0.03); transition: 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 25px rgba(0,0,0,0.06)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.03)';">
+              <div style="font-weight:700; font-size:14px; margin-bottom:8px; color: var(--c-slate); line-height: 1.4;">\${t.title}</div>
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                 \${t.due ? \`<span style="font-size:10px; background:rgba(239,68,68,0.1); color:var(--c-rust); padding:4px 8px; border-radius:6px; font-weight:600;">\${t.due}</span>\` : ''}
+                 \${t.courseId ? \`<span style="font-size:10px; background:rgba(79,70,229,0.1); color:var(--c-indigo); padding:4px 8px; border-radius:6px; font-weight:600;">\${getCourseCodeById(t.courseId) || 'วิชา'}</span>\` : ''}
               </div>
             </div>
-          `).join('')}
+          \`).join('')}
         </div>
       </div>
     `;
@@ -137,29 +162,29 @@ function renderPlannerMatrix() {
   const q3 = tasks.filter(t => t.urgency === 'Urgent' && t.importance !== 'Important');
   const q4 = tasks.filter(t => t.urgency !== 'Urgent' && t.importance !== 'Important');
   
-  const renderQ = (title, items, color, u, i) => `
-    <div style="background:white; border:2px solid ${color}; border-radius:12px; display:flex; flex-direction:column; min-height:200px;"
-         ondragover="event.preventDefault(); this.style.opacity='0.8';" 
-         ondragleave="this.style.opacity='1';"
-         ondrop="event.preventDefault(); this.style.opacity='1'; moveMatrixTask(event.dataTransfer.getData('text/plain'), '${u}', '${i}')">
-      <div style="background:${color}; color:white; font-weight:800; padding:10px; border-radius:8px 8px 0 0; text-align:center;">${title} (${items.length})</div>
-      <div style="padding:10px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:8px;">
-        ${items.map(t => `
-          <div draggable="true" ondragstart="event.dataTransfer.setData('text/plain', ${t.origIdx});" style="font-size:12px; padding:8px; border:1px solid #e2e8f0; border-radius:6px; cursor:grab;">
-            <div style="font-weight:700;">${t.title}</div>
-            ${t.due ? `<div style="font-size:9px; color:#64748b; margin-top:2px;">📅 ${t.due}</div>` : ''}
+  const renderQ = (title, items, color, bgGradient, u, i) => `
+    <div style="background: rgba(255,255,255,0.6); border: 1px solid \${color}; border-radius: 20px; display:flex; flex-direction:column; min-height: 250px; box-shadow: 0 10px 30px rgba(0,0,0,0.02); backdrop-filter: blur(20px); overflow:hidden;"
+         ondragover="event.preventDefault(); this.style.transform='scale(1.02)';" 
+         ondragleave="this.style.transform='scale(1)';"
+         ondrop="event.preventDefault(); this.style.transform='scale(1)'; moveMatrixTask(event.dataTransfer.getData('text/plain'), '\${u}', '\${i}')">
+      <div style="background: \${bgGradient}; color: white; font-weight: 800; font-size: 15px; padding: 16px 20px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">\${title} (\${items.length})</div>
+      <div style="padding:15px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:10px;">
+        \${items.map(t => \`
+          <div draggable="true" ondragstart="event.dataTransfer.setData('text/plain', \${t.origIdx});" style="font-size:13px; padding:12px; background:white; border: 1px solid rgba(0,0,0,0.05); border-radius:12px; cursor:grab; box-shadow: 0 4px 15px rgba(0,0,0,0.02); transition: 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(0,0,0,0.05)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.02)';">
+            <div style="font-weight:700; color:var(--c-slate); line-height:1.4;">\${t.title}</div>
+            \${t.due ? \`<div style="font-size:10px; color:var(--c-rust); font-weight:600; background:rgba(239,68,68,0.1); display:inline-block; padding:3px 6px; border-radius:6px; margin-top:6px;">📅 \${t.due}</div>\` : ''}
           </div>
-        `).join('')}
+        \`).join('')}
       </div>
     </div>
   `;
   
   return `
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
-      ${renderQ('Q1: Do First (ด่วน & สำคัญ)', q1, 'var(--c-rust)', 'Urgent', 'Important')}
-      ${renderQ('Q2: Schedule (ไม่ด่วน แต่สำคัญ)', q2, 'var(--c-blue)', 'Not Urgent', 'Important')}
-      ${renderQ('Q3: Delegate (ด่วน แต่ไม่สำคัญ)', q3, 'var(--c-yellow)', 'Urgent', 'Not Important')}
-      ${renderQ("Q4: Don't Do (ไม่ด่วน & ไม่สำคัญ)", q4, '#94a3b8', 'Not Urgent', 'Not Important')}
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+      \${renderQ('Q1: Do First (ด่วน & สำคัญ)', q1, 'rgba(239,68,68,0.3)', 'linear-gradient(135deg, #ef4444, #dc2626)', 'Urgent', 'Important')}
+      \${renderQ('Q2: Schedule (ไม่ด่วน แต่สำคัญ)', q2, 'rgba(59,130,246,0.3)', 'linear-gradient(135deg, #3b82f6, #2563eb)', 'Not Urgent', 'Important')}
+      \${renderQ('Q3: Delegate (ด่วน แต่ไม่สำคัญ)', q3, 'rgba(245,158,11,0.3)', 'linear-gradient(135deg, #f59e0b, #d97706)', 'Urgent', 'Not Important')}
+      \${renderQ("Q4: Don't Do (ไม่ด่วน & ไม่สำคัญ)", q4, 'rgba(148,163,184,0.3)', 'linear-gradient(135deg, #94a3b8, #64748b)', 'Not Urgent', 'Not Important')}
     </div>
   `;
 }
@@ -176,39 +201,47 @@ window.moveMatrixTask = function(idxStr, urgency, importance) {
 function renderPlannerProject() {
   const budgets = state.projectBudgets || [];
   const meetings = state.meetings || [];
+  
   return `
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:20px;">
-      <div class="glass-card nb-card" style="padding:20px;">
-         <div style="font-weight:800; font-size:16px; margin-bottom:15px; border-bottom:2px solid black; padding-bottom:10px;">
-           💰 Project Budgeting
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+      <div class="glass-card" style="padding:25px; border-radius:24px; background: rgba(255,255,255,0.7); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.8); box-shadow: 0 10px 30px rgba(0,0,0,0.03);">
+         <div style="font-weight:800; font-size:16px; margin-bottom:15px; border-bottom:1px solid rgba(0,0,0,0.05); padding-bottom:10px; color: var(--c-slate); display:flex; align-items:center; gap:8px;">
+           <div style="background: rgba(16,185,129,0.1); padding: 8px; border-radius: 12px; color: var(--c-green);">💰</div> Project Budget Tracker
          </div>
-         <div style="display:flex; flex-direction:column; gap:10px;">
+         <div style="display:flex; flex-direction:column; gap:12px;">
            ${budgets.map(b => `
-             <div style="border:1.5px solid black; border-radius:8px; padding:12px; background:white;">
-               <div style="font-weight:700;">${b.name}</div>
-               <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:12px;">
+             <div style="border:1px solid rgba(0,0,0,0.05); border-radius:16px; padding:16px; background:white; box-shadow: 0 4px 15px rgba(0,0,0,0.02); transition: 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(0,0,0,0.04)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.02)';">
+               <div style="font-weight:800; font-size:15px; color:var(--c-slate);">${b.name}</div>
+               <div style="font-size:12px; color:#64748b; margin-bottom:8px;">งบประมาณรวม: ฿${b.budget}</div>
+               <div style="display:flex; justify-content:space-between; font-size:12px; font-weight: 600; padding: 8px 12px; background: #f8fafc; border-radius: 8px;">
                  <span>รายรับ: <span style="color:var(--c-green)">฿${b.income}</span></span>
                  <span>รายจ่าย: <span style="color:var(--c-red)">฿${b.expense}</span></span>
                </div>
-               <div style="margin-top:5px; font-size:12px; font-weight:800; text-align:right;">คงเหลือ: ฿${b.income - b.expense}</div>
+               <div style="margin-top:10px; font-size:14px; font-weight:800; text-align:right; color: ${(b.income - b.expense) >= 0 ? 'var(--c-green)' : 'var(--c-red)'};">
+                 คงเหลือ: ฿${b.income - b.expense}
+               </div>
              </div>
            `).join('')}
-           <button class="btn-glass-secondary sm" onclick="alert('Coming soon: สร้างกระเป๋างบโปรเจกต์ใหม่')">+ เพิ่มกระเป๋างบ</button>
+           ${budgets.length === 0 ? '<div style="padding:20px; text-align:center; color:#94a3b8; font-size:13px;">ยังไม่มีกระเป๋างบประมาณ</div>' : ''}
+           <button class="btn-glass-primary" style="margin-top:5px; box-shadow: 0 4px 15px rgba(59,130,246,0.2);" onclick="alert('Coming soon: สร้างกระเป๋างบโปรเจกต์ใหม่')">+ เพิ่มกระเป๋างบ</button>
          </div>
       </div>
       
-      <div class="glass-card nb-card" style="padding:20px;">
-         <div style="font-weight:800; font-size:16px; margin-bottom:15px; border-bottom:2px solid black; padding-bottom:10px;">
-           👥 Meeting Organizer
+      <div class="glass-card" style="padding:25px; border-radius:24px; background: rgba(255,255,255,0.7); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.8); box-shadow: 0 10px 30px rgba(0,0,0,0.03);">
+         <div style="font-weight:800; font-size:16px; margin-bottom:15px; border-bottom:1px solid rgba(0,0,0,0.05); padding-bottom:10px; color: var(--c-slate); display:flex; align-items:center; gap:8px;">
+           <div style="background: rgba(79,70,229,0.1); padding: 8px; border-radius: 12px; color: var(--c-indigo);">👥</div> Meeting Organizer
          </div>
-         <div style="display:flex; flex-direction:column; gap:10px;">
+         <div style="display:flex; flex-direction:column; gap:12px;">
            ${meetings.map(m => `
-             <div style="border:1.5px solid black; border-radius:8px; padding:12px; background:white;">
-               <div style="font-weight:700;">${m.topic}</div>
-               <div style="font-size:11px; color:#64748b;">📅 ${m.date} | 📍 ${m.location}</div>
+             <div style="border:1px solid rgba(0,0,0,0.05); border-radius:16px; padding:16px; background:white; box-shadow: 0 4px 15px rgba(0,0,0,0.02); transition: 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(0,0,0,0.04)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.02)';">
+               <div style="font-weight:800; font-size:15px; color:var(--c-slate);">${m.topic}</div>
+               <div style="font-size:12px; color:var(--c-indigo); margin-top:6px; background:rgba(79,70,229,0.05); padding:6px 10px; border-radius:8px; display:inline-block; font-weight:600;">
+                 📅 ${m.date} | 📍 ${m.location}
+               </div>
              </div>
            `).join('')}
-           <button class="btn-glass-secondary sm" onclick="alert('Coming soon: จัดการประชุมใหม่')">+ สร้างวาระการประชุม</button>
+           ${meetings.length === 0 ? '<div style="padding:20px; text-align:center; color:#94a3b8; font-size:13px;">ยังไม่มีการนัดหมายประชุม</div>' : ''}
+           <button class="btn-glass-primary" style="margin-top:5px; box-shadow: 0 4px 15px rgba(59,130,246,0.2);" onclick="alert('Coming soon: จัดการประชุมใหม่')">+ สร้างวาระการประชุม</button>
          </div>
       </div>
     </div>
