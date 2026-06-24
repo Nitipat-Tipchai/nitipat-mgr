@@ -608,13 +608,13 @@ window.forceSyncCalendar = async function() {
         const dayMap = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
         const byDay = dayMap[s.day];
         
-        // แนบลิงก์เช็คชื่อ
-        const checkinLink = `https://nitipat-mgr.vercel.app/?checkin=${c.id}`;
+        const baseUrl = window.location.origin + window.location.pathname;
+        const checkinLink = `${baseUrl}?checkin=${c.id}`;
         
         const event = {
           summary: `[${c.code || 'ไม่มีรหัส'}] ${c.nameTh || c.nameEn || 'ไม่ระบุชื่อวิชา'}`,
           location: c.room || 'ไม่ระบุห้อง',
-          description: `อาจารย์: ${c.teacher || '-'}\nหมวดหมู่: ${s.type || 'Lecture'}\n\n📍 <a href="${checkinLink}">กดที่นี่เพื่อเช็คชื่อเข้าเรียน / ดูข้อมูลวิชา</a>`,
+          description: `อาจารย์: ${c.instructor || '-'}\nหมวดหมู่: ${c.mode || 'Onsite'}\n\n📍 <a href="${checkinLink}">กดที่นี่เพื่อเช็คชื่อเข้าเรียน / ดูข้อมูลวิชา</a>`,
           start: {
             dateTime: getFirstClassDate(settings.semesterStart, s.day, s.startHour),
             timeZone: 'Asia/Bangkok'
