@@ -205,7 +205,7 @@ async function loadAll() {
   }
 
   try {
-    const [sSnap, cSnap, aSnap, eSnap, secSnap, mastSnap, structSnap, reflSnap, profSnap, ilmCompSnap, ilmProfSnap, ilmLogsSnap, ilmFilesSnap, calSnap, radioSnap, vfSnap] = await Promise.all([
+    const [sSnap, cSnap, aSnap, eSnap, secSnap, mastSnap, structSnap, reflSnap, profSnap, ilmCompSnap, ilmProfSnap, ilmLogsSnap, ilmFilesSnap, calSnap, radioSnap, vfSnap, plannerSnap, calConfigSnap] = await Promise.all([
       getDocs(collection(window.db, "semesters")),
       getDocs(collection(window.db, "courses")),
       getDocs(collection(window.db, "assignments")),
@@ -221,7 +221,9 @@ async function loadAll() {
       getDoc(doc(window.db, "ilm_data", "files")),
       getDoc(doc(window.db, "app_settings", "calendar")),
       getDoc(doc(window.db, "app_settings", "radio")),
-      getDoc(doc(window.db, "app_settings", "virtual_files"))
+      getDoc(doc(window.db, "app_settings", "virtual_files")),
+      getDoc(doc(window.db, "app_settings", "planner_tasks")),
+      getDoc(doc(window.db, "app_settings", "calendar_config"))
     ]);
 
     if (secSnap.exists()) {
@@ -243,6 +245,18 @@ async function loadAll() {
     if (vfSnap && vfSnap.exists()) {
       state.virtualFiles = vfSnap.data().files || {};
       localStorage.setItem('virtual_files', JSON.stringify(state.virtualFiles));
+    }
+    if (plannerSnap && plannerSnap.exists()) {
+      state.plannerTasks = plannerSnap.data().tasks || [];
+      localStorage.setItem('plannerTasks', JSON.stringify(state.plannerTasks));
+    }
+    if (calConfigSnap && calConfigSnap.exists()) {
+      const ccfg = calConfigSnap.data();
+      // Keep existing accessToken if we have one locally
+      const localToken = state.calendarConfig?.accessToken;
+      state.calendarConfig = { ...state.calendarConfig, ...ccfg };
+      if (localToken) state.calendarConfig.accessToken = localToken;
+      localStorage.setItem('calendarConfig', JSON.stringify(state.calendarConfig));
     }
     if (profSnap.exists()) {
       const profData = profSnap.data();
