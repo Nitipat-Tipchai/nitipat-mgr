@@ -331,6 +331,7 @@ function openAddAssignmentForm(a = null) {
     }
 
     closeModal(); await loadAll(); showToast(a ? '✅ บันทึกแก้ไขสำเร็จ' : '✅ เพิ่มการบ้านสำเร็จ');
+    if (typeof window.autoSyncCalendar === 'function') window.autoSyncCalendar();
   };
 }
 
@@ -403,6 +404,7 @@ function openAddExamForm(e = null) {
 
     closeModal(); await loadAll(); showToast(e ? '✅ บันทึกแก้ไขสำเร็จ' : '✅ เพิ่มการสอบสำเร็จ');
     startHyperNotifications();
+    if (typeof window.autoSyncCalendar === 'function') window.autoSyncCalendar();
   };
 }
 
@@ -778,7 +780,11 @@ function attachAllEvents() {
   document.querySelectorAll('[data-toggle-assign]').forEach(b => b.onclick = async () => {
     const id = b.dataset.toggleAssign;
     const a = Object.values(state.assignments).flat().find(x => x.id === id);
-    if (a) { await fsUpd('assignments', id, { submitted: !a.submitted, status: !a.submitted ? 'ส่งแล้ว' : 'ยังไม่เริ่ม' }); await loadAll(); }
+    if (a) { 
+      await fsUpd('assignments', id, { submitted: !a.submitted, status: !a.submitted ? 'ส่งแล้ว' : 'ยังไม่เริ่ม' }); 
+      await loadAll(); 
+      if (typeof window.autoSyncCalendar === 'function') window.autoSyncCalendar();
+    }
   });
   document.querySelectorAll('[data-del-assign]').forEach(b => b.onclick = async () => {
     const id = b.dataset.delAssign;
@@ -792,7 +798,9 @@ function attachAllEvents() {
         showToast('🗑️ กำลังลบโฟลเดอร์การบ้านใน Google Drive...');
         google.script.run.deleteAssignmentFolder(a.folderId);
       }
-      await fsDel('assignments', id); await loadAll();
+      await fsDel('assignments', id); 
+      await loadAll();
+      if (typeof window.autoSyncCalendar === 'function') window.autoSyncCalendar();
     }
   });
   document.querySelectorAll('[data-edit-assign]').forEach(b => b.onclick = () => {
@@ -809,7 +817,9 @@ function attachAllEvents() {
         const curSem = getCurrentSemester() || state.semesters[state.semesters.length - 1];
         if (curSem) google.script.run.deleteCalendarEvent(`NITIPAT MANAGER - ${curSem.name}`, e.calendarEventId);
       }
-      await fsDel('exams', id); await loadAll();
+      await fsDel('exams', id); 
+      await loadAll();
+      if (typeof window.autoSyncCalendar === 'function') window.autoSyncCalendar();
     }
   });
   document.querySelectorAll('[data-edit-exam]').forEach(b => b.onclick = () => {
@@ -1011,4 +1021,4 @@ function renderCourseHub(courseId) {
       refreshDriveFiles(courseId, c.driveId);
     }
   }
-}
+}
