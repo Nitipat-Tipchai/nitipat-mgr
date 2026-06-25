@@ -362,7 +362,11 @@ async function startAppCore() {
     render();
     
     const urlParams = new URLSearchParams(window.location.search);
-    const checkinCourseId = urlParams.get('checkin');
+    let checkinCourseId = urlParams.get('checkin');
+    if (!checkinCourseId && window.location.hash.includes('checkin=')) {
+      checkinCourseId = window.location.hash.split('checkin=')[1].split('&')[0];
+    }
+    
     if (checkinCourseId) {
       setTimeout(() => {
         let foundCourse = null;
