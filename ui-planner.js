@@ -119,10 +119,27 @@ function getCourseCodeById(courseId) {
   return null;
 }
 
+window.savePlannerTasksState = function() {
+  localStorage.setItem('plannerTasks', JSON.stringify(state.plannerTasks));
+  if (typeof window.fsSet === 'function') {
+    window.fsSet('app_settings', 'planner_tasks', { tasks: state.plannerTasks }).catch(e => console.warn(e));
+  }
+};
+
+window.saveCalendarConfigToCloud = function() {
+  localStorage.setItem('calendarConfig', JSON.stringify(state.calendarConfig));
+  if (typeof window.fsSet === 'function') {
+    const safeConfig = { ...state.calendarConfig };
+    delete safeConfig.accessToken;
+    window.fsSet('app_settings', 'calendar_config', safeConfig).catch(e => console.warn(e));
+  }
+};
+
 function renderPlannerKanban() {
+  const container = document.getElementById('plannerKanban');
+  if (!container) return;
   const tasks = state.plannerTasks || [];
   const cols = state.kanbanColumns || ['To Do', 'In Progress', 'Done'];
-  
   const colColors = {
     'To Do': { bg: 'rgba(79,70,229,0.05)', headBg: 'var(--c-indigo)', text: 'white', border: 'rgba(79,70,229,0.2)' },
     'In Progress': { bg: 'rgba(245,158,11,0.05)', headBg: 'var(--c-yellow)', text: 'white', border: 'rgba(245,158,11,0.2)' },
@@ -185,7 +202,7 @@ window.moveKanbanTask = function(idxStr, newStage) {
   state.plannerTasks[idx].kanbanStage = newStage;
   if(newStage === 'Done') state.plannerTasks[idx].done = true;
   else state.plannerTasks[idx].done = false;
-  localStorage.setItem('plannerTasks', JSON.stringify(state.plannerTasks));
+  savePlannerTasksState();
   render();
   if (typeof window.autoSyncCalendar === 'function') window.autoSyncCalendar();
 };
@@ -229,7 +246,7 @@ window.moveMatrixTask = function(idxStr, urgency, importance) {
   if(isNaN(idx)) return;
   state.plannerTasks[idx].urgency = urgency;
   state.plannerTasks[idx].importance = importance;
-  localStorage.setItem('plannerTasks', JSON.stringify(state.plannerTasks));
+  savePlannerTasksState();
   render();
 };
 
@@ -452,7 +469,7 @@ window.savePlannerTask = function() {
     createdAt: new Date().toISOString()
   });
   
-  localStorage.setItem('plannerTasks', JSON.stringify(state.plannerTasks));
+  savePlannerTasksState();
   closeModal();
   render();
   showToast('✅ เพิ่มงานลง Planner แล้ว');
@@ -560,7 +577,7 @@ document.addEventListener('click', e => {
     const idx = parseInt(toggleBtn.dataset.togglePlanner);
     if(state.plannerTasks[idx]) {
       state.plannerTasks[idx].done = !state.plannerTasks[idx].done;
-      localStorage.setItem('plannerTasks', JSON.stringify(state.plannerTasks));
+      savePlannerTasksState();
       render();
       if(state.plannerTasks[idx].done && Object.values(state.plannerTasks).every(x=>x.done)) triggerConfetti();
       if (typeof window.autoSyncCalendar === 'function') window.autoSyncCalendar();
@@ -572,8 +589,8 @@ document.addEventListener('click', e => {
     const idx = parseInt(delBtn.dataset.delPlanner);
     if(confirm('ลบงานนี้หรือไม่?')) {
       state.plannerTasks.splice(idx, 1);
-      localStorage.setItem('plannerTasks', JSON.stringify(state.plannerTasks));
-      render();
+      savePlannerTasksState();
+      renderPlannerKanban();
       if (typeof window.autoSyncCalendar === 'function') window.autoSyncCalendar();
     }
   }
@@ -589,7 +606,7 @@ var plannerGisInited = false;
 var CALENDAR_SCOPES = 'https://www.googleapis.com/auth/calendar';
 
 function getGoogleClientId() {
-  return localStorage.getItem('google_client_id') || '';
+  return localStorage.getItem('google_client_id') || '986910230630-09pgqj27lsaevmv21jc2imqf0ia688t7.apps.googleusercontent.com';
 }
 
 window.connectGoogleCalendar = function() {
@@ -617,7 +634,7 @@ window.connectGoogleCalendar = function() {
         if (tokenResponse && tokenResponse.access_token) {
           state.calendarConfig.syncEnabled = true;
           state.calendarConfig.accessToken = tokenResponse.access_token;
-          localStorage.setItem('calendarConfig', JSON.stringify(state.calendarConfig));
+          window.saveCalendarConfigToCloud();
           showToast('✅ เชื่อมต่อ Google Calendar สำเร็จ!');
           render();
         }
@@ -639,7 +656,7 @@ window.disconnectCalendar = function() {
   if (confirm('ยกเลิกการเชื่อมต่อ Google Calendar หรือไม่?')) {
     state.calendarConfig.syncEnabled = false;
     delete state.calendarConfig.accessToken;
-    localStorage.setItem('calendarConfig', JSON.stringify(state.calendarConfig));
+    window.saveCalendarConfigToCloud();
     render();
     showToast('🔴 ยกเลิกการเชื่อมต่อแล้ว');
   }
@@ -835,7 +852,7 @@ window.forceSyncCalendar = async function(isSilent = false) {
           const calData = await createRes.json();
           calId = calData.id;
           state.calendarConfig.multiCalendarIds[cat] = calId;
-          localStorage.setItem('calendarConfig', JSON.stringify(state.calendarConfig));
+          window.saveCalendarConfigToCloud();
         } else {
           calId = 'primary';
         }
@@ -859,7 +876,7 @@ window.forceSyncCalendar = async function(isSilent = false) {
         } else if (res.status === 403 || res.status === 404) {
           console.warn(`POST to ${calId} returned ${res.status}. Invalidating calendar.`);
           state.calendarConfig.multiCalendarIds[cat] = null;
-          localStorage.setItem('calendarConfig', JSON.stringify(state.calendarConfig));
+          window.saveCalendarConfigToCloud();
           break; // Stop posting to this broken calendar
         }
       }
