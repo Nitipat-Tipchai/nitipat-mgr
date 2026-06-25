@@ -579,12 +579,23 @@ window.disconnectCalendar = function() {
   }
 };
 
-window.forceSyncCalendar = async function() {
+window.autoSyncCalendar = function() {
+  if (state.calendarConfig?.syncEnabled && state.calendarConfig?.calendarId) {
+    setTimeout(() => {
+      if (typeof window.forceSyncCalendar === 'function') {
+        window.forceSyncCalendar(true); // silent mode
+      }
+    }, 1500); // wait for loadAll to finish loading from firebase
+  }
+};
+
+window.forceSyncCalendar = async function(isSilent = false) {
   if (!state.calendarConfig.syncEnabled || !state.calendarConfig.accessToken) {
-    return showToast('กรุณาเชื่อมต่อ Google Calendar ก่อน', 'err');
+    if (!isSilent) return showToast('กรุณาเชื่อมต่อ Google Calendar ก่อน', 'err');
+    return;
   }
   
-  showToast('กำลังเตรียมข้อมูลซิงค์...', 'info');
+  if (!isSilent) showToast('กำลังประมวลผลตารางเรียน...', 'info');
   try {
     const eventsToSync = [];
     const term = state.selectedSemester || (typeof getCurrentSemester === 'function' ? getCurrentSemester()?.id : null) || (state.semesters && state.semesters.length ? state.semesters[state.semesters.length - 1].id : null);
@@ -643,7 +654,7 @@ window.forceSyncCalendar = async function() {
     
     // ถ้ายังไม่มีปฏิทินแยก ให้สร้างใหม่
     if (!targetCalendarId) {
-      showToast('กำลังสร้างปฏิทินใหม่แยกเฉพาะ...', 'info');
+      if (!isSilent) showToast('กำลังสร้างปฏิทินใหม่แยกเฉพาะ...', 'info');
       const createRes = await fetch('https://www.googleapis.com/calendar/v3/calendars', {
         method: 'POST',
         headers: {
@@ -661,8 +672,31 @@ window.forceSyncCalendar = async function() {
       } else {
         targetCalendarId = 'primary'; // fallback
       }
+    } else {
+      // มีปฏิทินแล้ว -> ทำการล้างข้อมูลเก่าออกทั้งหมด (Smart Mirror)
+      if (!isSilent) showToast('กำลังปรับปรุงข้อมูลให้ตรงกับแอป (กำลังลบข้อมูลเก่า...)', 'info');
+      try {
+        const listRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendarId)}/events?maxResults=2500`, {
+          headers: { 'Authorization': `Bearer ${state.calendarConfig.accessToken}` }
+        });
+        if (listRes.ok) {
+          const listData = await listRes.json();
+          if (listData.items && listData.items.length > 0) {
+            const deletePromises = listData.items.map(ev => 
+              fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendarId)}/events/${ev.id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${state.calendarConfig.accessToken}` }
+              })
+            );
+            await Promise.all(deletePromises);
+          }
+        }
+      } catch (err) {
+        console.error("Error clearing old events", err);
+      }
     }
 
+    if (!isSilent) showToast('กำลังซิงค์ข้อมูลล่าสุด...', 'info');
     let successCount = 0;
     for (const ev of eventsToSync) {
       const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendarId)}/events`, {
@@ -675,14 +709,15 @@ window.forceSyncCalendar = async function() {
       });
       if (res.ok) successCount++;
       else if (res.status === 401) {
-        showToast('Token หมดอายุ กรุณาเชื่อมต่อใหม่', 'err');
+        if (!isSilent) showToast('Token หมดอายุ กรุณาเชื่อมต่อใหม่', 'err');
         state.calendarConfig.syncEnabled = false;
         render();
         return;
       }
     }
     
-    showToast(`✅ ซิงค์เสร็จสิ้น ${successCount} รายการ!`);
+    if (!isSilent) showToast(`✅ ซิงค์เสร็จสิ้น ${successCount} รายการ!`);
+    else console.log(`Auto sync completed: ${successCount} items`);
     
   } catch (err) {
     console.error(err);
