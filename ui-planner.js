@@ -74,22 +74,38 @@ function renderPlannerList() {
       </div>
       
       <div class="planner-task-list" style="display:flex; flex-direction:column; gap:12px;">
-        ${tasks.map((t, i) => `
+        ${tasks.map((t, i) => {
+          const tagIcons = {
+            'class': '📚 คลาส', 'assignment': '📝 งาน', 'exam': '🚨 สอบ', 'study': '📖 อ่านหนังสือ',
+            'research': '🔬 วิจัย', 'internship': '🏢 ฝึกงาน', 'meeting': '💼 ประชุม', 'club': '🏛️ กิจกรรม',
+            'fitness': '🏋️ ฟิตเนส', 'health': '🏥 สุขภาพ', 'social': '🎉 สังสรรค์', 'finance': '💵 การเงิน',
+            'shopping': '🛒 ซื้อของ', 'chores': '🧹 งานบ้าน', 'personal_project': '💡 โปรเจกต์', 'other': '✨ อื่นๆ'
+          };
+          const tagText = tagIcons[t.tag] || (t.project ? `📁 ${t.project}` : '');
+          
+          let timeText = '';
+          if (t.startTime) {
+            timeText += t.startTime;
+            if (t.endTime) timeText += ` - ${t.endTime}`;
+          }
+          
+          return `
           <div class="planner-task-row ${t.done ? 'done' : ''}" style="display:flex; align-items:flex-start; gap:15px; padding:16px; background: ${t.done ? 'rgba(248,250,252,0.6)' : 'white'}; border: 1px solid ${t.done ? 'rgba(0,0,0,0.05)' : 'rgba(0,0,0,0.08)'}; border-radius:16px; transition: all 0.2s ease; box-shadow: ${t.done ? 'none' : '0 4px 15px rgba(0,0,0,0.02)'}; transform: scale(1);" onmouseover="this.style.transform='scale(1.01)'; this.style.boxShadow='0 8px 25px rgba(0,0,0,0.05)';" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='${t.done ? 'none' : '0 4px 15px rgba(0,0,0,0.02)'}';">
             <button class="check-circle sm ${t.done ? 'checked' : ''}" data-toggle-planner="${i}" style="width:28px; height:28px; border-radius:50%; border: 2px solid ${t.done ? 'var(--c-indigo)' : '#cbd5e1'}; background:${t.done ? 'var(--c-indigo)' : 'white'}; color:white; display:flex; align-items:center; justify-content:center; font-weight:800; cursor:pointer; transition: 0.2s; margin-top:2px;">${t.done ? '✓' : ''}</button>
             <div style="flex:1;">
               <div style="font-weight:700; font-size:15px; text-decoration:${t.done ? 'line-through' : 'none'}; opacity:${t.done ? 0.5 : 1}; color: var(--c-slate);">${t.title}</div>
               ${t.note ? `<div style="font-size:12px; opacity:0.6; margin-top:4px; line-height:1.4;">${t.note}</div>` : ''}
               <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
-                ${t.due ? `<span style="font-size:10px; background:rgba(239,68,68,0.1); color:var(--c-rust); font-weight:700; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;">📅 ${t.due}</span>` : ''}
+                ${t.due ? `<span style="font-size:10px; background:rgba(239,68,68,0.1); color:var(--c-rust); font-weight:700; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;">📅 ${t.due} ${timeText ? '⏱️ '+timeText : ''}</span>` : ''}
                 ${t.courseId ? `<span style="font-size:10px; background:rgba(79,70,229,0.1); color:var(--c-indigo); font-weight:600; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;">📚 ${getCourseCodeById(t.courseId) || 'วิชา'}</span>` : ''}
-                ${t.project ? `<span style="font-size:10px; background:#f1f5f9; color:#475569; font-weight:600; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;">📁 ${t.project}</span>` : ''}
-                ${t.urgency ? `<span style="font-size:10px; background:rgba(245,158,11,0.15); color:#b45309; font-weight:700; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;">🔥 ${t.urgency}</span>` : ''}
+                ${tagText ? `<span style="font-size:10px; background:#f1f5f9; color:#475569; font-weight:600; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;">${tagText}</span>` : ''}
+                ${t.urgency && t.urgency !== 'Not Urgent' ? `<span style="font-size:10px; background:rgba(245,158,11,0.15); color:#b45309; font-weight:700; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;">🔥 ${t.urgency}</span>` : ''}
               </div>
             </div>
             <button class="icon-btn danger sm" data-del-planner="${i}" style="background:rgba(239,68,68,0.08); border:none; color:var(--c-red); font-size:14px; cursor:pointer; width:32px; height:32px; border-radius:10px; transition:0.2s;" onmouseover="this.style.background='var(--c-red)'; this.style.color='white';" onmouseout="this.style.background='rgba(239,68,68,0.08)'; this.style.color='var(--c-red)';">✕</button>
           </div>
-        `).join('')}
+          `;
+        }).join('')}
         ${tasks.length === 0 ? '<div class="empty-sm" style="padding:50px; text-align:center; color:#94a3b8;"><div style="font-size:40px; margin-bottom:10px;">🎉</div>ไม่มีงานค้าง เยี่ยมมาก!</div>' : ''}
       </div>
     </div>`;
@@ -128,15 +144,33 @@ function renderPlannerKanban() {
              ondragover="event.preventDefault(); this.style.background='rgba(0,0,0,0.05)';" 
              ondragleave="this.style.background='transparent';"
              ondrop="event.preventDefault(); this.style.background='transparent'; moveKanbanTask(event.dataTransfer.getData('text/plain'), '${col}')">
-          ${colTasks.map(t => `
+          ${colTasks.map(t => {
+            const tagIcons = {
+              'class': '📚 คลาส', 'assignment': '📝 งาน', 'exam': '🚨 สอบ', 'study': '📖 อ่านหนังสือ',
+              'research': '🔬 วิจัย', 'internship': '🏢 ฝึกงาน', 'meeting': '💼 ประชุม', 'club': '🏛️ กิจกรรม',
+              'fitness': '🏋️ ฟิตเนส', 'health': '🏥 สุขภาพ', 'social': '🎉 สังสรรค์', 'finance': '💵 การเงิน',
+              'shopping': '🛒 ซื้อของ', 'chores': '🧹 งานบ้าน', 'personal_project': '💡 โปรเจกต์', 'other': '✨ อื่นๆ'
+            };
+            const tagText = tagIcons[t.tag] || (t.project ? `📁 ${t.project}` : '');
+            
+            let timeText = '';
+            if (t.startTime) {
+              timeText += t.startTime;
+              if (t.endTime) timeText += ` - ${t.endTime}`;
+            }
+
+            return `
             <div draggable="true" ondragstart="event.dataTransfer.setData('text/plain', ${t.origIdx}); this.style.opacity='0.5';" ondragend="this.style.opacity='1';" style="background:white; border: 1px solid rgba(0,0,0,0.05); border-radius:14px; padding:15px; cursor:grab; box-shadow: 0 4px 15px rgba(0,0,0,0.03); transition: 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 25px rgba(0,0,0,0.06)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.03)';">
               <div style="font-weight:700; font-size:14px; margin-bottom:8px; color: var(--c-slate); line-height: 1.4;">${t.title}</div>
               <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                 ${t.due ? `<span style="font-size:10px; background:rgba(239,68,68,0.1); color:var(--c-rust); padding:4px 8px; border-radius:6px; font-weight:600;">${t.due}</span>` : ''}
-                 ${t.courseId ? `<span style="font-size:10px; background:rgba(79,70,229,0.1); color:var(--c-indigo); padding:4px 8px; border-radius:6px; font-weight:600;">${getCourseCodeById(t.courseId) || 'วิชา'}</span>` : ''}
+                 ${t.due ? `<span style="font-size:10px; background:rgba(239,68,68,0.1); color:var(--c-rust); padding:4px 8px; border-radius:6px; font-weight:600;">📅 ${t.due} ${timeText ? '⏱️ '+timeText : ''}</span>` : ''}
+                 ${t.courseId ? `<span style="font-size:10px; background:rgba(79,70,229,0.1); color:var(--c-indigo); padding:4px 8px; border-radius:6px; font-weight:600;">📚 ${getCourseCodeById(t.courseId) || 'วิชา'}</span>` : ''}
+                 ${tagText ? `<span style="font-size:10px; background:#f1f5f9; color:#475569; padding:4px 8px; border-radius:6px; font-weight:600;">${tagText}</span>` : ''}
+                 ${t.urgency && t.urgency !== 'Not Urgent' ? `<span style="font-size:10px; background:rgba(245,158,11,0.15); color:#b45309; padding:4px 8px; border-radius:6px; font-weight:600;">🔥 ${t.urgency}</span>` : ''}
               </div>
             </div>
-          `).join('')}
+            `;
+          }).join('')}
         </div>
       </div>
     `;
@@ -153,6 +187,7 @@ window.moveKanbanTask = function(idxStr, newStage) {
   else state.plannerTasks[idx].done = false;
   localStorage.setItem('plannerTasks', JSON.stringify(state.plannerTasks));
   render();
+  if (typeof window.autoSyncCalendar === 'function') window.autoSyncCalendar();
 };
 
 function renderPlannerMatrix() {
@@ -308,54 +343,80 @@ window.openAddPlannerTask = function() {
   const html = `
     <div style="display:flex; flex-direction:column; gap:12px;">
       <div>
-        <label style="font-size:12px; font-weight:700;">ชื่องาน</label>
+        <label style="font-size:12px; font-weight:700;">ชื่องาน / กิจกรรม</label>
         <input type="text" id="pTaskTitle" class="glass-input sm" style="width:100%" placeholder="เช่น ทำสไลด์พรีเซนต์...">
       </div>
       <div>
         <label style="font-size:12px; font-weight:700;">รายละเอียด (ใส่หรือไม่ใส่ก็ได้)</label>
         <input type="text" id="pTaskNote" class="glass-input sm" style="width:100%">
       </div>
+      
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
         <div>
-          <label style="font-size:12px; font-weight:700;">วันครบกำหนด</label>
+          <label style="font-size:12px; font-weight:700;">วันที่ / Deadline</label>
           <input type="date" id="pTaskDue" class="glass-input sm" style="width:100%">
         </div>
-        <div>
-          <label style="font-size:12px; font-weight:700;">โปรเจกต์/ชุมนุม</label>
-          <input type="text" id="pTaskProj" class="glass-input sm" style="width:100%" placeholder="เช่น งานกลุ่ม, ส่วนตัว">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px;">
+          <div>
+             <label style="font-size:12px; font-weight:700;">เวลาเริ่ม</label>
+             <input type="time" id="pTaskStartTime" class="glass-input sm" style="width:100%">
+          </div>
+          <div>
+             <label style="font-size:12px; font-weight:700;">เวลาสิ้นสุด</label>
+             <input type="time" id="pTaskEndTime" class="glass-input sm" style="width:100%">
+          </div>
         </div>
       </div>
       
-      <!-- New Fields for Phase 2 -->
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:5px;">
         <div>
-          <label style="font-size:12px; font-weight:700; color:var(--c-indigo);">📚 เชื่อมโยงรายวิชา (เทอมล่าสุด)</label>
+          <label style="font-size:12px; font-weight:700;">หมวดหมู่ (Tag)</label>
+          <select id="pTaskTag" class="glass-input sm" style="width:100%">
+            <optgroup label="📚 การเรียนและสอบ (Classes & Exams)">
+              <option value="class">📚 เข้าเรียน / คลาสเสริม (Classes)</option>
+              <option value="assignment">📝 การบ้าน / รายงาน (Assignments)</option>
+              <option value="exam">🚨 สอบกลางภาค / ปลายภาค (Exams)</option>
+              <option value="study">📖 อ่านหนังสือเตรียมสอบ (Study)</option>
+            </optgroup>
+            <optgroup label="💼 งานและโปรเจกต์ (Projects & Internship)">
+              <option value="research">🔬 โครงงาน / วิจัย (Research)</option>
+              <option value="internship">🏢 นัดหมายฝึกงาน (Internship)</option>
+              <option value="meeting">💼 ประชุมงาน (Meetings)</option>
+              <option value="club">🏛️ กิจกรรมมหาลัย/ชุมนุม (Club Events)</option>
+            </optgroup>
+            <optgroup label="✨ ส่วนตัว (Personal)">
+              <option value="fitness">🏋️ ออกกำลังกาย (Fitness)</option>
+              <option value="health">🏥 สุขภาพ / หาหมอ (Health)</option>
+              <option value="social">🎉 สังสรรค์ / พักผ่อน (Social)</option>
+              <option value="finance">💵 จ่ายบิล / การเงิน (Finance)</option>
+              <option value="shopping">🛒 ซื้อของ (Shopping)</option>
+              <option value="chores">🧹 งานบ้าน (Chores)</option>
+              <option value="personal_project">💡 โปรเจกต์ส่วนตัว (Personal Projects)</option>
+              <option value="other">✨ อื่นๆ (Others)</option>
+            </optgroup>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:700; color:var(--c-indigo);">📚 เชื่อมโยงรายวิชา</label>
           <select id="pTaskCourse" class="glass-input sm" style="width:100%">
             <option value="">-- ไม่เชื่อมโยง --</option>
             ${latestCourses.map(c => `<option value="${c.id}">${c.code} ${c.nameTh}</option>`).join('')}
           </select>
         </div>
-        <div>
-          <label style="font-size:12px; font-weight:700;">สถานะงาน (Kanban)</label>
-          <select id="pTaskStage" class="glass-input sm" style="width:100%">
-            ${(state.kanbanColumns || ['To Do', 'In Progress', 'Done']).map(c => `<option value="${c}">${c}</option>`).join('')}
-          </select>
-        </div>
       </div>
       
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:5px;">
         <div>
-          <label style="font-size:12px; font-weight:700;">ความเร่งด่วน (Urgency)</label>
-          <select id="pTaskUrg" class="glass-input sm" style="width:100%">
-            <option value="Not Urgent">ไม่ด่วน (Not Urgent)</option>
-            <option value="Urgent">ด่วนมาก (Urgent)</option>
+          <label style="font-size:12px; font-weight:700;">สถานะ (Kanban)</label>
+          <select id="pTaskStage" class="glass-input sm" style="width:100%">
+            ${(state.kanbanColumns || ['To Do', 'In Progress', 'Done']).map(c => `<option value="${c}">${c}</option>`).join('')}
           </select>
         </div>
         <div>
-          <label style="font-size:12px; font-weight:700;">ความสำคัญ (Importance)</label>
-          <select id="pTaskImp" class="glass-input sm" style="width:100%">
-            <option value="Important">สำคัญ (Important)</option>
-            <option value="Not Important">ไม่สำคัญ (Not Important)</option>
+          <label style="font-size:12px; font-weight:700;">ความเร่งด่วน</label>
+          <select id="pTaskUrg" class="glass-input sm" style="width:100%">
+            <option value="Not Urgent">ไม่ด่วน (Not Urgent)</option>
+            <option value="Urgent">ด่วนมาก (Urgent)</option>
           </select>
         </div>
       </div>
@@ -368,7 +429,7 @@ window.openAddPlannerTask = function() {
       <button class="btn-pastel-primary" onclick="savePlannerTask()">+ บันทึกงาน</button>
     </div>
   `;
-  openModal('⚡ เพิ่มงานใหม่ลง Planner', html, footer);
+  openModal('⚡ เพิ่มงาน/กิจกรรมลง Planner', html, footer);
 };
 
 window.savePlannerTask = function() {
@@ -377,14 +438,16 @@ window.savePlannerTask = function() {
   
   if (!state.plannerTasks) state.plannerTasks = [];
   state.plannerTasks.push({
+    id: 'ptask_' + Date.now() + Math.floor(Math.random()*1000),
     title: t,
     note: document.getElementById('pTaskNote')?.value.trim() || '',
     due: document.getElementById('pTaskDue')?.value || '',
-    project: document.getElementById('pTaskProj')?.value.trim() || '',
+    startTime: document.getElementById('pTaskStartTime')?.value || '',
+    endTime: document.getElementById('pTaskEndTime')?.value || '',
+    tag: document.getElementById('pTaskTag')?.value || 'other',
     courseId: document.getElementById('pTaskCourse')?.value || null,
     kanbanStage: document.getElementById('pTaskStage')?.value || 'To Do',
     urgency: document.getElementById('pTaskUrg')?.value || 'Not Urgent',
-    importance: document.getElementById('pTaskImp')?.value || 'Important',
     done: false,
     createdAt: new Date().toISOString()
   });
@@ -393,6 +456,7 @@ window.savePlannerTask = function() {
   closeModal();
   render();
   showToast('✅ เพิ่มงานลง Planner แล้ว');
+  if (typeof window.autoSyncCalendar === 'function') window.autoSyncCalendar();
 };
 
 window.openAddBudgetModal = function() {
@@ -499,6 +563,7 @@ document.addEventListener('click', e => {
       localStorage.setItem('plannerTasks', JSON.stringify(state.plannerTasks));
       render();
       if(state.plannerTasks[idx].done && Object.values(state.plannerTasks).every(x=>x.done)) triggerConfetti();
+      if (typeof window.autoSyncCalendar === 'function') window.autoSyncCalendar();
     }
   }
   
@@ -509,6 +574,7 @@ document.addEventListener('click', e => {
       state.plannerTasks.splice(idx, 1);
       localStorage.setItem('plannerTasks', JSON.stringify(state.plannerTasks));
       render();
+      if (typeof window.autoSyncCalendar === 'function') window.autoSyncCalendar();
     }
   }
 });
@@ -595,133 +661,190 @@ window.forceSyncCalendar = async function(isSilent = false) {
     return;
   }
   
-  if (!isSilent) showToast('กำลังประมวลผลตารางเรียน...', 'info');
+  if (!isSilent) showToast('กำลังประมวลผลข้อมูลปฏิทิน...', 'info');
   try {
-    const eventsToSync = [];
     const term = state.selectedSemester || (typeof getCurrentSemester === 'function' ? getCurrentSemester()?.id : null) || (state.semesters && state.semesters.length ? state.semesters[state.semesters.length - 1].id : null);
     const courses = state.courses[term] || [];
-    
     const settings = state.calendarSettings || {};
     
     if (!settings.semesterStart || !settings.semesterEnd) {
       return showToast('กรุณาระบุ วันเปิดเทอม และ วันสิ้นสุดเทอม ในหน้า "ตั้งค่าปฏิทินการศึกษา" ก่อนซิงก์ครับ', 'err');
     }
     
-    // สร้าง UNTIL string: YYYYMMDDTHHmmssZ
     const endTermDate = new Date(settings.semesterEnd);
     endTermDate.setHours(23, 59, 59, 0);
     const untilStr = endTermDate.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
     
-    // Mapping our schedule logic to Google Calendar Event logic
+    // Initialize categorised events array
+    const categorizedEvents = {
+      classes: [],
+      assignments: [],
+      projects: [],
+      personal: []
+    };
+    
+    // 1. CLASSES
     courses.forEach(c => {
       if (!c.schedules) return;
       c.schedules.forEach(s => {
         const dayMap = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
         const byDay = dayMap[s.day];
-        
         const baseUrl = window.location.origin + window.location.pathname;
         const checkinLink = `${baseUrl}#checkin=${c.id}`;
-        
-        const event = {
+        categorizedEvents.classes.push({
           summary: `[${c.code || 'ไม่มีรหัส'}] ${c.nameTh || c.nameEn || 'ไม่ระบุชื่อวิชา'}`,
           location: c.room || 'ไม่ระบุห้อง',
-          description: `อาจารย์: ${c.instructor || '-'}\nหมวดหมู่: ${c.mode || 'Onsite'}\n\n📍 <a href="${checkinLink}">กดที่นี่เพื่อเช็คชื่อเข้าเรียน / ดูข้อมูลวิชา</a>`,
-          start: {
-            dateTime: getFirstClassDate(settings.semesterStart, s.day, s.startHour),
-            timeZone: 'Asia/Bangkok'
-          },
-          end: {
-            dateTime: getFirstClassDate(settings.semesterStart, s.day, s.endHour),
-            timeZone: 'Asia/Bangkok'
-          },
-          recurrence: [
-            `RRULE:FREQ=WEEKLY;BYDAY=${byDay};UNTIL=${untilStr}`
-          ],
-          reminders: {
-            useDefault: false,
-            overrides: [
-              { method: 'popup', minutes: 10 }
-            ]
-          }
-        };
-        eventsToSync.push(event);
+          description: `อาจารย์: ${c.instructor || '-'}\nหมวดหมู่: ${c.mode || 'Onsite'}\n\n📍 <a href="${checkinLink}">กดที่นี่เพื่อเช็คชื่อเข้าเรียน</a>`,
+          start: { dateTime: getFirstClassDate(settings.semesterStart, s.day, s.startHour), timeZone: 'Asia/Bangkok' },
+          end: { dateTime: getFirstClassDate(settings.semesterStart, s.day, s.endHour), timeZone: 'Asia/Bangkok' },
+          recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${byDay};UNTIL=${untilStr}`]
+        });
       });
     });
 
-    if (eventsToSync.length === 0) return showToast('ไม่มีตารางเรียนให้ซิงค์', 'err');
-
-    let targetCalendarId = state.calendarConfig.calendarId;
-    
-    // ถ้ายังไม่มีปฏิทินแยก ให้สร้างใหม่
-    if (!targetCalendarId) {
-      if (!isSilent) showToast('กำลังสร้างปฏิทินใหม่แยกเฉพาะ...', 'info');
-      const createRes = await fetch('https://www.googleapis.com/calendar/v3/calendars', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${state.calendarConfig.accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ summary: "ตารางเรียน (Nitipat Manager)", timeZone: "Asia/Bangkok" })
+    // 2. ASSIGNMENTS & EXAMS
+    const allAssignments = Object.values(state.assignments || {}).flat();
+    allAssignments.forEach(a => {
+      if(!a.deadline) return;
+      const isDone = a.submitted || a.status === 'ส่งแล้ว';
+      const prefix = isDone ? '✅ ' : '📝 ';
+      const cCode = getCourseCodeById(a.courseId) || '';
+      categorizedEvents.assignments.push({
+        summary: `${prefix}[${cCode}] ${a.title}`,
+        description: `สถานะ: ${a.status}\n\n${a.desc || ''}`,
+        start: { date: a.deadline },
+        end: { date: a.deadline }
       });
-      
-      if (createRes.ok) {
-        const calData = await createRes.json();
-        targetCalendarId = calData.id;
-        state.calendarConfig.calendarId = targetCalendarId;
-        localStorage.setItem('calendarConfig', JSON.stringify(state.calendarConfig));
-      } else {
-        targetCalendarId = 'primary'; // fallback
+    });
+
+    const allExams = Object.values(state.exams || {}).flat();
+    allExams.forEach(e => {
+      if(!e.date) return;
+      // if time exists, we have to provide end time as well to Google Calendar API
+      // Let's assume exam is 2 hours long if time is provided
+      let endDateTime = '';
+      if (e.time) {
+        const d = new Date(`${e.date}T${e.time}:00`);
+        d.setHours(d.getHours() + 2);
+        const pad = n => String(n).padStart(2, '0');
+        endDateTime = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
       }
-    } else {
-      // มีปฏิทินแล้ว -> ทำการล้างข้อมูลเก่าออกทั้งหมด (Smart Mirror)
-      if (!isSilent) showToast('กำลังปรับปรุงข้อมูลให้ตรงกับแอป (กำลังลบข้อมูลเก่า...)', 'info');
+      
+      categorizedEvents.assignments.push({
+        summary: `🚨 สอบ ${e.type}: [${e.courseName}] ${e.title}`,
+        location: e.room || '',
+        description: `ขอบเขต: ${e.scope || '-'}\nหมายเหตุ: ${e.notes || '-'}`,
+        start: e.time ? { dateTime: `${e.date}T${e.time}:00`, timeZone: 'Asia/Bangkok' } : { date: e.date },
+        end: e.time ? { dateTime: endDateTime, timeZone: 'Asia/Bangkok' } : { date: e.date }
+      });
+    });
+
+    // 3. TASKS
+    const tasks = state.plannerTasks || [];
+    tasks.forEach(t => {
+      const isDone = t.done;
+      const prefix = isDone ? '✅ ' : '';
+      
+      let targetCat = 'personal';
+      if (['research', 'internship', 'meeting', 'club'].includes(t.tag)) targetCat = 'projects';
+      else if (['class', 'assignment', 'exam', 'study'].includes(t.tag)) targetCat = 'assignments';
+      
+      const evt = {
+        summary: `${prefix}${t.title}`,
+        description: `${t.note || ''}\n\nแท็ก: ${t.tag}\nสถานะ: ${t.kanbanStage}`,
+      };
+      
+      if (t.due && t.startTime && t.endTime) {
+        evt.start = { dateTime: `${t.due}T${t.startTime}:00`, timeZone: 'Asia/Bangkok' };
+        evt.end = { dateTime: `${t.due}T${t.endTime}:00`, timeZone: 'Asia/Bangkok' };
+      } else if (t.due) {
+        evt.start = { date: t.due };
+        evt.end = { date: t.due };
+      } else {
+        return; // Skip tasks without due date
+      }
+      
+      categorizedEvents[targetCat].push(evt);
+    });
+
+    if (!state.calendarConfig.multiCalendarIds) {
+      state.calendarConfig.multiCalendarIds = {};
+    }
+
+    const calNames = {
+      classes: "📚 NITIPAT - ตารางเรียน",
+      assignments: "🚨 NITIPAT - การบ้านและสอบ",
+      projects: "💼 NITIPAT - งานและโปรเจกต์",
+      personal: "✨ NITIPAT - ส่วนตัว"
+    };
+
+    let totalSuccessCount = 0;
+
+    for (const cat of ['classes', 'assignments', 'projects', 'personal']) {
+      const events = categorizedEvents[cat];
+      if (events.length === 0) continue;
+
+      let calId = state.calendarConfig.multiCalendarIds[cat];
+      
+      // Create if not exists
+      if (!calId) {
+        if (!isSilent) showToast(`กำลังสร้างปฏิทิน ${calNames[cat]}...`, 'info');
+        const createRes = await fetch('https://www.googleapis.com/calendar/v3/calendars', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${state.calendarConfig.accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ summary: calNames[cat], timeZone: "Asia/Bangkok" })
+        });
+        if (createRes.ok) {
+          const calData = await createRes.json();
+          calId = calData.id;
+          state.calendarConfig.multiCalendarIds[cat] = calId;
+          localStorage.setItem('calendarConfig', JSON.stringify(state.calendarConfig));
+        } else {
+          calId = 'primary';
+        }
+      }
+
+      // Wipe old events
       try {
-        const listRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendarId)}/events?maxResults=2500`, {
+        const listRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?maxResults=2500`, {
           headers: { 'Authorization': `Bearer ${state.calendarConfig.accessToken}` }
         });
         if (listRes.ok) {
           const listData = await listRes.json();
           if (listData.items && listData.items.length > 0) {
             const deletePromises = listData.items.map(ev => 
-              fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendarId)}/events/${ev.id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${state.calendarConfig.accessToken}` }
+              fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${ev.id}`, {
+                method: 'DELETE', headers: { 'Authorization': `Bearer ${state.calendarConfig.accessToken}` }
               })
             );
             await Promise.all(deletePromises);
           }
         }
-      } catch (err) {
-        console.error("Error clearing old events", err);
-      }
-    }
+      } catch (err) { console.error("Error clearing old events", err); }
 
-    if (!isSilent) showToast('กำลังซิงค์ข้อมูลล่าสุด...', 'info');
-    let successCount = 0;
-    for (const ev of eventsToSync) {
-      const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendarId)}/events`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${state.calendarConfig.accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(ev)
-      });
-      if (res.ok) successCount++;
-      else if (res.status === 401) {
-        if (!isSilent) showToast('Token หมดอายุ กรุณาเชื่อมต่อใหม่', 'err');
-        state.calendarConfig.syncEnabled = false;
-        render();
-        return;
+      // Sync new events
+      for (const ev of events) {
+        const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${state.calendarConfig.accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(ev)
+        });
+        if (res.ok) totalSuccessCount++;
+        else if (res.status === 401) {
+          if (!isSilent) showToast('Token หมดอายุ กรุณาเชื่อมต่อใหม่', 'err');
+          state.calendarConfig.syncEnabled = false;
+          render();
+          return;
+        }
       }
     }
     
-    if (!isSilent) showToast(`✅ ซิงค์เสร็จสิ้น ${successCount} รายการ!`);
-    else console.log(`Auto sync completed: ${successCount} items`);
+    if (!isSilent) showToast(`✅ ซิงค์เสร็จสิ้น ${totalSuccessCount} รายการ!`);
+    else console.log(`Auto sync completed: ${totalSuccessCount} items`);
     
   } catch (err) {
     console.error(err);
-    showToast('เกิดข้อผิดพลาดในการซิงค์', 'err');
+    if (!isSilent) showToast('เกิดข้อผิดพลาดในการซิงค์', 'err');
   }
 };
 
@@ -830,4 +953,4 @@ window.mpSaveWallets = function() {
     showToast('❌ เกิดข้อผิดพลาดในการบันทึกกระเป๋าเงิน', 'err');
   }
 };
-
+
