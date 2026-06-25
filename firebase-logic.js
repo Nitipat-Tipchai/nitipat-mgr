@@ -23,9 +23,7 @@ function hideLoadingBlocker() {
 async function fsSet(col, id, data) {
   saveToLocalStorage();
   const isCapacitor_nitipat = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
-  if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron') && !isCapacitor_nitipat) {
-    return;
-  }
+  // Localhost block removed to allow cross-device sync during testing
   try {
     const plainData = JSON.parse(JSON.stringify(data));
     setDoc(doc(window.db, col, id), { ...plainData, _t: serverTimestamp() })
@@ -47,9 +45,7 @@ async function fsSet(col, id, data) {
 async function fsDel(col, id) {
   saveToLocalStorage();
   const isCapacitor_nitipat = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
-  if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron') && !isCapacitor_nitipat) {
-    return;
-  }
+  // Localhost block removed to allow cross-device sync during testing
   try {
     deleteDoc(doc(window.db, col, id))
       .catch(e => handleFirebaseError(e, 'fsDel'));
@@ -60,9 +56,7 @@ async function fsDel(col, id) {
 async function fsUpd(col, id, data) {
   saveToLocalStorage();
   const isCapacitor_nitipat = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
-  if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !navigator.userAgent.includes('Electron') && !isCapacitor_nitipat) {
-    return;
-  }
+  // Localhost block removed to allow cross-device sync during testing
   try {
     const plainData = JSON.parse(JSON.stringify(data));
     updateDoc(doc(window.db, col, id), plainData)
