@@ -810,7 +810,8 @@ window.forceSyncCalendar = async function(isSilent = false) {
           } else if (listRes.ok) {
             const listData = await listRes.json();
             if (listData.items && listData.items.length > 0) {
-              const deletePromises = listData.items.map(ev => 
+              const activeEvents = listData.items.filter(ev => ev.status !== 'cancelled');
+              const deletePromises = activeEvents.map(ev => 
                 fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${ev.id}`, {
                   method: 'DELETE', headers: { 'Authorization': `Bearer ${state.calendarConfig.accessToken}` }
                 })
