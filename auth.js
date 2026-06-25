@@ -18,7 +18,7 @@ const LoginGate = {
     const isCapacitor = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     
-    if (urlParams.get('admin') !== 'true' && !urlParams.has('checkin') && !isElectron && !isCapacitor && !isLocalhost) {
+    if (urlParams.get('admin') !== 'true' && !urlParams.has('checkin') && !window.location.hash.includes('checkin=') && !isElectron && !isCapacitor && !isLocalhost) {
       document.title = "404 Not Found";
       this.el.style.background = "#09090b";
       this.el.innerHTML = `
