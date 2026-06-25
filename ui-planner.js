@@ -805,6 +805,30 @@ window.forceSyncCalendar = async function(isSilent = false) {
       personal: "✨ NITIPAT - ส่วนตัว"
     };
 
+    // --- Duplicate Cleanup ---
+    try {
+      if (!isSilent) showToast('กำลังลบปฏิทินที่ซ้ำซ้อน...', 'info');
+      const calListRes = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+        headers: { 'Authorization': `Bearer ${state.calendarConfig.accessToken}` }
+      });
+      if (calListRes.ok) {
+        const calList = await calListRes.json();
+        const activeIds = Object.values(state.calendarConfig.multiCalendarIds).filter(id => id);
+        for (const item of (calList.items || [])) {
+          if (item.summary && item.summary.includes('NITIPAT -')) {
+            if (!activeIds.includes(item.id)) {
+              console.log('Deleting duplicate calendar:', item.summary, item.id);
+              await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(item.id)}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${state.calendarConfig.accessToken}` }
+              });
+            }
+          }
+        }
+      }
+    } catch(e) { console.warn('Cleanup failed', e); }
+    // -------------------------
+
     let totalSuccessCount = 0;
 
     for (const cat of ['classes', 'assignments', 'projects', 'personal']) {
