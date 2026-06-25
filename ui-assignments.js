@@ -164,6 +164,7 @@ window.handleDrop = async (e, newStatus) => {
     showToast(`📦 ย้ายงานไปที่ [${newStatus}]`);
     localStorage.setItem('assignments', JSON.stringify(state.assignments));
     render();
+    if (typeof window.autoSyncCalendar === 'function') window.autoSyncCalendar();
 
     try {
       await fsSet('assignments', courseId, { assignments: state.assignments[courseId] });
@@ -172,4 +173,4 @@ window.handleDrop = async (e, newStatus) => {
     }
   }
 };
-
+
