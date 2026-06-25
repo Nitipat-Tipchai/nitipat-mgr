@@ -1729,6 +1729,7 @@ async function deleteCourse(courseId) {
   await fsDel('courses', courseId);
   state.view = 'courses';
   await loadAll();
+  if (typeof window.autoSyncCalendar === 'function') window.autoSyncCalendar();
 }
 
 // ══════════════════════════════════════════════════
