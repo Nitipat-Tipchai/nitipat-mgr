@@ -246,7 +246,10 @@ function openAddCourseForm(existing = null, targetSemId = null) {
         }
       }).createDriveHierarchy(sem ? sem.name : 'Unknown_Semester', `${data.code}_${data.nameEn || data.nameTh}`);
     }
-    closeModal(); await loadAll(); showToast('✅ บันทึกวิชาสำเร็จ');
+    closeModal(); 
+    await loadAll(); 
+    showToast('✅ บันทึกวิชาสำเร็จ');
+    if (typeof window.autoSyncCalendar === 'function') window.autoSyncCalendar();
   };
 }
 
