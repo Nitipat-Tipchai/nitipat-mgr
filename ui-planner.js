@@ -798,7 +798,30 @@ window.forceSyncCalendar = async function(isSilent = false) {
 
       let calId = state.calendarConfig.multiCalendarIds[cat];
       
-      // Create if not exists
+      // 1. Verify existence & Wipe old events if exists
+      if (calId) {
+        try {
+          const listRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?maxResults=2500`, {
+            headers: { 'Authorization': `Bearer ${state.calendarConfig.accessToken}` }
+          });
+          if (listRes.status === 404) {
+            calId = null;
+            state.calendarConfig.multiCalendarIds[cat] = null;
+          } else if (listRes.ok) {
+            const listData = await listRes.json();
+            if (listData.items && listData.items.length > 0) {
+              const deletePromises = listData.items.map(ev => 
+                fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${ev.id}`, {
+                  method: 'DELETE', headers: { 'Authorization': `Bearer ${state.calendarConfig.accessToken}` }
+                })
+              );
+              await Promise.all(deletePromises);
+            }
+          }
+        } catch (err) { console.error("Error verifying/clearing old events", err); }
+      }
+      
+      // 2. Create if not exists (or if it was deleted on Google Calendar)
       if (!calId) {
         if (!isSilent) showToast(`กำลังสร้างปฏิทิน ${calNames[cat]}...`, 'info');
         const createRes = await fetch('https://www.googleapis.com/calendar/v3/calendars', {
@@ -815,24 +838,6 @@ window.forceSyncCalendar = async function(isSilent = false) {
           calId = 'primary';
         }
       }
-
-      // Wipe old events
-      try {
-        const listRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?maxResults=2500`, {
-          headers: { 'Authorization': `Bearer ${state.calendarConfig.accessToken}` }
-        });
-        if (listRes.ok) {
-          const listData = await listRes.json();
-          if (listData.items && listData.items.length > 0) {
-            const deletePromises = listData.items.map(ev => 
-              fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${ev.id}`, {
-                method: 'DELETE', headers: { 'Authorization': `Bearer ${state.calendarConfig.accessToken}` }
-              })
-            );
-            await Promise.all(deletePromises);
-          }
-        }
-      } catch (err) { console.error("Error clearing old events", err); }
 
       // Sync new events
       for (const ev of events) {
