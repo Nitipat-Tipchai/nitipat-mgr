@@ -339,15 +339,19 @@ async function startAppCore() {
         experimentalForceLongPolling: true
       });
 
-      window.messaging = getMessaging(app);
-      onMessage(messaging, (payload) => {
-        if (typeof Notification !== 'undefined') {
-          new Notification(payload.notification.title, {
-            body: payload.notification.body,
-            icon: payload.notification.image || "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
-          });
-        }
-      });
+      try {
+        window.messaging = getMessaging(app);
+        onMessage(messaging, (payload) => {
+          if (typeof Notification !== 'undefined') {
+            new Notification(payload.notification.title, {
+              body: payload.notification.body,
+              icon: payload.notification.image || "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+            });
+          }
+        });
+      } catch (msgErr) {
+        console.warn("Firebase Messaging not supported or failed to initialize:", msgErr);
+      }
     }
 
     await loadAll();
@@ -383,6 +387,15 @@ async function startAppCore() {
     }
   } catch (err) {
     console.error("App initialization failed:", err);
+    document.body.innerHTML = `
+      <div style="height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center; background:#0f172a; color:#f8fafc; font-family:'Inter', sans-serif; text-align:center; padding: 20px;">
+        <div style="font-size:60px; margin-bottom:20px;">💥</div>
+        <h2 style="color:#ef4444; margin-top:0;">CRITICAL SYSTEM ERROR</h2>
+        <p style="color:#94a3b8; line-height:1.6; max-width: 400px;">เกิดข้อผิดพลาดร้ายแรงขณะโหลดข้อมูลเข้าสู่ระบบ ทำให้หน้าจอขาว กรุณาล้างแคชหรือติดต่อผู้ดูแลระบบ</p>
+        <code style="background:#1e293b; padding:10px; border-radius:8px; font-size:12px; color:#f8fafc; margin-top:20px; text-align:left; max-width:100%; overflow-x:auto;">${err.message || err}</code>
+        <button onclick="localStorage.clear(); sessionStorage.clear(); window.location.reload();" style="margin-top:30px; padding: 12px 24px; background:var(--c-red); color:white; border:none; border-radius:12px; font-weight:bold; cursor:pointer;">⚠️ ล้างข้อมูลทั้งหมดและเริ่มใหม่</button>
+      </div>
+    `;
   }
 }
 
