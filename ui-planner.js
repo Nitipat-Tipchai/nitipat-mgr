@@ -520,7 +520,7 @@ document.addEventListener('click', e => {
 var plannerTokenClient;
 var plannerGapiInited = false;
 var plannerGisInited = false;
-var CALENDAR_SCOPES = 'https://www.googleapis.com/auth/calendar.events';
+var CALENDAR_SCOPES = 'https://www.googleapis.com/auth/calendar';
 
 function getGoogleClientId() {
   return localStorage.getItem('google_client_id') || '';
@@ -609,7 +609,7 @@ window.forceSyncCalendar = async function() {
         const byDay = dayMap[s.day];
         
         const baseUrl = window.location.origin + window.location.pathname;
-        const checkinLink = `${baseUrl}?checkin=${c.id}`;
+        const checkinLink = `${baseUrl}#checkin=${c.id}`;
         
         const event = {
           summary: `[${c.code || 'ไม่มีรหัส'}] ${c.nameTh || c.nameEn || 'ไม่ระบุชื่อวิชา'}`,
