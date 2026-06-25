@@ -136,8 +136,6 @@ window.saveCalendarConfigToCloud = function() {
 };
 
 function renderPlannerKanban() {
-  const container = document.getElementById('plannerKanban');
-  if (!container) return;
   const tasks = state.plannerTasks || [];
   const cols = state.kanbanColumns || ['To Do', 'In Progress', 'Done'];
   const colColors = {
