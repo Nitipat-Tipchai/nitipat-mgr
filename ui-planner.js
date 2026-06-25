@@ -645,13 +645,17 @@ window.disconnectCalendar = function() {
   }
 };
 
+window._autoSyncTimer = null;
+window._isSyncingCalendar = false;
+
 window.autoSyncCalendar = function() {
-  if (state.calendarConfig?.syncEnabled && state.calendarConfig?.calendarId) {
-    setTimeout(() => {
+  if (state.calendarConfig?.syncEnabled) {
+    if (window._autoSyncTimer) clearTimeout(window._autoSyncTimer);
+    window._autoSyncTimer = setTimeout(() => {
       if (typeof window.forceSyncCalendar === 'function') {
         window.forceSyncCalendar(true); // silent mode
       }
-    }, 1500); // wait for loadAll to finish loading from firebase
+    }, 2500); // Wait for loadAll and batch updates
   }
 };
 
@@ -660,6 +664,14 @@ window.forceSyncCalendar = async function(isSilent = false) {
     if (!isSilent) return showToast('กรุณาเชื่อมต่อ Google Calendar ก่อน', 'err');
     return;
   }
+  
+  if (window._isSyncingCalendar) {
+    console.log("Calendar sync already in progress. Skipping.");
+    if (!isSilent) showToast('กำลังประมวลผลอยู่ กรุณารอสักครู่...', 'info');
+    return;
+  }
+  
+  window._isSyncingCalendar = true;
   
   if (!isSilent) showToast('กำลังประมวลผลข้อมูลปฏิทิน...', 'info');
   try {
@@ -845,6 +857,8 @@ window.forceSyncCalendar = async function(isSilent = false) {
   } catch (err) {
     console.error(err);
     if (!isSilent) showToast('เกิดข้อผิดพลาดในการซิงค์', 'err');
+  } finally {
+    window._isSyncingCalendar = false;
   }
 };
 
