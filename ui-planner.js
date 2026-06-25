@@ -804,7 +804,8 @@ window.forceSyncCalendar = async function(isSilent = false) {
           const listRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?maxResults=2500`, {
             headers: { 'Authorization': `Bearer ${state.calendarConfig.accessToken}` }
           });
-          if (listRes.status === 404) {
+          if (!listRes.ok && listRes.status !== 401) {
+            console.warn(`Calendar ${calId} returned ${listRes.status}. Marking for recreation.`);
             calId = null;
             state.calendarConfig.multiCalendarIds[cat] = null;
           } else if (listRes.ok) {
@@ -842,17 +843,24 @@ window.forceSyncCalendar = async function(isSilent = false) {
 
       // Sync new events
       for (const ev of events) {
+        if (!calId) break; // skip if calendar creation failed
         const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${state.calendarConfig.accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify(ev)
         });
-        if (res.ok) totalSuccessCount++;
-        else if (res.status === 401) {
+        if (res.ok) {
+          totalSuccessCount++;
+        } else if (res.status === 401) {
           if (!isSilent) showToast('Token หมดอายุ กรุณาเชื่อมต่อใหม่', 'err');
           state.calendarConfig.syncEnabled = false;
           render();
           return;
+        } else if (res.status === 403 || res.status === 404) {
+          console.warn(`POST to ${calId} returned ${res.status}. Invalidating calendar.`);
+          state.calendarConfig.multiCalendarIds[cat] = null;
+          localStorage.setItem('calendarConfig', JSON.stringify(state.calendarConfig));
+          break; // Stop posting to this broken calendar
         }
       }
     }
