@@ -951,7 +951,7 @@ function renderTopNav(gpa, pro, curSem) {
       ${[
       { id: 'dashboard', icon: '◈', label: 'Dashboard' }, { id: 'semesters', icon: '📅', label: 'เทอมการศึกษา' },
       { id: 'courses', icon: '📚', label: 'รายวิชา' }, { id: 'schedule', icon: '▦', label: 'ตารางเรียน' },
-      { id: 'assignments', icon: '📋', label: 'การบ้าน' }, { id: 'exams', icon: '📝', label: 'ตารางสอบ' },
+      { id: 'exams', icon: '📝', label: 'ตารางสอบ' }, 
       { id: 'grades', icon: '🎓', label: 'เกรด & GPA' }, 
       { id: 'curriculum', icon: '🗺️', label: 'แผนผัง & Roadmap' },
       { id: 'focus', icon: '🍅', label: 'Focus Mode' }, { id: 'planner', icon: '⚡', label: 'Pro Planner' },
@@ -971,7 +971,7 @@ function renderTopNav(gpa, pro, curSem) {
 function renderFloatingNav() {
   const items = [
     { id: 'dashboard', icon: '◈' }, { id: 'courses', icon: '📚' },
-    { id: 'assignments', icon: '📋' }, { id: 'money-pod', icon: '🐽' }, { id: 'focus', icon: '🍅' }
+    { id: 'planner', icon: '⚡' }, { id: 'money-pod', icon: '🐽' }, { id: 'focus', icon: '🍅' }
   ];
   return `<nav class="floating-dock glass">
     ${items.map(n => `<button class="dock-item ${state.view === n.id ? 'active' : ''}" data-nav="${n.id}">
@@ -984,7 +984,6 @@ function renderFAB() {
   return `<div class="fab-wrap">
     <button class="fab-main" id="fabBtn">+</button>
     <div class="fab-menu" id="fabMenu">
-      <button class="fab-item" data-quick="assignment">📋 การบ้าน</button>
       <button class="fab-item" data-quick="exam">📝 การสอบ</button>
       <button class="fab-item" data-quick="course">📚 วิชา</button>
       <button class="fab-item" data-quick="planner">⚡ เพิ่ม Planner</button>
