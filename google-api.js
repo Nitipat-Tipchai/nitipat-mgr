@@ -4,8 +4,8 @@
 // Replaces Google Apps Script (GAS)
 // ══════════════════════════════════════════════════
 
-// ⚠️ คุณต้องเอา Client ID จาก Google Cloud Console มาใส่ที่นี่!
-const CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID_HERE.apps.googleusercontent.com';
+// ใช้ Client ID เดียวกันกับ ui-planner.js
+const CLIENT_ID = localStorage.getItem('google_client_id') || '986910230630-09pgqj27lsaevmv21jc2imqf0ia688t7.apps.googleusercontent.com';
 const API_KEY = 'YOUR_GOOGLE_API_KEY_HERE';
 
 // Scopes สำหรับ Drive และ Calendar
@@ -66,8 +66,8 @@ function checkAuthReady() {
 
 // ฟังก์ชันสำหรับบังคับล็อกอินเพื่อขอ Token
 function requestDriveAccess(callback) {
-  if (CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID_HERE.apps.googleusercontent.com') {
-    alert("⚠️ ไม่สามารถใช้ Google Drive ได้!\\nคุณต้องตั้งค่า Client ID ในไฟล์ google-api.js ก่อน");
+  if (!CLIENT_ID) {
+    alert("⚠️ ไม่สามารถใช้ Google Drive ได้!\nไม่พบ Client ID กรุณาตั้งค่าก่อน");
     return;
   }
   
