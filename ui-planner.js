@@ -805,6 +805,21 @@ window.forceSyncCalendar = async function(isSilent = false) {
       personal: "✨ NITIPAT - ส่วนตัว"
     };
 
+    // --- Add Default Reminders ---
+    for (const cat of ['classes', 'assignments', 'projects', 'personal']) {
+      categorizedEvents[cat] = categorizedEvents[cat].map(ev => ({
+        ...ev,
+        reminders: {
+          useDefault: false,
+          overrides: [
+            { method: 'popup', minutes: 30 },
+            { method: 'popup', minutes: 15 },
+            { method: 'popup', minutes: 5 }
+          ]
+        }
+      }));
+    }
+
     // --- Duplicate Cleanup ---
     try {
       if (!isSilent) showToast('กำลังลบปฏิทินที่ซ้ำซ้อน...', 'info');
