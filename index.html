@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+  <script>
+    window.addEventListener('error', function(e) {
+      const errDiv = document.createElement('div');
+      errDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:red;color:white;padding:20px;z-index:99999;font-family:monospace;white-space:pre-wrap;';
+      errDiv.textContent = 'Global JS Error: ' + e.message + ' at ' + e.filename + ':' + e.lineno + ':' + e.colno + '\nStack:\n' + (e.error ? e.error.stack : 'N/A');
+      document.body.appendChild(errDiv);
+    });
+  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="NITIPAT MGR">
+  <meta name="theme-color" content="#f0f4ff">
+  <title>NITIPAT MANAGER</title>
+  <link rel="manifest"
+    href='data:application/manifest+json,{"name":"NITIPAT MANAGER","short_name":"NITIPAT MGR","start_url":".","display":"standalone","background_color":"%23f0f4ff","theme_color":"%23f0f4ff","icons":[{"src":"https://img1.pic.in.th/images/Gemini_Generated_Image_k0lkzwk0lkzwk0lk.png","sizes":"512x512","type":"image/png"}]}'>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&family=Kanit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <!-- Google APIs -->
+  <script src="https://accounts.google.com/gsi/client" onload="if(window.onloadGis) window.onloadGis()" async defer></script>
+  <script src="https://apis.google.com/js/api.js" onload="if(window.onloadGapi) window.onloadGapi()"></script>
+  <script src="google-api.js"></script>
+
+  <!-- API Proxy for GAS -->
+  <script>
+    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwrHhlu-hEvp6IHS-1RXC4wRBXuNV54nRXa-jh-cibzAhqCTIvTEG5BGb0C_vghip-t/exec"; 
+
+    window.google = {
+      script: {
+        run: new Proxy({}, {
+          get: function (target, prop) {
+            if (['withSuccessHandler', 'withFailureHandler'].includes(prop)) {
+              return function (handler) {
+                const context = { success: null, failure: null };
+                context[prop === 'withSuccessHandler' ? 'success' : 'failure'] = handler;
+                return createChain(context);
+              };
+            }
+            return function (...args) {
+              executeRpc(prop, args, { success: null, failure: null });
+            };
+          }
+        })
+      }
+    };
+
+    function createChain(context) {
+      return new Proxy({}, {
+        get: function (target, prop) {
+          if (['withSuccessHandler', 'withFailureHandler'].includes(prop)) {
+            return function (handler) {
+              context[prop === 'withSuccessHandler' ? 'success' : 'failure'] = handler;
+              return createChain(context);
+            };
+          }
+          return function (...args) {
+            executeRpc(prop, args, context);
+          };
+        }
+      });
+    }
+
+    function executeRpc(method, args, context, attempt = 1) {
+      const maxAttempts = 3;
+      const backoffMs = 1500 * Math.pow(2, attempt - 1);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 35000); // 35 seconds client timeout
+
+      fetch(GAS_WEB_APP_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: method, args: args }),
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        signal: controller.signal
+      })
+        .then(res => {
+          clearTimeout(timeoutId);
+          return res.json();
+        })
+        .then(data => {
+          if (data.success) {
+            if (context.success) context.success(data.result);
+          } else {
+            if (attempt < maxAttempts) {
+              console.warn(`GAS RPC Error. Retrying attempt ${attempt + 1}/${maxAttempts} in ${backoffMs}ms...`, data.error);
+              setTimeout(() => executeRpc(method, args, context, attempt + 1), backoffMs);
+            } else {
+              if (context.failure) context.failure(data.error);
+              else console.error("GAS Error:", data.error);
+            }
+          }
+        })
+        .catch(err => {
+          clearTimeout(timeoutId);
+          if (attempt < maxAttempts) {
+            console.warn(`GAS RPC Network failure/timeout. Retrying attempt ${attempt + 1}/${maxAttempts} in ${backoffMs}ms...`, err);
+            setTimeout(() => executeRpc(method, args, context, attempt + 1), backoffMs);
+          } else {
+            if (context.failure) context.failure(err.toString());
+            else console.error("Network Error after max retries:", err);
+          }
+        });
+    }
+  </script>
+
+  <!-- Extracted Styles and Scripts -->
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="firebase-bootstrap.js"></script>
+  <script src="auth.js" defer></script>
+  <script src="state.js" defer></script>
+  <script src="managers.js" defer></script>
+  <script src="firebase-logic.js" defer></script>
+  <script src="managers2.js" defer></script>
+  <script src="ilm-logic.js" defer></script>
+  <script src="ilm-ui.js" defer></script>
+  <script src="ui-curriculum-map.js" defer></script>
+  <script src="ui-dashboard.js" defer></script>
+  <script src="ui-schedule.js" defer></script>
+  <script src="ui-assignments.js" defer></script>
+  <script src="ui-exams.js" defer></script>
+  <script src="ui-grades.js" defer></script>
+  <script src="ui-focus.js" defer></script>
+  <script src="ui-planner.js" defer></script>
+  <script src="ui-moneypod.js" defer></script>
+  <script src="ui-settings.js" defer></script>
+  <script src="ui-styles.js" defer></script>
+  <script src="ui-forms.js" defer></script>
+  <script src="ui-utils.js" defer></script>
+  <script src="trial-reg.js" defer></script>
+  <script src="ui-report.js" defer></script>
+  <script src="ui-notifications.js" defer></script>
+  <script src="ai-service.js" defer></script>
+  <script src="ui-ai-widget.js" defer></script>
+  <script src="ui-core.js" defer></script>
+  <script src="https://accounts.google.com/gsi/client" defer></script>
+</head>
+
+<body>
+  <!-- Login Gate Overlay -->
+  <div id="login-gate" class="gate-overlay active">
+    <div class="gate-content">
+      <div class="gate-logo">⚗</div>
+      <div class="gate-title">NITIPAT MANAGER</div>
+      <div id="gate-status" class="gate-status">Connecting to Secure Vault...</div>
+      <div id="pin-container" class="pin-container hidden">
+        <!-- PIN Pad will be rendered here -->
+      </div>
+    </div>
+  </div>
+
+  <div id="app"></div>
+</body>
+
+</html>
