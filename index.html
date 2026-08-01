@@ -94,12 +94,13 @@
           if (data.success) {
             if (context.success) context.success(data.result);
           } else {
-            if (attempt < maxAttempts) {
+            const isMissingFunc = data.error && (data.error.includes("apply") || data.error.includes("does not exist"));
+            if (attempt < maxAttempts && !isMissingFunc) {
               console.warn(`GAS RPC Error. Retrying attempt ${attempt + 1}/${maxAttempts} in ${backoffMs}ms...`, data.error);
               setTimeout(() => executeRpc(method, args, context, attempt + 1), backoffMs);
             } else {
               if (context.failure) context.failure(data.error);
-              else console.error("GAS Error:", data.error);
+              else console.warn("GAS Method Unavailable:", method, data.error);
             }
           }
         })
